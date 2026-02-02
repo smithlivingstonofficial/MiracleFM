@@ -1,26 +1,64 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* The Miracle FM Brand */
+  --color-brand: #FF0055;
+  --color-brand-hover: #E6004D;
+  --color-brand-glow: rgba(255, 0, 85, 0.3);
+
+  /* Professional Dark Mode Palette */
+  --color-surface: #050505;        /* Deepest Black (Background) */
+  --color-panel: #0A0A0A;          /* Slightly Lighter (Cards) */
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-hover: rgba(255, 255, 255, 0.12);
+  
+  /* Text Colors */
+  --color-text-main: #FFFFFF;
+  --color-text-muted: #A1A1AA;     /* Zinc-400 */
+  --color-text-dim: #52525B;       /* Zinc-600 */
+
+  /* Animation Speeds */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    @apply bg-surface text-text-main antialiased selection:bg-brand selection:text-white;
+    font-feature-settings: "cv11", "ss01"; /* Cleaner Inter font characters */
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Modern Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-zinc-800 rounded-full hover:bg-zinc-700; }
+
+/* Utilities for "Glass" look */
+.glass-panel {
+  @apply bg-panel border border-border;
+}
+
+/* Add refined gradients for the User Side */
+.bg-gradient-hero {
+  background: linear-gradient(180deg, rgba(255, 0, 85, 0.15) 0%, rgba(0,0,0,0) 100%);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Range Input Styling for Player */
+input[type=range] {
+  @apply rounded-lg overflow-hidden appearance-none bg-zinc-800;
+}
+input[type=range]::-webkit-slider-thumb {
+  @apply w-0 h-0 appearance-none bg-transparent shadow-[calc(-100vw_-_0px)_0_0_100vw_#ff0055];
+}
+/* For Firefox */
+input[type="range"]::-moz-range-progress {
+  @apply bg-[#FF0055];
 }
