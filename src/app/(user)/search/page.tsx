@@ -91,7 +91,7 @@ export default function SearchPage() {
               <h2 className="text-xl font-black text-white mb-4">Songs</h2>
               <div className="space-y-1">
                 {results.tracks.map((track, i) => (
-                  <TrackRow key={track.id} track={track} index={i} context="Search" />
+                  <TrackRow key={track.id} track={track} index={i} context="Search" allTracks={tracks}/>
                 ))}
               </div>
             </section>

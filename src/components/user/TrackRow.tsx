@@ -9,18 +9,26 @@ import LikeButton from "./LikeButton";
 interface TrackRowProps {
   track: any;
   index: number;
-  context?: string; // e.g., "Album", "Playlist"
+  context?: string;
+  allTracks?: any[];
 }
 
-export default function TrackRow({ track, index, context }: TrackRowProps) {
+// Add 'allTracks' to the destructured props here
+export default function TrackRow({ track, index, context, allTracks }: TrackRowProps) {
   const { currentTrack, isPlaying, setTrack, setIsPlaying } = usePlayerStore();
   const isCurrent = currentTrack?.id === track.id;
 
   const handlePlay = () => {
     if (isCurrent) {
-      setIsPlaying(!isPlaying);
+        setIsPlaying(!isPlaying);
     } else {
-      setTrack(track);
+        // If we have the full list, set the queue starting from this index
+        if (allTracks && allTracks.length > 0) {
+        usePlayerStore.getState().setQueue(allTracks, index);
+        } else {
+        // Fallback for single track
+        setTrack(track);
+        }
     }
   };
 

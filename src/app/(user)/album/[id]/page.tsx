@@ -83,7 +83,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
 
         <div className="space-y-1">
           {tracks?.map((track, i) => (
-            <TrackRow key={track.id} track={track} index={i} context="Album" />
+            <TrackRow key={track.id} track={track} index={i} context="Album" allTracks={tracks}/>
           ))}
         </div>
         

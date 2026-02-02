@@ -61,7 +61,7 @@ export default async function LibraryPage() {
       <div className="space-y-1">
         {tracks.length > 0 ? (
           tracks.map((track, i) => (
-            <TrackRow key={track.id} track={track} index={i} context="Library" />
+            <TrackRow key={track.id} track={track} index={i} context="Library" allTracks={tracks}/>
           ))
         ) : (
           <div className="py-20 text-center space-y-4">

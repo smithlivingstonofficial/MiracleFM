@@ -24,23 +24,26 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const url = request.nextUrl.clone()
 
-  // Define Admin Pages
-  const adminPaths = ['/dashboard', '/upload', '/tracks', '/artists', '/settings', '/admin-tracks']
-  const isTargetingAdmin = adminPaths.some(path => url.pathname.startsWith(path))
-
-  if (isTargetingAdmin) {
-    // 1. No user? Login.
-    if (!user) {
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
-    }
-
-    // 2. Check Role
+  // 1. Admin Security
+  if (url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/upload')) { // ... add other admin routes
+    if (!user) return NextResponse.redirect(new URL('/login', request.url))
+    
+    // Check role
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (!profile || profile.role !== 'admin') {
-      url.pathname = '/'
-      return NextResponse.redirect(url)
-    }
+    if (profile?.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // 2. User Security (Library requires login)
+  if (url.pathname.startsWith('/library')) {
+    if (!user) return NextResponse.redirect(new URL('/signin', request.url))
+  }
+
+  // 3. Prevent logged-in users from visiting auth pages
+  if ((url.pathname === '/signin' || url.pathname === '/login') && user) {
+    // If admin, go dashboard, else go home
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role === 'admin') return NextResponse.redirect(new URL('/dashboard', request.url))
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   return response

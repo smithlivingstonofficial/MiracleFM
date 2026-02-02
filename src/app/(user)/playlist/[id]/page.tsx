@@ -77,7 +77,7 @@ export default async function PlaylistPage({ params }: { params: Promise<{ id: s
 
         <div className="space-y-1">
           {tracks.map((track, i) => (
-            <TrackRow key={track.id} track={track} index={i} context="Playlist" />
+            <TrackRow key={track.id} track={track} index={i} context="Playlist" allTracks={tracks}/>
           ))}
         </div>
       </div>
