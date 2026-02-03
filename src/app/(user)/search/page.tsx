@@ -16,6 +16,7 @@ export default function SearchPage() {
   const supabase = createClient();
 
   useEffect(() => {
+    // Debounce search to prevent API calls on every keystroke
     const delayDebounceFn = setTimeout(async () => {
       if (query.length > 1) {
         setLoading(true);
@@ -37,7 +38,7 @@ export default function SearchPage() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [query]);
+  }, [query, supabase]);
 
   return (
     <div className="p-6 md:p-10 min-h-screen pb-32">
@@ -56,7 +57,7 @@ export default function SearchPage() {
       </div>
 
       {!query && (
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-600">
+        <div className="flex flex-col items-center justify-center py-20 text-zinc-600 animate-in fade-in">
           <SearchIcon size={64} className="mb-4 opacity-20" />
           <p className="font-bold text-lg">Search for songs, artists, or albums</p>
         </div>
@@ -65,15 +66,15 @@ export default function SearchPage() {
       {query && (
         <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
           
-          {/* Top Result (Best Match) */}
+          {/* Top Result */}
           {(results.artists.length > 0 || results.albums.length > 0) && (
             <section>
               <h2 className="text-xl font-black text-white mb-4">Top Result</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {results.artists[0] && (
                   <Link href={`/artist/${results.artists[0].id}`} className="bg-zinc-900/50 p-6 rounded-[2rem] hover:bg-zinc-900 transition-colors group flex items-center gap-6">
-                    <div className="relative w-24 h-24 rounded-full overflow-hidden shadow-lg">
-                      <Image src={results.artists[0].image_url || "/placeholder.jpg"} alt="" fill className="object-cover" />
+                    <div className="relative w-24 h-24 rounded-full overflow-hidden shadow-lg shrink-0">
+                      {results.artists[0].image_url && <Image src={results.artists[0].image_url} alt="" fill className="object-cover" />}
                     </div>
                     <div>
                       <h3 className="text-2xl font-black text-white group-hover:text-[#FF0055] transition-colors">{results.artists[0].name}</h3>
@@ -91,7 +92,13 @@ export default function SearchPage() {
               <h2 className="text-xl font-black text-white mb-4">Songs</h2>
               <div className="space-y-1">
                 {results.tracks.map((track, i) => (
-                  <TrackRow key={track.id} track={track} index={i} context="Search" allTracks={tracks}/>
+                  <TrackRow 
+                    key={track.id} 
+                    track={track} 
+                    index={i} 
+                    context="Search" 
+                    allTracks={results.tracks} // <-- FIX IS HERE
+                  />
                 ))}
               </div>
             </section>
@@ -131,6 +138,14 @@ export default function SearchPage() {
               </div>
             </section>
           )}
+
+          {/* No Results Message */}
+          {query && !loading && results.tracks.length === 0 && results.artists.length === 0 && results.albums.length === 0 && (
+            <div className="text-center py-20 text-zinc-600">
+              <p className="font-bold">No results found for "{query}"</p>
+            </div>
+          )}
+
         </div>
       )}
     </div>

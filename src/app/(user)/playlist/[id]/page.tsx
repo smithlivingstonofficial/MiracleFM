@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Clock, Play, ListMusic } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 
-export const revalidate = 60;
+// Force dynamic rendering to always get the latest version of the playlist
+export const revalidate = 0;
 
 export default async function PlaylistPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,20 +18,30 @@ export default async function PlaylistPage({ params }: { params: Promise<{ id: s
     .eq("id", id)
     .single();
 
-  if (!playlist) return notFound();
+  if (!playlist) {
+    notFound();
+  }
 
-  // 2. Fetch Linked Tracks
+  // 2. Fetch Linked Tracks via the junction table
   const { data: playlistItems } = await supabase
     .from("playlist_tracks")
-    .select("track_id, tracks(*, artists(name), albums(title, cover_url))")
+    .select(`
+      track_id, 
+      tracks (
+        *, 
+        artists (name, image_url), 
+        albums (title, cover_url)
+      )
+    `)
     .eq("playlist_id", id)
     .order("added_at", { ascending: true });
 
-  // Extract tracks from the junction object
-  const tracks = playlistItems?.map(item => item.tracks) || [];
+  // 3. Extract tracks safely, filtering out any nulls.
+  // We explicitly cast 'item' and 't' to 'any' to fix the TypeScript error.
+  const tracks = playlistItems?.map((item: any) => item.tracks).filter((t: any) => t !== null) || [];
 
   return (
-    <div className="bg-gradient-to-b from-indigo-900/40 to-black min-h-screen pb-24">
+    <div className="bg-gradient-to-b from-indigo-900/40 to-black min-h-screen pb-24 animate-in fade-in duration-500">
       
       {/* Header */}
       <div className="p-6 md:p-10 flex flex-col md:flex-row items-end gap-8 pt-20">
@@ -76,8 +87,15 @@ export default async function PlaylistPage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className="space-y-1">
-          {tracks.map((track, i) => (
-            <TrackRow key={track.id} track={track} index={i} context="Playlist" allTracks={tracks}/>
+          {/* We type 'track' as 'any' here to resolve the type inference issue */}
+          {tracks.map((track: any, i: number) => (
+            <TrackRow 
+              key={track.id} 
+              track={track} 
+              index={i} 
+              context="Playlist"
+              allTracks={tracks}
+            />
           ))}
         </div>
       </div>
