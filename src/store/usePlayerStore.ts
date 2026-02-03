@@ -12,34 +12,58 @@ interface Track {
 type RepeatMode = "off" | "all" | "one";
 
 interface PlayerState {
+  // Core State
   isPlaying: boolean;
   currentTrack: Track | null;
-  queue: Track[];           // The list of songs playing
-  currentIndex: number;     // Where we are in the list
+  queue: Track[];
+  currentIndex: number;
+
+  // Modifiers
   isShuffled: boolean;
   repeatMode: RepeatMode;
+  
+  // UI State
+  isFullScreen: boolean;
+  
+  // Time Synchronization State
+  currentTime: number;
+  duration: number;
 
   // Actions
-  setTrack: (track: Track) => void; // Legacy single play
-  setQueue: (tracks: Track[], startIndex?: number) => void; // Play a whole list
+  setTrack: (track: Track) => void;
+  setQueue: (tracks: Track[], startIndex?: number) => void;
   setIsPlaying: (playing: boolean) => void;
   playNext: () => void;
   playPrevious: () => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
+  toggleFullScreen: () => void;
+  
+  // Time Actions
+  setCurrentTime: (time: number) => void;
+  setDuration: (time: number) => void;
+  seekTo: (time: number) => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
+  // Initial State
   isPlaying: false,
   currentTrack: null,
   queue: [],
   currentIndex: -1,
   isShuffled: false,
   repeatMode: "off",
+  isFullScreen: false,
+  currentTime: 0,
+  duration: 0,
+
+  // --- ACTIONS ---
 
   setIsPlaying: (isPlaying) => set({ isPlaying }),
+  
+  toggleFullScreen: () => set((state) => ({ isFullScreen: !state.isFullScreen })),
 
-  // Play a single track (creates a queue of 1)
+  // Play a single track (creates a new queue of 1)
   setTrack: (track) => set({ 
     currentTrack: track, 
     queue: [track], 
@@ -47,7 +71,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     isPlaying: true 
   }),
 
-  // Play a list of tracks (Album/Playlist)
+  // Play a list of tracks (from an Album, Playlist, etc.)
   setQueue: (tracks, startIndex = 0) => set({
     queue: tracks,
     currentTrack: tracks[startIndex],
@@ -60,7 +84,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     if (queue.length === 0) return;
 
     if (repeatMode === "one") {
-      // Just re-trigger the current track
       const audio = document.querySelector("audio");
       if (audio) {
         audio.currentTime = 0;
@@ -76,12 +99,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       nextIndex = currentIndex + 1;
     }
 
-    // Check bounds
     if (nextIndex >= queue.length) {
       if (repeatMode === "all") {
-        nextIndex = 0; // Loop back to start
+        nextIndex = 0; // Loop back to the start
       } else {
-        set({ isPlaying: false }); // Stop at end
+        set({ isPlaying: false }); // Stop at the end
         return; 
       }
     }
@@ -93,7 +115,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const { queue, currentIndex, isShuffled } = get();
     if (queue.length === 0) return;
 
-    // If song played for > 3 seconds, just restart it
     const audio = document.querySelector("audio");
     if (audio && audio.currentTime > 3) {
       audio.currentTime = 0;
@@ -107,7 +128,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       prevIndex = currentIndex - 1;
     }
 
-    if (prevIndex < 0) prevIndex = queue.length - 1; // Loop to end
+    if (prevIndex < 0) {
+      prevIndex = queue.length - 1; // Loop to the end
+    }
 
     set({ currentTrack: queue[prevIndex], currentIndex: prevIndex, isPlaying: true });
   },
@@ -119,4 +142,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const nextIndex = (modes.indexOf(state.repeatMode) + 1) % modes.length;
     return { repeatMode: modes[nextIndex] };
   }),
+
+  // --- TIME SYNCHRONIZATION ACTIONS ---
+  setCurrentTime: (time) => set({ currentTime: time }),
+  setDuration: (time) => set({ duration: time }),
+  
+  // Action triggered by UI sliders to update the <audio> element
+  seekTo: (time) => {
+    const audio = document.querySelector('audio');
+    if (audio) {
+      audio.currentTime = time;
+    }
+    // Update the state so UI sliders don't jump back
+    set({ currentTime: time });
+  }
 }));

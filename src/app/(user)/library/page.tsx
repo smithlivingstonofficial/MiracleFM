@@ -1,96 +1,119 @@
-import { createClient } from "@/lib/supabase/server";
-import { Heart, Play } from "lucide-react";
-import TrackRow from "@/components/user/TrackRow";
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { Heart, Plus, ListMusic, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import PlaylistCover from "@/components/user/PlaylistCover";
+import { toast } from "sonner";
 
-// Force dynamic rendering to ensure the library is always up to date
-export const revalidate = 0;
+export default function LibraryPage() {
+  const [user, setUser] = useState<any>(null);
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [likedCount, setLikedCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-export default async function LibraryPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const router = useRouter();
+  const supabase = createClient();
 
-  if (!user) {
-    redirect("/signin");
-  }
+  useEffect(() => {
+    async function fetchData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/signin");
+        return;
+      }
+      setUser(user);
 
-  // 1. Fetch Likes with joined Track data
-  const { data: likes } = await supabase
-    .from("user_likes")
-    .select(`
-      track_id, 
-      tracks (
-        *, 
-        artists (name, image_url), 
-        albums (title, cover_url)
-      )
-    `)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+      const [playlistsRes, likesRes] = await Promise.all([
+        supabase.from("playlists").select("id, title, cover_url").eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("user_likes").select("track_id", { count: 'exact', head: true }).eq("user_id", user.id)
+      ]);
 
-  // 2. Extract tracks safely. 
-  // We explicitly cast 'l' and 't' to any to prevent TypeScript inference errors.
-  const tracks = likes?.map((l: any) => l.tracks).filter((t: any) => t !== null) || [];
+      if (playlistsRes.data) setPlaylists(playlistsRes.data);
+      setLikedCount(likesRes.count || 0);
+      setLoading(false);
+    }
+    fetchData();
+  }, []);
+
+  const handleCreatePlaylist = async () => {
+    if (!user) return toast.error("Please log in.");
+    
+    const { data, error } = await supabase
+      .from("playlists")
+      .insert({ title: `My Playlist #${playlists.length + 1}`, user_id: user.id })
+      .select().single();
+
+    if (data) {
+      toast.success("New playlist created!");
+      router.push(`/playlist/${data.id}`);
+    } else {
+      toast.error("Failed to create playlist.");
+    }
+  };
+
+  if (loading) return (
+    <div className="h-screen flex items-center justify-center bg-black">
+      <Loader2 className="animate-spin text-[#FF0055] w-10 h-10" />
+    </div>
+  );
 
   return (
-    <div className="p-6 md:p-10 min-h-screen pb-32 bg-gradient-to-b from-indigo-900/30 to-black animate-in fade-in duration-500">
-      
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row items-end gap-8 mb-10 pt-10">
-        <div className="w-52 h-52 bg-gradient-to-br from-[#4b3ae6] to-[#8d5be3] rounded-[2rem] flex items-center justify-center shadow-2xl shadow-indigo-500/20 shrink-0">
-          <Heart size={80} className="text-white fill-white drop-shadow-lg" />
-        </div>
+    <div className="min-h-screen pb-32 bg-black animate-in fade-in duration-500">
+      <div className="p-6 md:p-12 space-y-10">
         
-        <div className="space-y-4">
-          <span className="text-xs font-black uppercase tracking-widest text-white/80">Private Collection</span>
-          <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-none">
-            Liked Songs
+        {/* Header */}
+        <div className="pt-16 md:pt-8 flex items-center justify-between">
+          <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white">
+            Your Library
           </h1>
-          <div className="flex items-center gap-2 text-sm font-bold text-zinc-300">
-            <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] text-white font-black border border-white/10">
-              {user.email?.charAt(0).toUpperCase()}
-            </div>
-            <span>{user.email}</span>
-            <span className="w-1 h-1 bg-zinc-500 rounded-full mx-1" />
-            <span>{tracks.length} tracks</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Bar */}
-      {tracks.length > 0 && (
-        <div className="mb-8">
-          <button className="w-14 h-14 bg-[#FF0055] rounded-full flex items-center justify-center text-black hover:scale-105 transition-transform shadow-lg shadow-[#FF0055]/20">
-            <Play fill="black" size={24} className="ml-1" />
+          <button 
+            onClick={handleCreatePlaylist}
+            className="flex items-center justify-center w-12 h-12 md:w-auto md:h-auto md:px-6 md:py-3 gap-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors font-bold text-sm"
+          >
+            <Plus size={24} />
+            <span className="hidden md:inline">New Playlist</span>
           </button>
         </div>
-      )}
 
-      {/* Track List */}
-      <div className="space-y-1">
-        {tracks.length > 0 ? (
-          // We type 'track' as 'any' here to fix the "Property id does not exist on type any[]" error
-          tracks.map((track: any, i: number) => (
-            <TrackRow 
-              key={track.id} 
-              track={track} 
-              index={i} 
-              context="Library"
-              allTracks={tracks} 
-            />
-          ))
-        ) : (
-          <div className="py-20 text-center space-y-6">
-            <p className="text-zinc-500 text-lg font-medium">You haven't liked any songs yet.</p>
-            <Link 
-              href="/" 
-              className="inline-block bg-white text-black px-8 py-3 rounded-full font-bold text-sm hover:bg-zinc-200 transition-colors"
-            >
-              Discover Music
-            </Link>
+        {/* Liked Songs Card */}
+        <Link href="/library/liked" className="block group">
+          <div className="flex items-center gap-6 p-4 md:p-6 bg-gradient-to-r from-indigo-900/50 to-zinc-900 rounded-[2rem] border border-transparent hover:border-white/10 transition-all duration-300">
+            <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden bg-gradient-to-br from-pink-500 to-pink-700 flex items-center justify-center shrink-0 shadow-2xl group-hover:scale-105 transition-transform">
+              <Heart size={48} className="text-white fill-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold text-white group-hover:text-pink-300 transition-colors">Liked Songs</h2>
+              <p className="text-sm text-zinc-400 font-medium mt-1">{likedCount} tracks</p>
+            </div>
           </div>
-        )}
+        </Link>
+
+        {/* User Playlists Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          {playlists.map((playlist) => (
+            <Link 
+              key={playlist.id} 
+              href={`/playlist/${playlist.id}`} 
+              className="group block"
+            >
+              <div className="aspect-square relative rounded-[2rem] overflow-hidden bg-zinc-900 shadow-lg transition-transform duration-500 group-hover:-translate-y-2 group-hover:shadow-[#FF0055]/10">
+                <PlaylistCover 
+                  playlistId={playlist.id} 
+                  explicitCover={playlist.cover_url} 
+                  className="w-full h-full"
+                />
+              </div>
+              <div className="mt-4 px-1">
+                <h3 className="font-bold text-white truncate text-base group-hover:text-[#FF0055] transition-colors">{playlist.title}</h3>
+                <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-1">Playlist</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+
       </div>
     </div>
   );

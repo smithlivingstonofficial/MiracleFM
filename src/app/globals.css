@@ -62,3 +62,40 @@ input[type=range]::-webkit-slider-thumb {
 input[type="range"]::-moz-range-progress {
   @apply bg-[#FF0055];
 }
+
+@layer components {
+  /* Custom Range Slider Styling */
+  .player-slider {
+    @apply appearance-none bg-zinc-800 rounded-full h-1 cursor-pointer transition-all w-full;
+  }
+
+  /* Chrome, Safari, Edge, Opera */
+  .player-slider::-webkit-slider-runnable-track {
+    @apply h-full rounded-full;
+    /* Uses the CSS variable --range-progress passed from React */
+    background: linear-gradient(to right, #FF0055 var(--range-progress), #27272a var(--range-progress));
+  }
+
+  .player-slider::-webkit-slider-thumb {
+    @apply appearance-none w-3 h-3 bg-white rounded-full -mt-1 opacity-0 shadow-lg transition-opacity;
+  }
+
+  /* Show thumb on hover */
+  .group:hover .player-slider::-webkit-slider-thumb {
+    @apply opacity-100;
+  }
+
+  /* Firefox */
+  .player-slider::-moz-range-track {
+    @apply h-full rounded-full bg-zinc-800;
+  }
+  .player-slider::-moz-range-progress {
+    @apply bg-[#FF0055] h-full rounded-full;
+  }
+  .player-slider::-moz-range-thumb {
+    @apply w-3 h-3 bg-white border-none rounded-full opacity-0 shadow-lg transition-opacity;
+  }
+  .group:hover .player-slider::-moz-range-thumb {
+    @apply opacity-100;
+  }
+}

@@ -1,39 +1,40 @@
 import UserSidebar from "@/components/user/UserSidebar";
 import MobileNav from "@/components/user/MobileNav";
 import AudioPlayer from "@/components/player/AudioPlayer";
+import FullScreenPlayer from "@/components/player/FullScreenPlayer";
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen w-full bg-black text-white overflow-hidden selection:bg-[#FF0055] selection:text-white font-sans">
+    <div className="flex h-screen w-full bg-black text-white overflow-hidden font-sans selection:bg-[#FF0055] selection:text-white">
       
-      {/* 1. Desktop Sidebar (Fixed Left) */}
+      {/* Desktop Sidebar (Hidden on Mobile) */}
       <div className="hidden md:block h-full z-30 relative">
         <UserSidebar />
       </div>
 
-      {/* 2. Main Content Area (Scrollable) */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col h-full relative min-w-0">
-        
-        {/* Scrollable Container */}
         <main className="flex-1 overflow-y-auto scroll-smooth no-scrollbar w-full">
           {/* 
-             IMPORTANT: pb-[120px] ensures the last song is visible 
-             above the fixed player bar.
+             Mobile Padding: pb-48 (Space for Nav + Player) 
+             Desktop Padding: pb-32 (Space for Player only)
           */}
-          <div className="pb-[120px] min-h-full">
+          <div className="pb-48 md:pb-32 min-h-full">
             {children}
           </div>
         </main>
 
-        {/* 3. The Player (Fixed Overlay on top of content at the bottom) */}
-        <div className="absolute bottom-0 left-0 right-0 z-50">
+        {/* Player Overlay */}
+        <div className="z-40">
           <AudioPlayer />
         </div>
-        
       </div>
 
-      {/* 4. Mobile Navigation (Fixed Bottom, below Player on mobile) */}
+      {/* Mobile Navigation (Fixed Bottom) */}
       <MobileNav />
+      
+      {/* Full Screen Overlay */}
+      <FullScreenPlayer />
     </div>
   );
 }
