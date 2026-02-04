@@ -33,9 +33,13 @@ export default function AdminTracksPage() {
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ field: SortField; order: SortOrder }>({ field: "created_at", order: "desc" });
   
+  // Inline Editing State
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const lastSelectedIndex = useRef<number>(-1); // For Shift+Click
+  const lastSelectedIndex = useRef<number>(-1); 
   const [bulkActionType, setBulkActionType] = useState<"artist" | "playlist" | "album" | null>(null);
   
   // Modals
@@ -54,7 +58,7 @@ export default function AdminTracksPage() {
   async function fetchInitialData() {
     setLoading(true);
     const [tRes, aRes, pRes, albRes] = await Promise.all([
-      supabase.from("tracks").select("*, artists(name, image_url), albums(title, cover_url)"), // Client-side sort for speed
+      supabase.from("tracks").select("*, artists(name, image_url), albums(title, cover_url)"), 
       supabase.from("artists").select("id, name").order("name"),
       supabase.from("playlists").select("id, title").is("user_id", null),
       supabase.from("albums").select("id, title").order("title")
@@ -109,18 +113,46 @@ export default function AdminTracksPage() {
     }));
   };
 
-  // --- LOGIC: SELECTION (Includes Shift+Click) ---
+  // --- LOGIC: INLINE EDITING ---
+  const startEditing = (track: any, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent row selection or play
+    setEditingId(track.id);
+    setEditTitle(track.title);
+  };
+
+  const saveTitleEdit = async () => {
+    if (!editingId) return;
+    
+    // Optimistic Update locally
+    const oldTracks = [...tracks];
+    const updatedTracks = tracks.map(t => t.id === editingId ? { ...t, title: editTitle } : t);
+    setTracks(updatedTracks);
+    setEditingId(null);
+
+    // Database Update
+    const { error } = await supabase.from("tracks").update({ title: editTitle }).eq("id", editingId);
+    
+    if (error) {
+      setTracks(oldTracks); // Revert on fail
+      toast.error("Failed to rename track");
+    } else {
+      toast.success("Track renamed");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") saveTitleEdit();
+    if (e.key === "Escape") setEditingId(null);
+  };
+
+  // --- LOGIC: SELECTION ---
   const toggleSelect = (id: string, index: number, event: React.MouseEvent) => {
-    // Shift + Click Logic
     if (event.shiftKey && lastSelectedIndex.current !== -1) {
       const start = Math.min(lastSelectedIndex.current, index);
       const end = Math.max(lastSelectedIndex.current, index);
       const idsInRange = processedTracks.slice(start, end + 1).map(t => t.id);
-      
-      // Merge unique IDs
       setSelectedIds(prev => Array.from(new Set([...prev, ...idsInRange])));
     } else {
-      // Normal Click
       setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     }
     lastSelectedIndex.current = index;
@@ -144,7 +176,7 @@ export default function AdminTracksPage() {
   const handleCopyId = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(id);
-    toast.success("ID Copied to clipboard");
+    toast.success("ID Copied");
   };
 
   const applyBulkUpdate = async (field: "artist_id" | "album_id", value: string) => {
@@ -284,15 +316,15 @@ export default function AdminTracksPage() {
             const isCurrent = currentTrack?.id === track.id;
             const displayImage = track.cover_url || track.albums?.cover_url || track.artists?.image_url;
             const healthIssues = getHealthStatus(track);
+            const isEditing = editingId === track.id;
 
             return (
               <div 
                 key={track.id} 
-                onClick={(e) => toggleSelect(track.id, index, e)} // Click anywhere to select (with Shift)
+                onClick={(e) => toggleSelect(track.id, index, e)} 
                 className={cn("grid grid-cols-12 px-8 py-4 items-center group transition-all duration-100 cursor-pointer select-none", isSelected ? "bg-brand/[0.04]" : "hover:bg-white/[0.01]")}
               >
                 <div className="col-span-1" onClick={(e) => e.stopPropagation()}>
-                   {/* Dedicated checkbox area stops propagation to prevent shift-click conflict if needed, or allow it */}
                   <button onClick={(e) => toggleSelect(track.id, index, e)} className={cn("transition-colors", isSelected ? "text-brand" : "text-zinc-800 group-hover:text-zinc-600")}>
                     {isSelected ? <CheckSquare size={22} /> : <Square size={22} />}
                   </button>
@@ -305,10 +337,31 @@ export default function AdminTracksPage() {
                       {isCurrent && isPlaying ? <Pause size={18} fill="white" className="text-white" /> : <Play size={18} fill="white" className="text-white ml-1" />}
                     </div>
                   </div>
-                  <div className="min-w-0 pr-4">
+                  
+                  <div className="min-w-0 pr-4 flex-1">
                     <div className="flex items-center gap-2">
-                       <p className={cn("font-bold text-sm truncate transition-colors", isSelected || isCurrent ? "text-brand" : "text-white")}>{track.title}</p>
-                       {healthIssues && <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" title={`Missing: ${healthIssues}`} />}
+                       {/* INLINE EDITING LOGIC */}
+                       {isEditing ? (
+                         <input
+                           autoFocus
+                           value={editTitle}
+                           onChange={(e) => setEditTitle(e.target.value)}
+                           onKeyDown={handleKeyDown}
+                           onBlur={saveTitleEdit}
+                           onClick={(e) => e.stopPropagation()}
+                           className="bg-black border border-brand text-white font-bold text-sm px-2 py-1 rounded-md w-full outline-none"
+                         />
+                       ) : (
+                         <p 
+                           onClick={(e) => startEditing(track, e)}
+                           className={cn("font-bold text-sm truncate transition-colors cursor-text hover:underline decoration-zinc-600 underline-offset-4", isSelected || isCurrent ? "text-brand" : "text-white")}
+                           title="Click to rename"
+                         >
+                           {track.title}
+                         </p>
+                       )}
+                       
+                       {healthIssues && <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" title={`Missing: ${healthIssues}`} />}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider">HLS 128k</span>
@@ -317,8 +370,9 @@ export default function AdminTracksPage() {
                   </div>
                 </div>
 
+                {/* Artist/Album Column */}
                 <div className="col-span-3 hidden md:block">
-                  <p className={cn("text-xs font-bold", track.artists ? "text-zinc-300" : "text-red-500 italic")}>{track.artists?.name || "Unassigned"}</p>
+                  <p className={cn("text-xs font-bold", track.artists ? "text-zinc-300" : "text-red-500 italic")}>{track.artists?.name || "Unassigned Artist"}</p>
                   <p className={cn("text-[10px] font-medium mt-1", track.albums ? "text-zinc-500" : "text-red-900 italic")}>{track.albums?.title || "No Album"}</p>
                 </div>
 
@@ -335,7 +389,7 @@ export default function AdminTracksPage() {
         </div>
       </div>
 
-      {/* Floating Toolbar (Same as before) */}
+      {/* Floating Toolbar */}
       {selectedIds.length > 0 && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-10 duration-500">
           <div className="bg-white text-black px-6 py-3 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] flex items-center gap-6 border border-white/20">
