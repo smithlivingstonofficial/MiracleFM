@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
         // This wildcard allows any public R2 bucket URL (pub-xxxx.r2.dev)
         hostname: "**.r2.dev", 
       },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
       // (Optional) If you connect a custom domain later, add it here:
       // {
       //   protocol: "https",
