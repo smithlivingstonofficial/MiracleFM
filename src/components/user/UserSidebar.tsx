@@ -66,7 +66,7 @@ export default function UserSidebar() {
       <div className="h-20 flex items-center justify-between px-6 shrink-0">
         {!isCollapsed ? (
           <h1 className="text-2xl font-black tracking-tighter text-white whitespace-nowrap animate-in fade-in">
-            MIRACLE<span className="text-[#FF0055]">FM</span>
+            MIRACLE<span className="text-[#FF0055]"> FM</span>
           </h1>
         ) : (
           <span className="text-[#FF0055] font-black text-2xl mx-auto">M</span>
