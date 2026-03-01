@@ -1,3 +1,5 @@
+// src/store/usePlayerStore.ts
+
 import { create } from "zustand";
 
 interface Track {

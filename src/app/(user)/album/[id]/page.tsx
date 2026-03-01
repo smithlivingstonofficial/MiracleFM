@@ -1,11 +1,14 @@
+// src/app/(user)/album/[id]/page.tsx
+
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Clock, Disc, Share2, MoreHorizontal, Calendar, Music4 } from "lucide-react";
+import { Clock, Disc, Share2, MoreHorizontal, Calendar, Music4, Play, Heart, Dot } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import StartRadio from "@/components/user/StartRadio";
+import LikeButton from "@/components/user/LikeButton"; // Assuming you have a standalone LikeButton component, otherwise use the Heart icon logic
 
 export const revalidate = 60;
 
@@ -31,115 +34,156 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
   const releaseYear = new Date(album.created_at).getFullYear();
   const trackCount = tracks?.length || 0;
   
-  // Get genres from the first track (it's now an array)
+  // Get genres from the first track
   const genres = tracks?.[0]?.genre || [];
 
   return (
-    <div className="min-h-screen pb-32 bg-black relative overflow-hidden">
+    <div className="bg-[#050505] min-h-screen pb-40 relative overflow-x-hidden text-white selection:bg-[#FF0055] selection:text-white">
       
-      {/* Dynamic Background Glow */}
-      <div className="absolute top-0 left-0 w-full h-[600px] bg-gradient-to-b from-[#FF0055]/5 to-transparent pointer-events-none" />
-
-      <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-8">
+      {/* --- 1. IMMERSIVE COMPACT HERO --- */}
+      {/* Reduced height on mobile to bring content up */}
+      <div className="relative w-full pt-10 md:pt-32 pb-6 md:pb-12 flex flex-col items-center md:items-start justify-end px-6 md:px-12">
         
-        {/* 1. The "Premium Card" Header */}
-        <div className="relative overflow-hidden rounded-[2.5rem] bg-zinc-900/40 border border-white/5 shadow-2xl p-6 md:p-10 mt-16 md:mt-0">
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 brightness-100 contrast-150 pointer-events-none"></div>
-          
-          <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-8 md:gap-10">
-            
-            {/* Album Cover */}
-            <div className="relative w-52 h-52 md:w-64 md:h-64 shrink-0 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden group border border-white/5">
-              {album.cover_url ? (
-                <Image src={album.cover_url} alt={album.title} fill className="object-cover transition-transform duration-700 group-hover:scale-105" priority />
-              ) : (
-                <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
-                  <Disc size={64} className="text-zinc-700" />
-                </div>
-              )}
+        {/* Cinematic Background Blur (Stronger on Mobile) */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+          {album.cover_url ? (
+            <div className="relative w-full h-full">
+               <Image 
+                src={album.cover_url} 
+                alt={album.title} 
+                fill 
+                className="object-cover opacity-60 blur-[60px] md:blur-[80px] scale-150 saturate-150 mask-gradient" 
+                priority 
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/40 via-[#050505]/80 to-[#050505]" />
             </div>
+          ) : (
+            <div className="w-full h-full bg-gradient-to-b from-zinc-800 to-[#050505]" />
+          )}
+        </div>
 
-            {/* Metadata Info */}
-            <div className="flex-1 text-center md:text-left space-y-4 w-full">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-black uppercase tracking-widest backdrop-blur-md">
-                <Disc size={12} className="text-[#FF0055]" /> Album Release
-              </div>
-              
-              <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter leading-[0.9] drop-shadow-xl">
+        {/* Content Container */}
+        <div className="relative z-10 w-full flex flex-col items-center gap-6 md:flex-row md:items-end md:gap-10">
+          
+          {/* BIGGER ALBUM ART FOR MOBILE */}
+          <div className="relative w-[70vw] aspect-square max-w-[280px] md:w-64 md:h-64 rounded-2xl md:rounded-[2rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6)] overflow-hidden border border-white/10 group shrink-0 animate-in zoom-in duration-700">
+             {album.cover_url ? (
+               <Image 
+                 src={album.cover_url} 
+                 alt={album.title} 
+                 fill 
+                 className="object-cover transition-transform duration-700 group-hover:scale-105" 
+                 priority 
+               />
+             ) : (
+               <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
+                 <Disc size={64} className="text-zinc-700" />
+               </div>
+             )}
+          </div>
+
+          {/* Album Metadata */}
+          <div className="text-center md:text-left flex-1 space-y-3 w-full">
+            
+            {/* Title & Badge */}
+            <div className="flex flex-col items-center md:items-start gap-2">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/10 border border-white/5 text-[#FF0055] text-[9px] font-black uppercase tracking-[0.2em] backdrop-blur-md">
+                    <Disc size={10} className="fill-current" /> Album
+                </div>
+                
+                <h1 className="text-3xl md:text-5xl lg:text-7xl font-black tracking-tighter leading-[1.1] drop-shadow-2xl line-clamp-2 px-2 md:px-0">
                 {album.title}
-              </h1>
-              
-              <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 pt-2 justify-center md:justify-start">
-                <Link href={`/artist/${album.artists?.id}`} className="group/artist flex items-center gap-3 bg-black/40 hover:bg-black/60 pr-4 pl-1 py-1 rounded-full border border-white/5 transition-colors">
-                  <div className="w-8 h-8 rounded-full overflow-hidden relative bg-zinc-800 border border-white/10">
+                </h1>
+            </div>
+            
+            {/* Artist Chip & Stats */}
+            <div className="flex flex-col items-center md:items-start gap-3 md:gap-4">
+               {/* Artist Link */}
+               <Link href={`/artist/${album.artists?.id}`} className="group flex items-center gap-2 bg-[#0A0A0A]/60 hover:bg-white/10 pr-4 pl-1 py-1 rounded-full border border-white/5 transition-all active:scale-95 backdrop-blur-md">
+                  <div className="w-6 h-6 md:w-8 md:h-8 rounded-full overflow-hidden relative bg-zinc-800 border border-white/10">
                     {album.artists?.image_url ? (
                       <Image src={album.artists.image_url} alt="" fill className="object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center"><Music4 size={14} className="text-zinc-500"/></div>
+                      <div className="w-full h-full flex items-center justify-center"><Music4 size={12} className="text-zinc-500"/></div>
                     )}
                   </div>
-                  <span className="text-sm font-bold text-white group-hover/artist:text-[#FF0055] transition-colors">{album.artists?.name}</span>
-                </Link>
+                  <span className="text-xs md:text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">{album.artists?.name}</span>
+               </Link>
 
-                <div className="hidden md:block w-[1px] h-8 bg-white/10" />
-
-                <div className="flex items-center gap-6 text-zinc-400 text-xs font-bold uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={14} />
-                    <span>{releaseYear}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Music4 size={14} />
-                    <span>{trackCount} Songs</span>
-                  </div>
-                </div>
-              </div>
+               {/* Stats Row */}
+               <div className="flex items-center gap-1 text-zinc-400 text-[11px] md:text-xs font-bold uppercase tracking-wider">
+                  <span>{releaseYear}</span>
+                  <Dot size={16} />
+                  <span>{trackCount} Songs</span>
+               </div>
             </div>
-
-            {/* Smart Play Button & Actions */}
-            <div className="flex flex-row md:flex-col items-center gap-4 shrink-0">
-              <CollectionPlayButton tracks={tracks ?? []} size="large" />
-              
-              <div className="flex gap-2">
-                <button className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/5">
-                  <Share2 size={18} />
-                </button>
-                {/* Launch Radio based on the album genres */}
-                <StartRadio genres={genres} label={false} />
-                <button className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/5">
-                  <MoreHorizontal size={18} />
-                </button>
-              </div>
-            </div>
-
           </div>
         </div>
+      </div>
 
-        {/* 2. Track List */}
-        <div className="space-y-4 px-2">
-          <div className="hidden md:flex items-center gap-4 px-4 pb-2 border-b border-white/10 text-zinc-500 text-[10px] font-black uppercase tracking-widest">
-            <div className="w-8 text-center">#</div>
-            <div className="flex-1">Title</div>
-            <div className="w-10 text-right"><Clock size={14} /></div>
+      {/* --- 2. ACTION BAR (Tight Cluster) --- */}
+      <div className="relative z-20 px-6 md:px-12 mb-8">
+        <div className="flex flex-row items-center justify-center md:justify-start gap-4 md:gap-6">
+          
+          {/* Main Play Button - Pulsing */}
+          <div className="relative group active:scale-95 transition-transform duration-300">
+             <div className="absolute inset-0 bg-[#FF0055] rounded-full blur-md opacity-40 animate-pulse" />
+             <div className="relative shadow-[0_0_20px_rgba(255,0,85,0.3)] rounded-full bg-[#FF0055]">
+                <CollectionPlayButton tracks={tracks || []} size="large" />
+             </div>
+          </div>
+          
+          {/* Secondary Actions Row */}
+          <div className="flex items-center gap-3">
+             <button className="h-12 w-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 hover:text-[#FF0055] transition-all backdrop-blur-md active:scale-90 flex items-center justify-center">
+               <Heart size={22} />
+             </button>
+             
+             <div className="active:scale-90 transition-transform">
+                <StartRadio genres={genres} label={false} />
+             </div>
+             
+             <button className="h-12 w-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 hover:text-white transition-all backdrop-blur-md active:scale-90 flex items-center justify-center">
+               <MoreHorizontal size={22} />
+             </button>
           </div>
 
-          <div className="space-y-1">
-            {tracks?.map((track, i) => (
-              <TrackRow 
-                key={track.id} 
+        </div>
+      </div>
+
+      <div className="px-0 md:px-12 space-y-8 relative z-10">
+        
+        {/* --- 3. TRACK LIST (Full Bleed on Mobile) --- */}
+        <div className="space-y-0.5 md:space-y-1">
+          {/* Desktop Table Header */}
+          <div className="hidden md:flex items-center gap-4 px-4 pb-3 border-b border-white/5 text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-2">
+            <div className="w-8 text-center">#</div>
+            <div className="flex-1">Title</div>
+            <div className="w-16 text-right"><Clock size={14} className="ml-auto" /></div>
+          </div>
+
+          {tracks?.map((track, i) => (
+            <div key={track.id} className="active:scale-[0.99] md:active:scale-100 transition-transform duration-200">
+               <TrackRow 
                 track={track} 
                 index={i} 
                 context="Album" 
                 allTracks={tracks ?? []}
               />
-            ))}
-          </div>
-          
-          <div className="mt-16 p-8 text-center md:text-left text-xs text-zinc-600 font-bold border-t border-white/5 flex flex-col gap-2">
-            <p>{new Date(album.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-            <p className="uppercase tracking-widest">© {releaseYear} {album.artists?.name}. All Rights Reserved.</p>
-          </div>
+            </div>
+          ))}
         </div>
+        
+        {/* --- 4. COPYRIGHT FOOTER --- */}
+        <div className="mt-8 mx-6 md:mx-0 p-6 text-center md:text-left border-t border-white/5 flex flex-col gap-1.5 opacity-60 hover:opacity-100 transition-opacity">
+           <p className="text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-widest">
+              Released on {new Date(album.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+           </p>
+           <p className="text-[9px] md:text-[10px] text-zinc-600 font-black uppercase tracking-widest">
+              © {releaseYear} {album.artists?.name}. All Rights Reserved.
+           </p>
+        </div>
+
       </div>
     </div>
   );

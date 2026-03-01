@@ -1,8 +1,10 @@
+// src/app/(user)/search/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search as SearchIcon, Disc, Mic2, Music, ChevronRight } from "lucide-react";
+import { Search as SearchIcon, Disc, Mic2, Music, X, Loader2, Play, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import TrackRow from "@/components/user/TrackRow";
@@ -10,7 +12,7 @@ import TrackRow from "@/components/user/TrackRow";
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ tracks: any[], artists: any[], albums: any[] }>({
-    tracks: [], artists: [], albums: []
+    tracks: [], artists:[], albums: []
   });
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
@@ -18,7 +20,7 @@ export default function SearchPage() {
   useEffect(() => {
     // Debounce search to prevent API calls on every keystroke
     const delayDebounceFn = setTimeout(async () => {
-      if (query.length > 1) {
+      if (query.trim().length > 1) {
         setLoading(true);
         const [t, a, alb] = await Promise.all([
           supabase.from("tracks").select("*, artists(name), albums(title, cover_url)").ilike("title", `%${query}%`).limit(5),
@@ -28,126 +30,207 @@ export default function SearchPage() {
         
         setResults({
           tracks: t.data || [],
-          artists: a.data || [],
-          albums: alb.data || []
+          artists: a.data ||[],
+          albums: alb.data ||[]
         });
         setLoading(false);
       } else {
-        setResults({ tracks: [], artists: [], albums: [] });
+        setResults({ tracks: [], artists: [], albums:[] });
+        setLoading(false);
       }
-    }, 300);
+    }, 400); // 400ms debounce for smoother typing feel
 
     return () => clearTimeout(delayDebounceFn);
   }, [query, supabase]);
 
+  const topResult = results.artists.length > 0 ? results.artists[0] : (results.albums.length > 0 ? results.albums[0] : null);
+
   return (
-    <div className="p-6 md:p-10 min-h-screen pb-32">
-      {/* Search Header */}
-      <div className="sticky top-0 bg-black/80 backdrop-blur-xl z-20 py-4 -mx-6 px-6 mb-8 border-b border-white/5">
-        <div className="relative max-w-md">
-          <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
-          <input 
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="What do you want to listen to?"
-            className="w-full bg-zinc-900/50 border border-white/10 rounded-full py-4 pl-12 pr-6 text-white font-medium outline-none focus:bg-zinc-900 focus:border-[#FF0055] transition-all placeholder:text-zinc-500"
-            autoFocus
-          />
-        </div>
-      </div>
+    <div className="relative min-h-screen w-full bg-[#050505] text-zinc-100 pb-32 overflow-x-hidden selection:bg-[#FF0055] selection:text-white">
+      
+      {/* Background Atmosphere */}
+      <div className="absolute top-0 inset-x-0 h-[400px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
 
-      {!query && (
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-600 animate-in fade-in">
-          <SearchIcon size={64} className="mb-4 opacity-20" />
-          <p className="font-bold text-lg">Search for songs, artists, or albums</p>
-        </div>
-      )}
-
-      {query && (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          
-          {/* Top Result */}
-          {(results.artists.length > 0 || results.albums.length > 0) && (
-            <section>
-              <h2 className="text-xl font-black text-white mb-4">Top Result</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {results.artists[0] && (
-                  <Link href={`/artist/${results.artists[0].id}`} className="bg-zinc-900/50 p-6 rounded-[2rem] hover:bg-zinc-900 transition-colors group flex items-center gap-6">
-                    <div className="relative w-24 h-24 rounded-full overflow-hidden shadow-lg shrink-0">
-                      {results.artists[0].image_url && <Image src={results.artists[0].image_url} alt="" fill className="object-cover" />}
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-black text-white group-hover:text-[#FF0055] transition-colors">{results.artists[0].name}</h3>
-                      <span className="text-xs font-bold bg-black/50 px-3 py-1 rounded-full uppercase tracking-wider text-zinc-400 mt-2 inline-block">Artist</span>
-                    </div>
-                  </Link>
-                )}
-              </div>
-            </section>
-          )}
-
-          {/* Songs */}
-          {results.tracks.length > 0 && (
-            <section>
-              <h2 className="text-xl font-black text-white mb-4">Songs</h2>
-              <div className="space-y-1">
-                {results.tracks.map((track, i) => (
-                  <TrackRow 
-                    key={track.id} 
-                    track={track} 
-                    index={i} 
-                    context="Search" 
-                    allTracks={results.tracks} // <-- FIX IS HERE
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Artists */}
-          {results.artists.length > 0 && (
-            <section>
-              <h2 className="text-xl font-black text-white mb-4">Artists</h2>
-              <div className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide">
-                {results.artists.map(artist => (
-                  <Link key={artist.id} href={`/artist/${artist.id}`} className="min-w-[140px] text-center group">
-                    <div className="w-32 h-32 relative rounded-full overflow-hidden mb-3 mx-auto border-2 border-transparent group-hover:border-[#FF0055] transition-all">
-                      {artist.image_url && <Image src={artist.image_url} alt="" fill className="object-cover" />}
-                    </div>
-                    <p className="font-bold text-white truncate">{artist.name}</p>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Albums */}
-          {results.albums.length > 0 && (
-            <section>
-              <h2 className="text-xl font-black text-white mb-4">Albums</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {results.albums.map(album => (
-                  <Link key={album.id} href={`/album/${album.id}`} className="group p-4 bg-zinc-900/30 rounded-2xl hover:bg-zinc-900 transition-colors">
-                    <div className="aspect-square relative rounded-xl overflow-hidden mb-3 shadow-lg">
-                      {album.cover_url && <Image src={album.cover_url} alt="" fill className="object-cover" />}
-                    </div>
-                    <p className="font-bold text-white truncate">{album.title}</p>
-                    <p className="text-xs text-zinc-500">{album.artists?.name}</p>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* No Results Message */}
-          {query && !loading && results.tracks.length === 0 && results.artists.length === 0 && results.albums.length === 0 && (
-            <div className="text-center py-20 text-zinc-600">
-              <p className="font-bold">No results found for "{query}"</p>
+      <div className="p-4 md:p-8 max-w-7xl mx-auto">
+        
+        {/* --- SEARCH HEADER --- */}
+        <div className="sticky top-0 z-40 py-4 md:py-6 -mx-4 px-4 md:mx-0 md:px-0 bg-[#050505]/90 backdrop-blur-2xl border-b border-white/5 mb-8 md:mb-10 transition-all">
+          <div className="relative max-w-2xl mx-auto group">
+            
+            {/* Search Icon / Loader */}
+            <div className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-[#FF0055] transition-colors z-10">
+               {loading ? <Loader2 size={22} className="animate-spin text-[#FF0055]" /> : <SearchIcon size={22} />}
             </div>
-          )}
+            
+            <input 
+              value={query}
+              onChange={(e) => {
+                  setQuery(e.target.value);
+                  if(e.target.value.trim().length > 1) setLoading(true);
+              }}
+              placeholder="What do you want to listen to?"
+              className="w-full bg-[#0A0A0A] border border-white/10 rounded-full py-4 md:py-5 pl-14 md:pl-16 pr-14 md:pr-16 text-white text-base md:text-lg font-black outline-none focus:bg-black focus:border-[#FF0055]/50 focus:ring-4 focus:ring-[#FF0055]/10 transition-all placeholder:text-zinc-600 shadow-2xl"
+              autoFocus
+            />
 
+            {/* Clear Button */}
+            {query && (
+                <button 
+                  onClick={() => { setQuery(""); setResults({ tracks: [], artists: [], albums:[] }); }}
+                  className="absolute right-5 md:right-6 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10 p-1.5 rounded-full transition-all active:scale-90"
+                >
+                    <X size={16} />
+                </button>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* --- EMPTY STATE --- */}
+        {!query && (
+          <div className="flex flex-col items-center justify-center py-20 md:py-32 text-center animate-in fade-in duration-1000">
+            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(255,255,255,0.02)] animate-[pulse_4s_ease-in-out_infinite]">
+                <SearchIcon size={40} className="text-zinc-700" />
+            </div>
+            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-2">Discover New Music</h2>
+            <p className="text-sm md:text-base font-medium text-zinc-500 max-w-sm">Search for your favorite songs, artists, or explore new albums.</p>
+          </div>
+        )}
+
+        {/* --- RESULTS SECTION --- */}
+        {query && (
+          <div className="space-y-12 md:space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+                
+                {/* --- LEFT COL: TOP RESULT --- */}
+                {topResult && (
+                    <div className="lg:col-span-5">
+                        <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Top Result</h2>
+                        <Link 
+                            href={topResult.name ? `/artist/${topResult.id}` : `/album/${topResult.id}`} 
+                            className="group relative block overflow-hidden rounded-[2rem] bg-[#0A0A0A] border border-white/5 hover:border-[#FF0055]/30 p-6 md:p-8 active:scale-[0.98] md:active:scale-100 transition-all duration-500 shadow-xl hover:shadow-[0_10px_40px_rgba(255,0,85,0.15)]"
+                        >
+                            {/* Animated Background Glow */}
+                            <div className="absolute -inset-20 bg-gradient-to-br from-[#FF0055]/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 blur-2xl transition-opacity duration-700 pointer-events-none" />
+
+                            <div className="relative z-10 flex flex-col gap-6">
+                                <div className={`relative w-28 h-28 md:w-32 md:h-32 overflow-hidden shadow-2xl ${topResult.name ? 'rounded-full' : 'rounded-2xl'}`}>
+                                    {topResult.image_url || topResult.cover_url ? (
+                                        <Image src={topResult.image_url || topResult.cover_url} alt="" fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
+                                    ) : (
+                                        <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                                            {topResult.name ? <Mic2 size={32} className="text-zinc-600"/> : <Disc size={32} className="text-zinc-600"/>}
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <div className="flex items-end justify-between">
+                                    <div>
+                                        <h3 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none group-hover:text-[#FF0055] transition-colors line-clamp-2">
+                                            {topResult.name || topResult.title}
+                                        </h3>
+                                        <div className="flex items-center gap-2 mt-3">
+                                            <span className="text-[10px] font-black bg-white/10 px-3 py-1 rounded-full uppercase tracking-widest text-zinc-300">
+                                                {topResult.name ? 'Artist' : 'Album'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Play Button overlay */}
+                                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[#FF0055] flex items-center justify-center text-white shadow-[0_0_20px_rgba(255,0,85,0.4)] translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-[#ff1a66]">
+                                        <Play fill="currentColor" size={24} className="ml-1" />
+                                    </div>
+                                </div>
+                            </div>
+                        </Link>
+                    </div>
+                )}
+
+                {/* --- RIGHT COL: SONGS --- */}
+                {results.tracks.length > 0 && (
+                    <div className={topResult ? "lg:col-span-7" : "lg:col-span-12"}>
+                        <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Songs</h2>
+                        <div className="space-y-1">
+                            {results.tracks.map((track, i) => (
+                                <div key={track.id} className="active:scale-[0.99] md:active:scale-100 transition-transform">
+                                    <TrackRow 
+                                        track={track} 
+                                        index={i} 
+                                        context="Search" 
+                                        allTracks={results.tracks}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* --- ARTISTS ROW (Story Ring Design) --- */}
+            {results.artists.length > 0 && (
+              <section className="-mx-4 px-4 md:mx-0 md:px-0">
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Artists</h2>
+                <div className="flex gap-4 md:gap-8 overflow-x-auto pb-6 snap-x snap-mandatory no-scrollbar pr-4 md:pr-0">
+                  {results.artists.map(artist => (
+                    <Link key={artist.id} href={`/artist/${artist.id}`} className="min-w-[110px] md:min-w-[140px] snap-start flex flex-col items-center group active:scale-95 md:active:scale-100 transition-transform duration-300">
+                      
+                      {/* Story Ring #FF0055 Theme */}
+                      <div className="w-[100px] h-[100px] md:w-32 md:h-32 rounded-full p-[3px] md:p-[4px] bg-gradient-to-b from-[#FF0055] via-[#ff1a66] to-[#4d001a] mb-3 md:mb-4 shadow-[0_0_15px_rgba(255,0,85,0.2)] md:group-hover:shadow-[0_0_25px_rgba(255,0,85,0.5)] transition-all duration-500 relative overflow-hidden">
+                         <div className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent_0%,#FF0055_50%,transparent_100%)] animate-[spin_4s_linear_infinite] opacity-40 mix-blend-overlay" />
+                         <div className="w-full h-full rounded-full overflow-hidden bg-[#050505] border-[3px] md:border-4 border-[#050505] relative z-10">
+                            {artist.image_url ? (
+                                <Image src={artist.image_url} alt="" fill className="object-cover md:filter md:grayscale md:group-hover:grayscale-0 transition-all duration-500 md:scale-100 md:group-hover:scale-110" />
+                            ) : (
+                                <div className="w-full h-full bg-zinc-800 flex items-center justify-center"><Mic2 size={32} className="text-zinc-600"/></div>
+                            )}
+                         </div>
+                      </div>
+                      <p className="font-bold text-xs md:text-sm text-zinc-200 md:text-zinc-300 md:group-hover:text-white truncate w-full text-center px-1 transition-colors">{artist.name}</p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* --- ALBUMS GRID --- */}
+            {results.albums.length > 0 && (
+              <section>
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Albums</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                  {results.albums.map(album => (
+                    <Link key={album.id} href={`/album/${album.id}`} className="group flex flex-col gap-2 md:gap-3 active:scale-95 md:active:scale-100 transition-transform duration-300">
+                      <div className="aspect-square relative rounded-2xl md:rounded-[1.5rem] overflow-hidden bg-zinc-900 border border-white/5 shadow-md md:group-hover:shadow-[0_10px_25px_rgba(255,255,255,0.05)] md:group-hover:border-white/20 md:group-hover:-translate-y-1 transition-all duration-500">
+                        {album.cover_url ? (
+                            <Image src={album.cover_url} alt="" fill className="object-cover md:transition-transform md:duration-700 md:group-hover:scale-105" />
+                        ) : (
+                            <div className="w-full h-full bg-zinc-800 flex items-center justify-center"><Disc size={40} className="text-zinc-600"/></div>
+                        )}
+                        <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      </div>
+                      <div className="px-1">
+                        <p className="font-bold text-sm md:text-base text-zinc-100 truncate md:group-hover:text-white transition-colors">{album.title}</p>
+                        <p className="text-[10px] md:text-xs text-zinc-400 md:text-zinc-500 font-bold uppercase tracking-wider truncate mt-0.5">{album.artists?.name}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* --- NO RESULTS MESSAGE --- */}
+            {query && !loading && results.tracks.length === 0 && results.artists.length === 0 && results.albums.length === 0 && (
+              <div className="text-center py-20 text-zinc-500 animate-in fade-in">
+                <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5">
+                    <SearchIcon size={32} className="text-zinc-600" />
+                </div>
+                <p className="font-black text-lg text-white mb-1">No results found</p>
+                <p className="text-sm">Please make sure your words are spelled correctly.</p>
+              </div>
+            )}
+
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+// src/components/user/CollectionPlayButton.tsx
+
 "use client";
 
 import { usePlayerStore } from "@/store/usePlayerStore";

@@ -1,3 +1,5 @@
+// src/app/(user)/layout.tsx
+
 import UserSidebar from "@/components/user/UserSidebar";
 import MobileNav from "@/components/user/MobileNav";
 import AudioPlayer from "@/components/player/AudioPlayer";
