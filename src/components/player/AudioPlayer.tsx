@@ -34,61 +34,14 @@ export default function AudioPlayer() {
   const supabase = createClient();
   const audioRef = useRef<HTMLAudioElement>(null);
   
-  const [volume, setVolume] = useState(1);
+  const[volume, setVolume] = useState(1);
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
-  const[myPlaylists, setMyPlaylists] = useState<any[]>([]);
+  const [myPlaylists, setMyPlaylists] = useState<any[]>([]);
 
   const progress = usePlayerStore(state => state.currentTime);
   const duration = usePlayerStore(state => state.duration);
 
-  // --- 1. MEDIA SESSION API (Background Playback Logic) ---
-  useEffect(() => {
-    if (!currentTrack || !("mediaSession" in navigator)) return;
-
-    // Resolve the best available artwork
-    const artworkUrl = currentTrack.cover_url || currentTrack.albums?.cover_url || currentTrack.artists?.image_url || "/miraclefm.jpg";
-
-    // Update Lock Screen Metadata
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentTrack.title,
-      artist: currentTrack.artists?.name || "Miracle FM",
-      album: currentTrack.albums?.title || "Single",
-      artwork:[
-        { src: artworkUrl, sizes: "96x96", type: "image/jpeg" },
-        { src: artworkUrl, sizes: "128x128", type: "image/jpeg" },
-        { src: artworkUrl, sizes: "192x192", type: "image/jpeg" },
-        { src: artworkUrl, sizes: "256x256", type: "image/jpeg" },
-        { src: artworkUrl, sizes: "384x384", type: "image/jpeg" },
-        { src: artworkUrl, sizes: "512x512", type: "image/jpeg" },
-      ]
-    });
-
-    // Handle Lock Screen / Notification Center Actions
-    navigator.mediaSession.setActionHandler("play", () => setIsPlaying(true));
-    navigator.mediaSession.setActionHandler("pause", () => setIsPlaying(false));
-    navigator.mediaSession.setActionHandler("previoustrack", playPrevious);
-    navigator.mediaSession.setActionHandler("nexttrack", playNext);
-    
-    // Allow scrubbing from lock screen
-    navigator.mediaSession.setActionHandler("seekto", (details) => {
-      if (details.seekTime && audioRef.current) {
-        audioRef.current.currentTime = details.seekTime;
-        setCurrentTime(details.seekTime);
-      }
-    });
-
-    return () => {
-      if ("mediaSession" in navigator) {
-        navigator.mediaSession.setActionHandler("play", null);
-        navigator.mediaSession.setActionHandler("pause", null);
-        navigator.mediaSession.setActionHandler("previoustrack", null);
-        navigator.mediaSession.setActionHandler("nexttrack", null);
-        navigator.mediaSession.setActionHandler("seekto", null);
-      }
-    };
-  },[currentTrack, setIsPlaying, playNext, playPrevious, setCurrentTime]);
-
-  // --- 2. Audio Engine Logic (Existing) ---
+  // --- Audio Engine Logic ---
   useEffect(() => {
     if (!currentTrack || !audioRef.current) return;
     const audio = audioRef.current;
@@ -111,12 +64,6 @@ export default function AudioPlayer() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    
-    // Sync media session playback state
-    if ("mediaSession" in navigator) {
-      navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
-    }
-
     if (isPlaying) audio.play().catch(() => {});
     else audio.pause();
   }, [isPlaying]);
@@ -168,14 +115,15 @@ export default function AudioPlayer() {
   return (
     <div className={cn(
       "fixed z-40 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+      // --- MOBILE: Floating Pill Design (sits above the floating nav) ---
       "bottom-[100px] left-1/2 -translate-x-1/2 w-[92%] max-w-[400px] h-[64px] bg-[#0A0A0A]/85 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] px-2",
+      // --- DESKTOP: Full Bottom Bar ---
       "md:bottom-0 md:left-0 md:translate-x-0 md:w-full md:max-w-none md:h-[96px] md:bg-[#050505]/95 md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-6"
     )}>
       
-      {/* Hidden audio element (CSS hidden to prevent mobile browsers from deprioritizing it) */}
       <audio 
         ref={audioRef} 
-        className="hidden" 
+        hidden 
         onTimeUpdate={handleTimeUpdate} 
         onLoadedMetadata={handleTimeUpdate} 
         onEnded={playNext}
