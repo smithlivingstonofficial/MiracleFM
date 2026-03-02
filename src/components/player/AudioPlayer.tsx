@@ -45,8 +45,10 @@ export default function AudioPlayer() {
   useEffect(() => {
     if (!currentTrack || !("mediaSession" in navigator)) return;
 
+    // Resolve the best available artwork
     const artworkUrl = currentTrack.cover_url || currentTrack.albums?.cover_url || currentTrack.artists?.image_url || "/miraclefm.jpg";
 
+    // Update Lock Screen Metadata
     navigator.mediaSession.metadata = new MediaMetadata({
       title: currentTrack.title,
       artist: currentTrack.artists?.name || "Miracle FM",
@@ -54,21 +56,20 @@ export default function AudioPlayer() {
       artwork:[
         { src: artworkUrl, sizes: "96x96", type: "image/jpeg" },
         { src: artworkUrl, sizes: "128x128", type: "image/jpeg" },
+        { src: artworkUrl, sizes: "192x192", type: "image/jpeg" },
         { src: artworkUrl, sizes: "256x256", type: "image/jpeg" },
+        { src: artworkUrl, sizes: "384x384", type: "image/jpeg" },
         { src: artworkUrl, sizes: "512x512", type: "image/jpeg" },
       ]
     });
 
-    navigator.mediaSession.setActionHandler("play", () => {
-      audioRef.current?.play();
-      setIsPlaying(true);
-    });
-    navigator.mediaSession.setActionHandler("pause", () => {
-      audioRef.current?.pause();
-      setIsPlaying(false);
-    });
+    // Handle Lock Screen / Notification Center Actions
+    navigator.mediaSession.setActionHandler("play", () => setIsPlaying(true));
+    navigator.mediaSession.setActionHandler("pause", () => setIsPlaying(false));
     navigator.mediaSession.setActionHandler("previoustrack", playPrevious);
     navigator.mediaSession.setActionHandler("nexttrack", playNext);
+    
+    // Allow scrubbing from lock screen
     navigator.mediaSession.setActionHandler("seekto", (details) => {
       if (details.seekTime && audioRef.current) {
         audioRef.current.currentTime = details.seekTime;
@@ -76,53 +77,48 @@ export default function AudioPlayer() {
       }
     });
 
-  }, [currentTrack, setIsPlaying, playNext, playPrevious, setCurrentTime]);
+    return () => {
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.setActionHandler("play", null);
+        navigator.mediaSession.setActionHandler("pause", null);
+        navigator.mediaSession.setActionHandler("previoustrack", null);
+        navigator.mediaSession.setActionHandler("nexttrack", null);
+        navigator.mediaSession.setActionHandler("seekto", null);
+      }
+    };
+  },[currentTrack, setIsPlaying, playNext, playPrevious, setCurrentTime]);
 
-  // --- 2. AUDIO ENGINE & HLS LOGIC (Optimized for Mobile Background) ---
+  // --- 2. Audio Engine Logic (Existing) ---
   useEffect(() => {
     if (!currentTrack || !audioRef.current) return;
     const audio = audioRef.current;
-    
-    // Reset time when track changes
+
     setCurrentTime(0);
 
-    // PRIORITY 1: Native Apple HLS (Crucial for iOS background playback)
-    if (audio.canPlayType("application/vnd.apple.mpegurl")) {
-      audio.src = currentTrack.hls_url;
-      // Wait for it to load before calling play
-      audio.addEventListener('loadedmetadata', () => {
-        if(isPlaying) audio.play().catch(e => console.log("Auto-play prevented", e));
-      }, { once: true });
-    } 
-    // PRIORITY 2: Hls.js for Android/Chrome/Desktop
-    else if (Hls.isSupported()) {
-      const hls = new Hls({
-        // Tweak buffer settings to help Android background playing survive longer JS pauses
-        maxBufferLength: 60, 
-        maxMaxBufferLength: 600,
-      });
+    if (Hls.isSupported()) {
+      const hls = new Hls();
       hls.loadSource(currentTrack.hls_url);
       hls.attachMedia(audio);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if(isPlaying) audio.play().catch(e => console.log("Auto-play prevented", e));
+        if(isPlaying) audio.play().catch(() => setIsPlaying(false));
       });
+    } else if (audio.canPlayType("application/vnd.apple.mpegurl")) {
+      audio.src = currentTrack.hls_url;
+      if(isPlaying) audio.play().catch(() => setIsPlaying(false));
     }
-  }, [currentTrack]); // Intentionally removed isPlaying from dependency array to prevent reloading stream
+  }, [currentTrack]);
 
-  // --- 3. PLAY/PAUSE SYNC ---
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     
+    // Sync media session playback state
     if ("mediaSession" in navigator) {
       navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
     }
 
-    if (isPlaying && audio.paused) {
-      audio.play().catch(() => setIsPlaying(false));
-    } else if (!isPlaying && !audio.paused) {
-      audio.pause();
-    }
+    if (isPlaying) audio.play().catch(() => {});
+    else audio.pause();
   }, [isPlaying]);
 
   const handleTimeUpdate = () => {
@@ -140,7 +136,6 @@ export default function AudioPlayer() {
     }
   };
 
-  // ... (Playlist Fetching Logic)
   const fetchMyPlaylists = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return toast.error("Login to add to playlist");
@@ -177,22 +172,13 @@ export default function AudioPlayer() {
       "md:bottom-0 md:left-0 md:translate-x-0 md:w-full md:max-w-none md:h-[96px] md:bg-[#050505]/95 md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-6"
     )}>
       
-      {/* 
-         CRUCIAL CHANGES HERE: 
-         1. Removed className="hidden"
-         2. Added playsInline
-         3. Added onPlay and onPause to perfectly sync the OS Lock Screen with the React State
-      */}
+      {/* Hidden audio element (CSS hidden to prevent mobile browsers from deprioritizing it) */}
       <audio 
         ref={audioRef} 
-        playsInline
-        preload="auto"
+        className="hidden" 
         onTimeUpdate={handleTimeUpdate} 
         onLoadedMetadata={handleTimeUpdate} 
         onEnded={playNext}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        style={{ display: "none" }} 
       />
       
       {/* --- MOBILE: Integrated Progress Line --- */}
@@ -207,6 +193,8 @@ export default function AudioPlayer() {
         
         {/* --- LEFT SECTION: Cover Art & Track Info --- */}
         <div className="flex items-center gap-3 md:gap-4 w-auto md:w-[30%] min-w-0 h-full flex-1 md:flex-none">
+          
+          {/* Cover Art - Click to open Fullscreen */}
           <button onClick={toggleFullScreen} className="relative w-12 h-12 md:w-16 md:h-16 rounded-[1rem] md:rounded-[1.25rem] overflow-hidden bg-zinc-800 shrink-0 group shadow-lg active:scale-95 transition-transform">
             {displayImage && <Image src={displayImage} alt="" fill className="object-cover" />}
             <div className="hidden md:flex absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 items-center justify-center transition-opacity">
@@ -214,11 +202,13 @@ export default function AudioPlayer() {
             </div>
           </button>
           
+          {/* Track Text - Click to open Fullscreen */}
           <div className="min-w-0 flex-1 pr-2 cursor-pointer active:opacity-70 transition-opacity" onClick={toggleFullScreen}>
             <p className="text-[13px] md:text-base font-black text-white truncate drop-shadow-md">{currentTrack.title}</p>
             <p className="text-[10px] md:text-xs font-bold text-zinc-400 truncate uppercase tracking-wide mt-0.5">{currentTrack.artists?.name}</p>
           </div>
 
+          {/* Desktop Only Extra Tools */}
           <div className="hidden md:flex items-center gap-3 ml-2 shrink-0">
             <LikeButton trackId={currentTrack.id} />
             <div className="relative">
@@ -244,12 +234,16 @@ export default function AudioPlayer() {
 
         {/* --- CENTER SECTION: Controls & Scrubber --- */}
         <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[45%] pr-2 md:pr-0">
+          
           <div className="flex items-center gap-3 md:gap-6">
             <button onClick={toggleShuffle} className={cn("hidden md:block active:scale-90 transition-all", isShuffled ? "text-[#FF0055]" : "text-zinc-500 hover:text-white")}><Shuffle size={18} /></button>
             <button onClick={playPrevious} className="hidden md:block text-zinc-400 hover:text-white active:scale-90 transition-all"><SkipBack size={24} fill="currentColor" /></button>
             
+            {/* Play/Pause Button */}
             <div className="relative group/play flex items-center justify-center">
+              {/* Glowing Pulse behind Play Button when active */}
               {isPlaying && <div className="absolute inset-0 bg-[#FF0055] rounded-full blur-md opacity-40 animate-pulse" />}
+              
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }} 
                 className="relative z-10 w-11 h-11 md:w-12 md:h-12 bg-white hover:bg-zinc-200 rounded-full flex items-center justify-center text-black active:scale-90 transition-transform shadow-xl"
@@ -265,6 +259,7 @@ export default function AudioPlayer() {
             </button>
           </div>
 
+          {/* Desktop Time Scrubber */}
           <div className="hidden md:flex w-full items-center gap-4 text-[11px] font-bold text-zinc-500 mt-2">
             <span className="w-10 text-right">{formatTime(progress)}</span>
             <div className="relative flex-1 flex items-center group">
