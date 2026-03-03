@@ -24,6 +24,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8115646001024972" crossOrigin="anonymous"/>
+      </head>
       <body className={`${inter.className} bg-black text-white antialiased`}>
         {children}
         <Toaster position="bottom-right" richColors />
