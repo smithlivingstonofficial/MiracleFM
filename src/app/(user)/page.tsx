@@ -6,6 +6,7 @@ import EditorialSection from "@/components/user/home/EditorialSection";
 import NewReleasesSection from "@/components/user/home/NewReleasesSection";
 import PopularArtistsSection from "@/components/user/home/PopularArtistsSection";
 import HomeFooter from "@/components/user/home/HomeFooter";
+import HomeFeedAd from "@/components/ads/HomeFeedAd";
 
 export const revalidate = 0; 
 
@@ -66,6 +67,11 @@ export default async function HomePage() {
         <EditorialSection playlists={playlistsRes.data || []} />
         
         <NewReleasesSection albums={albumsRes.data || []} />
+
+        {/* --- ADVERTISEMENT SECTION --- */}
+        <section className="max-w-[1200px] mx-auto">
+           <HomeFeedAd />
+        </section>
         
         <PopularArtistsSection artists={artistsRes.data || []} />
 
