@@ -31,7 +31,7 @@ export default async function LibraryPage() {
         
         {/* 1. The "Vault Card" Header */}
         <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-zinc-900 via-black to-zinc-950 border border-white/10 shadow-2xl p-8 md:p-12">
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
+          <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
           
           <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-8 md:gap-12">
             

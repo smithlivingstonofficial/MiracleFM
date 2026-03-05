@@ -128,7 +128,7 @@ export default function PlaylistPage() {
         {/* 1. Header Card */}
         <div className="relative overflow-hidden rounded-[2.5rem] bg-zinc-900/40 border border-white/5 shadow-2xl p-6 md:p-10 mt-16 md:mt-0 group/card transition-colors hover:bg-zinc-900/60">
           
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 brightness-100 contrast-150 pointer-events-none"></div>
+          <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 brightness-100 contrast-150 pointer-events-none"></div>
           
           <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-8 md:gap-12">
             
