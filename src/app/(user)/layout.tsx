@@ -1,5 +1,3 @@
-// src/app/(user)/layout.tsx
-
 import UserSidebar from "@/components/user/UserSidebar";
 import MobileNav from "@/components/user/MobileNav";
 import AudioPlayer from "@/components/player/AudioPlayer";
@@ -7,35 +5,42 @@ import FullScreenPlayer from "@/components/player/FullScreenPlayer";
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen w-full bg-black text-white overflow-hidden font-sans selection:bg-[#FF0055] selection:text-white">
+    // Changed h-screen to h-[100dvh] for better mobile browser support
+    <div className="flex h-[100dvh] w-full bg-[#050505] text-white overflow-hidden font-sans selection:bg-[#FF0055] selection:text-white">
       
-      {/* Desktop Sidebar (Hidden on Mobile) */}
-      <div className="hidden md:block h-full z-30 relative">
+      {/* 1. Desktop Sidebar (Fixed Left) */}
+      <div className="hidden md:block h-full z-30 relative shrink-0">
         <UserSidebar />
       </div>
 
-      {/* Main Content */}
+      {/* 2. Main Content Area */}
       <div className="flex-1 flex flex-col h-full relative min-w-0">
-        <main className="flex-1 overflow-y-auto scroll-smooth no-scrollbar w-full">
+        
+        {/* 
+           Scrollable Container 
+           - id="main-content" allows for potential "scroll to top" features later
+        */}
+        <main id="main-content" className="flex-1 overflow-y-auto scroll-smooth no-scrollbar w-full bg-[#050505]">
           {/* 
-             Mobile Padding: pb-48 (Space for Nav + Player) 
-             Desktop Padding: pb-32 (Space for Player only)
+             Padding Logic:
+             - Mobile: pb-48 (Nav Height + Player Height + Buffer)
+             - Desktop: pb-32 (Player Height + Buffer)
           */}
           <div className="pb-48 md:pb-32 min-h-full">
             {children}
           </div>
         </main>
 
-        {/* Player Overlay */}
+        {/* Player Overlay (Z-Index ensures it sits above scrolling content) */}
         <div className="z-40">
           <AudioPlayer />
         </div>
       </div>
 
-      {/* Mobile Navigation (Fixed Bottom) */}
+      {/* 3. Mobile Navigation (Fixed Bottom) */}
       <MobileNav />
       
-      {/* Full Screen Overlay */}
+      {/* 4. Full Screen Overlay (Highest Z-Index) */}
       <FullScreenPlayer />
     </div>
   );
