@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: "/upload",
         headers: [
           {
             key: "Cross-Origin-Opener-Policy",

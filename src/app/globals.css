@@ -99,3 +99,13 @@ input[type="range"]::-moz-range-progress {
     @apply opacity-100;
   }
 }
+
+/* Update this in globals.css */
+.grain-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background-image: url("/noise.svg"); /* Changed to local */
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 9999;
+}
