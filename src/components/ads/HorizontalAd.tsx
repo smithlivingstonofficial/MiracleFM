@@ -1,3 +1,5 @@
+// This ad is used in home page
+
 "use client";
 
 import { useEffect, useRef } from "react";

@@ -9,6 +9,7 @@ import TrackRow from "@/components/user/TrackRow";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import StartRadio from "@/components/user/StartRadio";
 import LikeButton from "@/components/user/LikeButton"; // Assuming you have a standalone LikeButton component, otherwise use the Heart icon logic
+import HorizontalAd from "@/components/ads/HorizontalAd";
 
 export const revalidate = 60;
 
@@ -175,14 +176,21 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
         </div>
         
         {/* --- 4. COPYRIGHT FOOTER --- */}
-        <div className="mt-8 mx-6 md:mx-0 p-6 text-center md:text-left border-t border-white/5 flex flex-col gap-1.5 opacity-60 hover:opacity-100 transition-opacity">
+        <div className="mt-8 mx-6 md:mx-0 p-6 text-center md:text-left border-t border-white/5 flex flex-col gap-1.5">
            <p className="text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-widest">
               Released on {new Date(album.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
            </p>
-           <p className="text-[9px] md:text-[10px] text-zinc-600 font-black uppercase tracking-widest">
+           <p className="text-[9px] md:text-[10px] text-rose-600 font-black uppercase tracking-widest">
               © {releaseYear} {album.artists?.name}. All Rights Reserved.
            </p>
         </div>
+
+        {/* --- ADD AD AT THE BOTTOM OF THE LIST --- */}
+        {tracks && tracks.length > 3 && (
+          <div className="pt-8 pb-4">
+            <HorizontalAd />
+          </div>
+        )}
 
       </div>
     </div>

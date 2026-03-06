@@ -1,3 +1,5 @@
+// this ad is used in all album pages
+
 "use client";
 
 import { useEffect, useRef } from "react";

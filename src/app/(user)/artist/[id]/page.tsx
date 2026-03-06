@@ -1,13 +1,12 @@
-// src/app/(user)/artist/[id]/page.tsx
-
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Play, CheckCircle2, MoreHorizontal, Radio, Music4, Disc } from "lucide-react";
+import { Play, CheckCircle2, MoreHorizontal, Music4, Disc } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import StartRadio from "@/components/user/StartRadio";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
+import HorizontalAd from "@/components/ads/HorizontalAd"; // Import the Ad Component
 
 export const revalidate = 60;
 
@@ -23,12 +22,17 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   ]);
 
   const artist = artistRes.data;
-  const topTracks = topTracksRes.data ||[];
+  const topTracks = topTracksRes.data || [];
   const albums = albumsRes.data ||[];
 
-  const genres = Array.from(new Set(topTracks.flatMap(t => t.genre || [])));
-
   if (!artist) return notFound();
+
+  // 2. Extract unique genres from the Array field for the Radio
+  const genres = Array.from(new Set(
+    topTracks
+      .flatMap(t => t.genre ||[])
+      .filter(g => typeof g === 'string')
+  ));
 
   return (
     <div className="bg-[#050505] min-h-screen pb-32 relative overflow-x-hidden text-white selection:bg-[#FF0055] selection:text-white">
@@ -60,14 +64,14 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
              <div className="absolute inset-[-10%] bg-[conic-gradient(from_0deg,transparent_0%,#FF0055_50%,transparent_100%)] animate-[spin_4s_linear_infinite] opacity-40 mix-blend-overlay rounded-full" />
              <div className="w-full h-full rounded-full overflow-hidden bg-[#050505] border-[4px] border-[#050505] relative z-10 shadow-inner">
                 {artist.image_url ? (
-                <Image src={artist.image_url} alt={artist.name} fill className="object-cover" />
+                  <Image src={artist.image_url} alt={artist.name} fill className="object-cover" />
                 ) : (
-                <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-500"><Music4 size={48} /></div>
+                  <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-500"><Music4 size={48} /></div>
                 )}
              </div>
           </div>
 
-          {/* Typography (Centered on Mobile, Left on Desktop) */}
+          {/* Typography */}
           <div className="text-center md:text-left flex-1">
             <div className="flex items-center justify-center md:justify-start gap-1.5 mb-2 md:mb-3">
               <CheckCircle2 size={16} className="text-[#FF0055] fill-current" />
@@ -87,29 +91,25 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
       <div className="relative z-20 px-4 md:px-12 mt-2 md:mt-6">
         <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 md:gap-5">
           
-          {/* Main Play Button (Using your component, wrapped for scale effect) */}
           <div className="active:scale-95 transition-transform duration-300 shadow-[0_0_20px_rgba(255,0,85,0.3)] rounded-full">
              <CollectionPlayButton tracks={topTracks} size="large" />
           </div>
           
-          {/* Glassmorphic Radio Button */}
           <div className="active:scale-95 transition-transform duration-300">
              <StartRadio genres={genres} artistId={id} />
           </div>
 
-          {/* Follow Button */}
           <button className="h-12 px-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#FF0055] text-white hover:text-[#FF0055] text-xs font-black uppercase tracking-widest transition-all backdrop-blur-md active:scale-95 flex items-center justify-center">
             Follow
           </button>
           
-          {/* More Options */}
           <button className="h-12 w-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 hover:text-white transition-all backdrop-blur-md active:scale-95 flex items-center justify-center">
             <MoreHorizontal size={20} />
           </button>
         </div>
       </div>
 
-      <div className="px-4 md:px-12 mt-12 md:mt-16 space-y-16 md:space-y-20 relative z-10">
+      <div className="px-4 md:px-12 mt-12 md:mt-16 space-y-10 md:space-y-16 relative z-10">
         
         {/* --- 3. POPULAR TRACKS --- */}
         {topTracks.length > 0 && (
@@ -127,14 +127,19 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           </section>
         )}
 
+        {/* --- ADVERTISEMENT BANNER --- */}
+        {/* Inserted cleanly between Tracks and Albums with animation */}
+        <section className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+          <HorizontalAd />
+        </section>
+
         {/* --- 4. DISCOGRAPHY (ALBUMS) --- */}
         {albums.length > 0 && (
-          <section className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+          <section className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-500">
             <div className="flex items-end justify-between mb-6 md:mb-8">
                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter">Releases</h2>
             </div>
 
-            {/* Horizontal Scroll Container (Full bleed on mobile) */}
             <div className="flex gap-4 md:gap-6 overflow-x-auto pb-8 snap-x snap-mandatory no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
               {albums.map((album, i, arr) => (
                 <Link 
@@ -156,16 +161,13 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                       <div className="w-full h-full flex items-center justify-center bg-zinc-800"><Disc size={40} className="text-zinc-600"/></div>
                     )}
                     
-                    {/* Glass Overlay (Desktop Hover) */}
                     <div className="hidden md:block absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]" />
                     
-                    {/* Floating Play Button (Desktop Hover) */}
                     <div className="hidden md:flex absolute inset-0 items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
                         <div className="bg-[#FF0055] p-3 md:p-4 rounded-full text-white shadow-xl shadow-black/50 hover:scale-110 hover:bg-[#ff1a66] transition-all">
                           <Play fill="currentColor" className="w-5 h-5 md:w-6 md:h-6 ml-1" />
                         </div>
                     </div>
-
                   </div>
                   
                   <div className="px-1">
