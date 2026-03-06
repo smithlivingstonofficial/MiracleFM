@@ -99,7 +99,7 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
         {/* User Profile (Moved to Right) */}
         {user ? (
           <Link 
-            href="/" 
+            href="/profile" 
             className="w-9 h-9 md:w-11 md:h-11 rounded-full overflow-hidden border border-white/10 active:scale-90 md:hover:border-[#FF0055] transition-all relative shadow-lg group ml-1"
           >
             {user.user_metadata?.avatar_url ? (
