@@ -80,7 +80,7 @@ export default function UserSidebar() {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative w-9 h-9 flex items-center justify-center">
              <div className="absolute inset-0 bg-[#FF0055] rounded-full blur-md opacity-40 group-hover:opacity-60 animate-pulse transition-opacity" />
-              <img src="/miraclefm.jpg" alt="Logo" className="absolute inset-0 w-full h-full object-cover rounded-full transition-opacity" />
+              <img src="/miraclefm-192.png" alt="Logo" className="absolute inset-0 w-full h-full object-cover rounded-full transition-opacity" />
           </div>
           
           {!isCollapsed && (

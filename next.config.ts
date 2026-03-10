@@ -1,9 +1,18 @@
 import type { NextConfig } from "next";
+import withPWAInit from "@ducanh2912/next-pwa";
+
+// Initialize the PWA plugin
+const withPWA = withPWAInit({
+  dest: "public",
+  // Disable PWA in development so you don't get annoying caching issues while coding
+  disable: process.env.NODE_ENV === "development",
+  register: true,
+});
 
 const nextConfig: NextConfig = {
-  // 1. Image Configuration: Allow images from Cloudflare R2
+  // 1. Image Configuration: Allow images from Cloudflare R2 & Google
   images: {
-    remotePatterns: [
+    remotePatterns:[
       {
         protocol: "https",
         // This wildcard allows any public R2 bucket URL (pub-xxxx.r2.dev)
@@ -26,7 +35,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/upload",
-        headers: [
+        headers:[
           {
             key: "Cross-Origin-Opener-Policy",
             value: "same-origin",
@@ -41,4 +50,5 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Export the config wrapped with the PWA initialization
+export default withPWA(nextConfig);
