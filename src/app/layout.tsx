@@ -6,6 +6,7 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import { GoogleAnalytics } from '@next/third-parties/google'
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -30,9 +31,10 @@ export default function RootLayout({
       <body className={`${inter.className} bg-black text-white antialiased`}>
         {children}
         <Toaster position="bottom-right" richColors />
-        <Analytics />
-        <SpeedInsights />
       </body>
+      <Analytics />
+      <SpeedInsights />
+      <GoogleAnalytics gaId="G-2PX140WBY7" />
     </html>
   );
 }
