@@ -2,6 +2,7 @@ import UserSidebar from "@/components/user/UserSidebar";
 import MobileNav from "@/components/user/MobileNav";
 import AudioPlayer from "@/components/player/AudioPlayer";
 import FullScreenPlayer from "@/components/player/FullScreenPlayer";
+import { Analytics } from "@vercel/analytics/next"
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -42,6 +43,7 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
       
       {/* 4. Full Screen Overlay (Highest Z-Index) */}
       <FullScreenPlayer />
+      <Analytics />
     </div>
   );
 }
