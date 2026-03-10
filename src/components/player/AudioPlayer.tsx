@@ -32,8 +32,11 @@ export default function AudioPlayer() {
   } = usePlayerStore();
 
   const supabase = createClient();
-  const audioRef = useRef<HTMLAudioElement>(null);
   
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const lastUpdate = useRef(0);
+
   const[volume, setVolume] = useState(1);
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
   const [myPlaylists, setMyPlaylists] = useState<any[]>([]);
@@ -48,19 +51,123 @@ export default function AudioPlayer() {
 
     setCurrentTime(0);
 
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+    }
+
     if (Hls.isSupported()) {
-      const hls = new Hls();
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        startFragPrefetch: true,
+        maxBufferLength: 10,
+        maxMaxBufferLength: 30,
+        maxBufferHole: 0.5,
+        highBufferWatchdogPeriod: 1,
+        fragLoadingTimeOut: 20000,
+        manifestLoadingTimeOut: 10000,
+        liveSyncDurationCount: 3
+      });
+
+      hlsRef.current = hls;
+
       hls.loadSource(currentTrack.hls_url);
       hls.attachMedia(audio);
+
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if(isPlaying) audio.play().catch(() => setIsPlaying(false));
       });
+
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        if (audio.paused && isPlaying) {
+          audio.play().catch(() => {});
+        }
+      });
+
     } else if (audio.canPlayType("application/vnd.apple.mpegurl")) {
       audio.src = currentTrack.hls_url;
       if(isPlaying) audio.play().catch(() => setIsPlaying(false));
     }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+      }
+    };
   }, [currentTrack]);
 
+  // --- Media Session API (Lockscreen / Bluetooth Controls) ---
+  useEffect(() => {
+    if (!currentTrack || !("mediaSession" in navigator)) return;
+
+    // 1. Add Media Session Metadata
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTrack.title,
+      artist: currentTrack.artists?.name || "Unknown Artist",
+      album: currentTrack.albums?.title || "",
+      artwork:[
+        {
+          src: currentTrack.cover_url || currentTrack.albums?.cover_url || currentTrack.artists?.image_url || "",
+          sizes: "512x512",
+          type: "image/png",
+        },
+      ],
+    });
+
+    // 2. Connect Notification Buttons to Your Player Logic
+    navigator.mediaSession.setActionHandler("play", () => setIsPlaying(true));
+    navigator.mediaSession.setActionHandler("pause", () => setIsPlaying(false));
+    navigator.mediaSession.setActionHandler("nexttrack", () => playNext());
+    navigator.mediaSession.setActionHandler("previoustrack", () => playPrevious());
+
+    // Clean up handlers on unmount
+    return () => {
+      navigator.mediaSession.setActionHandler("play", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("nexttrack", null);
+      navigator.mediaSession.setActionHandler("previoustrack", null);
+    };
+  }, [currentTrack, setIsPlaying, playNext, playPrevious]);
+
+  // --- Prevent Audio From Suspending When Tab Is Hidden ---
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleVisibility = () => {
+      if (document.hidden && isPlaying) {
+        // Try to force keep-alive when navigating away from the tab
+        audio.play().catch(()=>{});
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [isPlaying]);
+
+  // --- Prefetch Next Track ---
+  useEffect(() => {
+    const { queue, currentIndex } = usePlayerStore.getState();
+
+    const nextTrack = queue[currentIndex + 1];
+    if (!nextTrack) return;
+
+    const link = document.createElement("link");
+    link.rel = "prefetch";
+    link.href = nextTrack.hls_url;
+    link.as = "fetch";
+
+    document.head.appendChild(link);
+    
+    return () => {
+      document.head.removeChild(link);
+    };
+  }, [currentTrack]);
+
+  // --- Play/Pause Sync ---
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -69,6 +176,10 @@ export default function AudioPlayer() {
   }, [isPlaying]);
 
   const handleTimeUpdate = () => {
+    const now = Date.now();
+    if (now - lastUpdate.current < 250) return;
+    lastUpdate.current = now;
+
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
       setDuration(audioRef.current.duration || 0);
@@ -115,21 +226,21 @@ export default function AudioPlayer() {
   return (
     <div className={cn(
       "fixed z-40 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-      // --- MOBILE: Floating Pill Design (sits above the floating nav) ---
       "bottom-[100px] left-1/2 -translate-x-1/2 w-[92%] max-w-[400px] h-[64px] bg-[#0A0A0A]/85 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] px-2",
-      // --- DESKTOP: Full Bottom Bar ---
       "md:bottom-0 md:left-0 md:translate-x-0 md:w-full md:max-w-none md:h-[96px] md:bg-[#050505]/95 md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-6"
     )}>
       
+      {/* Added playsInline for mobile backgrounds */}
       <audio 
         ref={audioRef} 
+        preload="auto"
+        playsInline
         hidden 
         onTimeUpdate={handleTimeUpdate} 
         onLoadedMetadata={handleTimeUpdate} 
         onEnded={playNext}
       />
       
-      {/* --- MOBILE: Integrated Progress Line --- */}
       <div className="md:hidden absolute bottom-0 left-4 right-4 h-[3px] bg-white/5 rounded-full overflow-hidden">
         <div 
           className="h-full bg-[#FF0055] shadow-[0_0_10px_#FF0055] transition-all duration-300 ease-linear rounded-full" 
@@ -139,10 +250,8 @@ export default function AudioPlayer() {
 
       <div className="flex items-center justify-between max-w-[1600px] mx-auto h-full gap-2 md:gap-4 relative">
         
-        {/* --- LEFT SECTION: Cover Art & Track Info --- */}
         <div className="flex items-center gap-3 md:gap-4 w-auto md:w-[30%] min-w-0 h-full flex-1 md:flex-none">
           
-          {/* Cover Art - Click to open Fullscreen */}
           <button onClick={toggleFullScreen} className="relative w-12 h-12 md:w-16 md:h-16 rounded-[1rem] md:rounded-[1.25rem] overflow-hidden bg-zinc-800 shrink-0 group shadow-lg active:scale-95 transition-transform">
             {displayImage && <Image src={displayImage} alt="" fill className="object-cover" />}
             <div className="hidden md:flex absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 items-center justify-center transition-opacity">
@@ -150,13 +259,11 @@ export default function AudioPlayer() {
             </div>
           </button>
           
-          {/* Track Text - Click to open Fullscreen */}
           <div className="min-w-0 flex-1 pr-2 cursor-pointer active:opacity-70 transition-opacity" onClick={toggleFullScreen}>
             <p className="text-[13px] md:text-base font-black text-white truncate drop-shadow-md">{currentTrack.title}</p>
             <p className="text-[10px] md:text-xs font-bold text-zinc-400 truncate uppercase tracking-wide mt-0.5">{currentTrack.artists?.name}</p>
           </div>
 
-          {/* Desktop Only Extra Tools */}
           <div className="hidden md:flex items-center gap-3 ml-2 shrink-0">
             <LikeButton trackId={currentTrack.id} />
             <div className="relative">
@@ -180,16 +287,13 @@ export default function AudioPlayer() {
           </div>
         </div>
 
-        {/* --- CENTER SECTION: Controls & Scrubber --- */}
         <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[45%] pr-2 md:pr-0">
           
           <div className="flex items-center gap-3 md:gap-6">
             <button onClick={toggleShuffle} className={cn("hidden md:block active:scale-90 transition-all", isShuffled ? "text-[#FF0055]" : "text-zinc-500 hover:text-white")}><Shuffle size={18} /></button>
             <button onClick={playPrevious} className="hidden md:block text-zinc-400 hover:text-white active:scale-90 transition-all"><SkipBack size={24} fill="currentColor" /></button>
             
-            {/* Play/Pause Button */}
             <div className="relative group/play flex items-center justify-center">
-              {/* Glowing Pulse behind Play Button when active */}
               {isPlaying && <div className="absolute inset-0 bg-[#FF0055] rounded-full blur-md opacity-40 animate-pulse" />}
               
               <button 
@@ -207,7 +311,6 @@ export default function AudioPlayer() {
             </button>
           </div>
 
-          {/* Desktop Time Scrubber */}
           <div className="hidden md:flex w-full items-center gap-4 text-[11px] font-bold text-zinc-500 mt-2">
             <span className="w-10 text-right">{formatTime(progress)}</span>
             <div className="relative flex-1 flex items-center group">
@@ -225,7 +328,6 @@ export default function AudioPlayer() {
           </div>
         </div>
 
-        {/* --- RIGHT SECTION: Volume & Tools (Desktop) --- */}
         <div className="hidden md:flex items-center justify-end gap-6 w-[25%]">
           <div className="flex items-center gap-3 group">
             <Volume2 size={18} className="text-zinc-400 group-hover:text-white transition-colors" />
