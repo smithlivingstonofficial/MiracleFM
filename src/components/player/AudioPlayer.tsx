@@ -13,6 +13,7 @@ import LikeButton from "../user/LikeButton";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
+// Helper for Lock Screen images
 const getAbsoluteUrl = (url: string) => {
   if (!url) return "";
   if (url.startsWith("http")) return url;
@@ -38,7 +39,6 @@ export default function AudioPlayer() {
 
   const supabase = createClient();
   const audioRef = useRef<HTMLAudioElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
   
   const [volume, setVolume] = useState(1);
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
@@ -47,100 +47,58 @@ export default function AudioPlayer() {
   const progress = usePlayerStore(state => state.currentTime);
   const duration = usePlayerStore(state => state.duration);
 
-  // --- 1. CORE AUDIO ENGINE (Bulletproof Background Play) ---
+  // --- AUDIO ENGINE LOGIC (With Background Buffering) ---
   useEffect(() => {
+    if (!currentTrack || !audioRef.current) return;
     const audio = audioRef.current;
-    if (!currentTrack || !audio) return;
 
-    // Reset progress when track changes
     setCurrentTime(0);
 
-    // Destroy previous HLS instance immediately
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-
-    // The function that explicitly tells the browser to play
-    const attemptPlay = () => {
-      if (isPlaying) {
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              if ('mediaSession' in navigator) {
-                navigator.mediaSession.playbackState = "playing";
-              }
-            })
-            .catch((err) => {
-              console.warn("Autoplay prevented by browser:", err);
-              setIsPlaying(false); // Sync UI with actual state
-              if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
-            });
-        }
-      }
-    };
-
     if (Hls.isSupported()) {
+      // 1. FIX: Increase HLS Buffer limits so JS throttling in background doesn't stop playback
       const hls = new Hls({
-        maxBufferLength: 60, // Critical for background buffering
-        maxMaxBufferLength: 120,
-        enableWorker: true,
-      });
-      hlsRef.current = hls;
-
-      // Attach media first, then load source (Best practice for HLS.js)
-      hls.attachMedia(audio);
-      hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-        hls.loadSource(currentTrack.hls_url);
+        maxBufferLength: 60, // Buffer 60 seconds ahead
+        maxMaxBufferLength: 120, // Max memory limit
       });
       
-      // When the manifest is parsed, attempt to play
-      hls.on(Hls.Events.MANIFEST_PARSED, attemptPlay);
-    } 
-    // Fallback for Native HLS (iOS Safari)
-    else if (audio.canPlayType("application/vnd.apple.mpegurl")) {
+      hls.loadSource(currentTrack.hls_url);
+      hls.attachMedia(audio);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if(isPlaying) {
+          audio.play().catch(() => setIsPlaying(false));
+        }
+      });
+    } else if (audio.canPlayType("application/vnd.apple.mpegurl")) {
       audio.src = currentTrack.hls_url;
-      audio.load();
-      audio.addEventListener('loadedmetadata', attemptPlay, { once: true });
+      if(isPlaying) {
+        audio.play().catch(() => setIsPlaying(false));
+      }
     }
+  }, [currentTrack, setCurrentTime]);
 
-    return () => {
-      audio.removeEventListener('loadedmetadata', attemptPlay);
-    };
-  }, [currentTrack]); // Only run on track change
-
-
-  // --- 2. PLAY/PAUSE TOGGLE SYNC ---
-  // This handles the user clicking the play/pause button manually
+  // --- PLAY/PAUSE SYNC ---
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !currentTrack) return;
-
+    if (!audio) return;
+    
     if (isPlaying) {
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
-          })
-          .catch((err) => {
-            console.warn("Play interrupted", err);
-            setIsPlaying(false);
-          });
-      }
+      audio.play().then(() => {
+        // 2. FIX: Explicitly tell OS we are playing
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
+      }).catch(() => setIsPlaying(false));
     } else {
       audio.pause();
+      // Explicitly tell OS we are paused
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
     }
   }, [isPlaying]);
 
-
-  // --- 3. MEDIA SESSION API (Lock Screen Setup) ---
   const displayImage = currentTrack?.cover_url || currentTrack?.albums?.cover_url || currentTrack?.artists?.image_url || "/miraclefm.jpg";
 
+  // --- MEDIA SESSION API (Lock Screen Setup) ---
   useEffect(() => {
     if ('mediaSession' in navigator && currentTrack) {
+      
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title,
         artist: currentTrack.artists?.name || "Unknown Artist",
@@ -151,11 +109,11 @@ export default function AudioPlayer() {
         ]
       });
 
-      // These must be explicitly defined for background controls to work
       navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
       navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
       navigator.mediaSession.setActionHandler('previoustrack', () => playPrevious());
       navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+      
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime && audioRef.current) {
           audioRef.current.currentTime = details.seekTime;
@@ -165,6 +123,7 @@ export default function AudioPlayer() {
     }
   },[currentTrack, displayImage, playNext, playPrevious, setIsPlaying, setCurrentTime]);
 
+  // Sync Lock Screen Progress
   useEffect(() => {
     if ('mediaSession' in navigator && duration > 0) {
       try {
@@ -175,9 +134,9 @@ export default function AudioPlayer() {
         });
       } catch (e) {}
     }
-  },[progress, duration]);
+  }, [progress, duration]);
 
-  // --- DOM Handlers ---
+  // --- DOM Audio Handlers ---
   const handleTimeUpdate = () => {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
@@ -193,18 +152,17 @@ export default function AudioPlayer() {
     }
   };
 
-  // Keep OS in sync if user pauses from headphones/lockscreen
+  // 3. FIX: Bulletproof OS Sync tracking
   const handleNativePlay = () => {
-    if (!isPlaying) setIsPlaying(true);
+    setIsPlaying(true);
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
   };
 
   const handleNativePause = () => {
-    if (isPlaying) setIsPlaying(false);
+    setIsPlaying(false);
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
   };
 
-  // --- Playlist UI Logic ---
   const fetchMyPlaylists = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return toast.error("Login to add to playlist");
@@ -216,7 +174,7 @@ export default function AudioPlayer() {
   const addToPlaylist = async (playlistId: string) => {
     if (!currentTrack) return;
     const { error } = await supabase.from("playlist_tracks").insert({ playlist_id: playlistId, track_id: currentTrack.id });
-    if (error?.code === '23505') toast.error("Already in this playlist");
+    if (error?.code === '23505') toast.error("Already in playlist");
     else if (!error) toast.success("Added to playlist");
     setShowPlaylistMenu(false);
   };
@@ -240,6 +198,7 @@ export default function AudioPlayer() {
       "md:bottom-0 md:left-0 md:translate-x-0 md:w-full md:max-w-none md:h-[96px] md:bg-[#050505]/95 md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-6 md:overflow-visible"
     )}>
       
+      {/* 4. FIX: Add preload="auto" and playsInline to ensure OS respects the background session */}
       <audio 
         ref={audioRef} 
         hidden 
@@ -252,12 +211,8 @@ export default function AudioPlayer() {
         onPause={handleNativePause}
       />
       
-      {/* --- MOBILE: Integrated Progress Line --- */}
       <div className="md:hidden absolute bottom-0 left-0 right-0 h-[2px] bg-white/5">
-        <div 
-          className="h-full bg-[#FF0055] transition-all duration-100 ease-linear shadow-[0_0_10px_#FF0055]" 
-          style={{ width: `${progressPercent}%` }} 
-        />
+        <div className="h-full bg-[#FF0055] transition-all duration-100 ease-linear shadow-[0_0_10px_#FF0055]" style={{ width: `${progressPercent}%` }} />
       </div>
 
       <div className="flex items-center justify-between max-w-[1600px] mx-auto h-full gap-2 md:gap-4 relative z-10">
@@ -303,7 +258,7 @@ export default function AudioPlayer() {
         <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[45%] pr-2 md:pr-0">
           <div className="flex items-center gap-3 md:gap-6">
             <button onClick={toggleShuffle} className={cn("hidden md:block active:scale-90 transition-all", isShuffled ? "text-[#FF0055]" : "text-zinc-500 hover:text-white")}><Shuffle size={18} /></button>
-            <button onClick={playPrevious} className="hidden md:block text-zinc-300 hover:text-white active:scale-90 transition-all"><SkipBack size={24} fill="currentColor" /></button>
+            <button onClick={playPrevious} className="hidden md:block text-zinc-400 hover:text-white active:scale-90 transition-all"><SkipBack size={24} fill="currentColor" /></button>
             
             <div className="relative group/play flex items-center justify-center">
               {isPlaying && <div className="absolute inset-0 bg-[#FF0055] rounded-full blur-md opacity-40 animate-pulse" />}
