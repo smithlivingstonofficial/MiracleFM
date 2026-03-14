@@ -12,9 +12,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export default function LibraryPage() {
-  const [user, setUser] = useState<any>(null);
+  const[user, setUser] = useState<any>(null);
   const [playlists, setPlaylists] = useState<any[]>([]);
-  const[likedCount, setLikedCount] = useState(0);
+  const [likedCount, setLikedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -112,20 +112,24 @@ export default function LibraryPage() {
             <div className="absolute top-0 right-0 bottom-0 w-1/2 bg-gradient-to-l from-[#FF0055]/5 to-transparent opacity-100 pointer-events-none" />
 
             {/* Heart Icon Container (Smaller on mobile, sits on the left) */}
-            <div className="relative w-20 h-20 md:w-32 md:h-32 rounded-[1rem] md:rounded-[1.5rem] overflow-hidden bg-gradient-to-br from-[#FF0055] to-pink-900 flex items-center justify-center shrink-0 shadow-[0_10px_20px_rgba(255,0,85,0.3)] md:group-hover:scale-105 transition-transform duration-500">
+            <div className="relative w-20 h-20 md:w-32 md:h-32 rounded-[1rem] md:rounded-[1.5rem] overflow-hidden bg-gradient-to-br from-[#FF0055] to-[#ff1a66] flex items-center justify-center shrink-0 shadow-[0_10px_20px_rgba(255,0,85,0.3)] md:group-hover:scale-105 transition-transform duration-500">
               <Heart size={32} className="text-white fill-white drop-shadow-lg relative z-10 md:group-hover:scale-110 md:w-12 md:h-12 transition-transform duration-500" />
+              {/* Subtle inner glow for depth */}
+              <div className="absolute inset-0 bg-white/20 blur-xl opacity-50" />
             </div>
             
             {/* Text Content */}
             <div className="relative z-10 flex-1 flex items-center justify-between">
               <div>
-                <p className="text-[9px] md:text-xs text-[#FF0055] font-black uppercase tracking-[0.2em] mb-1 md:mb-1.5">Auto-Generated</p>
+                <p className="text-[9px] md:text-xs text-[#FF0055] font-black uppercase tracking-[0.2em] mb-1 md:mb-1.5 flex items-center gap-1.5">
+                  <Sparkles size={10} /> Auto-Generated
+                </p>
                 <h2 className="text-2xl md:text-4xl lg:text-5xl font-black text-white md:group-hover:text-[#FF0055] transition-colors tracking-tighter leading-none mb-1.5 md:mb-2">Liked Songs</h2>
                 <p className="text-xs md:text-sm text-zinc-400 font-bold flex items-center gap-1.5">
-                  <ListMusic size={14} className="md:w-4 md:h-4" /> {likedCount} {likedCount === 1 ? 'track' : 'tracks'}
+                  <ListMusic size={14} className="md:w-4 md:h-4 text-zinc-500" /> {likedCount} {likedCount === 1 ? 'track' : 'tracks'}
                 </p>
               </div>
-              <div className="w-8 h-8 md:w-12 md:h-12 rounded-full bg-white/5 flex items-center justify-center text-zinc-400 md:group-hover:bg-[#FF0055] md:group-hover:text-white transition-all duration-300 md:group-hover:translate-x-2 shrink-0">
+              <div className="w-8 h-8 md:w-12 md:h-12 rounded-full bg-white/5 flex items-center justify-center text-zinc-400 md:group-hover:bg-[#FF0055] md:group-hover:text-white transition-all duration-300 md:group-hover:translate-x-2 shrink-0 border border-white/5">
                  <ChevronRight size={20} className="md:w-6 md:h-6" />
               </div>
             </div>
@@ -142,16 +146,16 @@ export default function LibraryPage() {
           {playlists.length === 0 ? (
             
             /* EMPTY STATE */
-            <div className="flex flex-col items-center justify-center py-16 md:py-20 px-4 text-center border-2 border-dashed border-white/5 rounded-[2rem] md:rounded-[2.5rem] bg-[#0A0A0A]/50">
+            <div className="flex flex-col items-center justify-center py-16 md:py-20 px-4 text-center border-2 border-dashed border-white/5 rounded-[2rem] md:rounded-[2.5rem] bg-[#0A0A0A]/50 transition-colors hover:border-white/10">
                <div className="w-16 h-16 md:w-20 md:h-20 bg-zinc-900 rounded-full flex items-center justify-center mb-5 md:mb-6 shadow-xl border border-white/5">
                   <Disc size={28} className="text-zinc-600 md:w-8 md:h-8" />
                </div>
                <h3 className="text-lg md:text-2xl font-black text-white tracking-tighter mb-2">No Playlists Yet</h3>
-               <p className="text-xs md:text-sm text-zinc-500 max-w-xs md:max-w-sm mb-6 md:mb-8 font-medium">Create your first playlist to start organizing your favorite tracks and albums.</p>
+               <p className="text-xs md:text-sm text-zinc-500 max-w-xs md:max-w-sm mb-6 md:mb-8 font-medium leading-relaxed">Create your first playlist to start organizing your favorite tracks and albums.</p>
                <button 
                   onClick={handleCreatePlaylist}
                   disabled={isCreating}
-                  className="bg-[#FF0055] hover:bg-[#ff1a66] text-white px-8 py-3.5 rounded-full font-black text-xs md:text-sm uppercase tracking-widest transition-transform active:scale-95 flex items-center gap-2 shadow-[0_0_20px_rgba(255,0,85,0.3)]"
+                  className="bg-[#FF0055] hover:bg-[#ff1a66] text-white px-8 py-3.5 rounded-full font-black text-xs md:text-sm uppercase tracking-widest transition-transform active:scale-95 flex items-center gap-2 shadow-[0_0_20px_rgba(255,0,85,0.3)] disabled:opacity-50"
                >
                   {isCreating ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
                   Create Playlist
@@ -160,7 +164,7 @@ export default function LibraryPage() {
 
           ) : (
 
-            /* PLAYLISTS GRID (Optimized gap for mobile) */
+            /* PLAYLISTS GRID */
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
               {playlists.map((playlist) => (
                 <Link 
