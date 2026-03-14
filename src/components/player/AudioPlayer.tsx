@@ -194,7 +194,7 @@ export default function AudioPlayer() {
   return (
     <div className={cn(
       "fixed left-0 right-0 z-40 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-      "bottom-[90px] left-1/2 -translate-x-1/2 w-[92%] max-w-[400px] h-[64px] bg-[#121212]/90 backdrop-blur-3xl border border-white/10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] px-2 overflow-hidden",
+      "bottom-[90px] left-1/2 -translate-x-1/2 w-[92%] max-w-[400px] h-[64px] bg-[#121212]/80 backdrop-blur-3xl border border-white/10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] px-2 overflow-hidden",
       "md:bottom-0 md:left-0 md:translate-x-0 md:w-full md:max-w-none md:h-[96px] md:bg-[#050505]/95 md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-6 md:overflow-visible"
     )}>
       

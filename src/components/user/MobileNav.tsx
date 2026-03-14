@@ -17,7 +17,7 @@ export default function MobileNav() {
   ];
 
   return (
-    <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[85%] max-w-[360px]">
+    <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[85%] max-w-[360px]">
       
       {/* --- FLOATING GLASS ISLAND --- */}
       <div className="bg-[#0A0A0A]/85 backdrop-blur-2xl border border-white/10 rounded-[2rem] px-6 py-3.5 flex items-center justify-between shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)]">
