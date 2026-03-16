@@ -1,6 +1,8 @@
+// src/components/player/AudioPlayer.tsx
+
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
 import { usePlayerStore } from "@/store/usePlayerStore";
 import { 
@@ -13,7 +15,6 @@ import LikeButton from "../user/LikeButton";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
-// Helper for Lock Screen images
 const getAbsoluteUrl = (url: string) => {
   if (!url) return "";
   if (url.startsWith("http")) return url;
@@ -47,65 +48,95 @@ export default function AudioPlayer() {
   const progress = usePlayerStore(state => state.currentTime);
   const duration = usePlayerStore(state => state.duration);
 
-  // --- AUDIO ENGINE LOGIC (With Background Buffering) ---
+  // --- AUDIO ENGINE LOGIC (With Duration Fix & Cleanup) ---
   useEffect(() => {
     if (!currentTrack || !audioRef.current) return;
     const audio = audioRef.current;
-
+    
+    // Reset times ONLY when the actual track changes, not when pausing
     setCurrentTime(0);
+    setDuration(0);
+
+    let hls: Hls | null = null;
 
     if (Hls.isSupported()) {
-      // 1. FIX: Increase HLS Buffer limits so JS throttling in background doesn't stop playback
-      const hls = new Hls({
-        maxBufferLength: 60, // Buffer 60 seconds ahead
-        maxMaxBufferLength: 120, // Max memory limit
+      hls = new Hls({
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
       });
       
       hls.loadSource(currentTrack.hls_url);
       hls.attachMedia(audio);
+      
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if(isPlaying) {
+        // FIX 1: Use getState() to check playing status without adding it to dependencies
+        if (usePlayerStore.getState().isPlaying) {
           audio.play().catch(() => setIsPlaying(false));
         }
       });
+
+      hls.on(Hls.Events.LEVEL_LOADED, (_, data) => {
+        if (data.details && data.details.totalduration) {
+          setDuration(data.details.totalduration);
+        }
+      });
+      
     } else if (audio.canPlayType("application/vnd.apple.mpegurl")) {
       audio.src = currentTrack.hls_url;
-      if(isPlaying) {
+      // FIX 1: Use getState()
+      if (usePlayerStore.getState().isPlaying) {
         audio.play().catch(() => setIsPlaying(false));
       }
     }
-  }, [currentTrack, setCurrentTime]);
+
+    return () => {
+      if (hls) hls.destroy();
+    };
+  // FIX 2: Removed `isPlaying` from this array!
+  },[currentTrack, setCurrentTime, setDuration]);
 
   // --- PLAY/PAUSE SYNC ---
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    
+    if (!audioRef.current) return;
     if (isPlaying) {
-      audio.play().then(() => {
-        // 2. FIX: Explicitly tell OS we are playing
-        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
-      }).catch(() => setIsPlaying(false));
+      audioRef.current.play().catch(() => setIsPlaying(false));
     } else {
-      audio.pause();
-      // Explicitly tell OS we are paused
-      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
+      audioRef.current.pause();
     }
   }, [isPlaying]);
 
+  // --- SERVICE WORKER ---
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.error(err));
+      });
+    }
+  },[]);
+
+  // --- MEDIA SESSION & OS PROGRESS SYNC ---
+  const updatePositionState = useCallback(() => {
+    if ('mediaSession' in navigator && audioRef.current) {
+      const { duration, playbackRate, currentTime } = audioRef.current;
+      if (isFinite(duration) && duration > 0 && isFinite(currentTime)) {
+        try {
+          navigator.mediaSession.setPositionState({ duration, playbackRate, position: currentTime });
+        } catch (error) {}
+      }
+    }
+  },[]);
+
   const displayImage = currentTrack?.cover_url || currentTrack?.albums?.cover_url || currentTrack?.artists?.image_url || "/miraclefm.jpg";
 
-  // --- MEDIA SESSION API (Lock Screen Setup) ---
   useEffect(() => {
     if ('mediaSession' in navigator && currentTrack) {
-      
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title,
         artist: currentTrack.artists?.name || "Unknown Artist",
         album: currentTrack.albums?.title || "Miracle FM",
         artwork:[
+          { src: getAbsoluteUrl(displayImage), sizes: '96x96', type: 'image/jpeg' },
           { src: getAbsoluteUrl(displayImage), sizes: '512x512', type: 'image/jpeg' },
-          { src: getAbsoluteUrl(displayImage), sizes: '256x256', type: 'image/jpeg' },
         ]
       });
 
@@ -113,34 +144,33 @@ export default function AudioPlayer() {
       navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
       navigator.mediaSession.setActionHandler('previoustrack', () => playPrevious());
       navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
-      
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime && audioRef.current) {
+        if (details.seekTime !== undefined && audioRef.current) {
           audioRef.current.currentTime = details.seekTime;
           setCurrentTime(details.seekTime);
+          updatePositionState();
         }
       });
-    }
-  },[currentTrack, displayImage, playNext, playPrevious, setIsPlaying, setCurrentTime]);
 
-  // Sync Lock Screen Progress
-  useEffect(() => {
-    if ('mediaSession' in navigator && duration > 0) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: duration,
-          playbackRate: audioRef.current?.playbackRate || 1,
-          position: progress
-        });
-      } catch (e) {}
+      return () => {
+        ['play','pause','previoustrack','nexttrack','seekto'].forEach(action => 
+          navigator.mediaSession.setActionHandler(action as any, null)
+        );
+      };
     }
-  }, [progress, duration]);
+  },[currentTrack, displayImage, playNext, playPrevious, setIsPlaying, setCurrentTime, updatePositionState]);
 
-  // --- DOM Audio Handlers ---
+  // --- DOM EVENT HANDLERS ---
   const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-      setDuration(audioRef.current.duration || 0);
+    if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+  };
+
+  const handleDurationChange = (e: React.SyntheticEvent<HTMLAudioElement>) => {
+    const newDuration = e.currentTarget.duration;
+    // Fallback: If HLS didn't set duration, standard HTML5 Audio will set it here once fully parsed
+    if (newDuration && isFinite(newDuration)) {
+      setDuration(newDuration);
+      updatePositionState();
     }
   };
 
@@ -149,38 +179,17 @@ export default function AudioPlayer() {
     if (audioRef.current) {
       audioRef.current.currentTime = time;
       setCurrentTime(time);
+      updatePositionState();
     }
   };
 
-  // 3. FIX: Bulletproof OS Sync tracking
-  const handleNativePlay = () => {
-    setIsPlaying(true);
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
-  };
+  const handleNativePlay = () => { setIsPlaying(true); updatePositionState(); };
+  const handleNativePause = () => { setIsPlaying(false); updatePositionState(); };
 
-  const handleNativePause = () => {
-    setIsPlaying(false);
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
-  };
-
-  const fetchMyPlaylists = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return toast.error("Login to add to playlist");
-    const { data } = await supabase.from("playlists").select("id, title").eq("user_id", user.id);
-    if (data) setMyPlaylists(data);
-    setShowPlaylistMenu(!showPlaylistMenu);
-  };
-
-  const addToPlaylist = async (playlistId: string) => {
-    if (!currentTrack) return;
-    const { error } = await supabase.from("playlist_tracks").insert({ playlist_id: playlistId, track_id: currentTrack.id });
-    if (error?.code === '23505') toast.error("Already in playlist");
-    else if (!error) toast.success("Added to playlist");
-    setShowPlaylistMenu(false);
-  };
-
+  // --- FORMATTING FIX ---
   const formatTime = (time: number) => {
-    if(isNaN(time)) return "0:00";
+    // FIX: Catch Infinity or NaN before formatting so UI doesn't break
+    if (!time || isNaN(time) || time === Infinity) return "0:00";
     const min = Math.floor(time / 60);
     const sec = Math.floor(time % 60);
     return `${min}:${sec < 10 ? "0" : ""}${sec}`;
@@ -188,7 +197,7 @@ export default function AudioPlayer() {
 
   if (!currentTrack) return null;
 
-  const progressPercent = (progress / (duration || 1)) * 100;
+  const progressPercent = Math.min((progress / (duration || 1)) * 100, 100);
   const volumePercent = volume * 100;
 
   return (
@@ -198,19 +207,19 @@ export default function AudioPlayer() {
       "md:bottom-0 md:left-0 md:translate-x-0 md:w-full md:max-w-none md:h-[96px] md:bg-[#050505]/95 md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-6 md:overflow-visible"
     )}>
       
-      {/* 4. FIX: Add preload="auto" and playsInline to ensure OS respects the background session */}
       <audio 
         ref={audioRef} 
         hidden 
         preload="auto"
         playsInline
         onTimeUpdate={handleTimeUpdate} 
-        onLoadedMetadata={handleTimeUpdate} 
+        onDurationChange={handleDurationChange} 
         onEnded={playNext}
         onPlay={handleNativePlay}
         onPause={handleNativePause}
       />
       
+      {/* Mini Progress Bar for Mobile Layout */}
       <div className="md:hidden absolute bottom-0 left-0 right-0 h-[2px] bg-white/5">
         <div className="h-full bg-[#FF0055] transition-all duration-100 ease-linear shadow-[0_0_10px_#FF0055]" style={{ width: `${progressPercent}%` }} />
       </div>
@@ -230,31 +239,9 @@ export default function AudioPlayer() {
             <p className="text-[13px] md:text-base font-black text-white truncate drop-shadow-md">{currentTrack.title}</p>
             <p className="text-[10px] md:text-xs font-bold text-zinc-400 truncate uppercase tracking-wide mt-0.5">{currentTrack.artists?.name}</p>
           </div>
-
-          <div className="hidden md:flex items-center gap-3 ml-2 shrink-0">
-            <LikeButton trackId={currentTrack.id} />
-            <div className="relative">
-              <button onClick={fetchMyPlaylists} className="text-zinc-400 hover:text-white transition-colors active:scale-90"><PlusCircle size={20} /></button>
-              {showPlaylistMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowPlaylistMenu(false)} />
-                  <div className="absolute left-0 bottom-full mb-6 w-64 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl z-50 p-2 animate-in fade-in slide-in-from-bottom-2">
-                    <p className="px-3 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest">Save to Playlist</p>
-                    <div className="max-h-48 overflow-y-auto no-scrollbar">
-                      {myPlaylists.map(pl => (
-                        <button key={pl.id} onClick={() => addToPlaylist(pl.id)} className="w-full text-left px-3 py-3 text-xs font-bold text-zinc-300 hover:text-white hover:bg-white/5 rounded-xl flex items-center gap-3 transition-colors">
-                          <ListMusic size={16} className="text-[#FF0055]" /> {pl.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
         </div>
 
-        {/* Center Section */}
+        {/* Center Section & New Progress Bar */}
         <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[45%] pr-2 md:pr-0">
           <div className="flex items-center gap-3 md:gap-6">
             <button onClick={toggleShuffle} className={cn("hidden md:block active:scale-90 transition-all", isShuffled ? "text-[#FF0055]" : "text-zinc-500 hover:text-white")}><Shuffle size={18} /></button>
@@ -270,16 +257,48 @@ export default function AudioPlayer() {
             <button onClick={playNext} className="text-zinc-400 hover:text-white active:scale-90 transition-all"><SkipForward className="w-7 h-7 md:w-[24px] md:h-[24px]" fill="currentColor" /></button>
             <button onClick={toggleRepeat} className={cn("hidden md:block relative active:scale-90 transition-all", repeatMode !== "off" ? "text-[#FF0055]" : "text-zinc-500 hover:text-white")}>
               {repeatMode === "one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
-              {repeatMode !== "off" && <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#FF0055]" />}
             </button>
           </div>
 
-          <div className="hidden md:flex w-full items-center gap-4 text-[11px] font-bold text-zinc-500 mt-2">
-            <span className="w-10 text-right">{formatTime(progress)}</span>
-            <div className="relative flex-1 flex items-center group">
-              <input type="range" min={0} max={duration || 100} value={progress} onChange={handleSeek} style={{ "--range-progress": `${progressPercent}%` } as any} className="player-slider w-full z-20" />
+          {/* ⚡ THE NEW UPGRADED PROGRESS BAR SLIDER ⚡ */}
+          <div className="hidden md:flex w-full items-center gap-3 text-[11px] font-bold text-zinc-400 mt-2">
+            
+            {/* Current Time */}
+            <span className="w-10 text-right tabular-nums tracking-wider">{formatTime(progress)}</span>
+            
+            <div className="relative flex-1 flex items-center group h-4 cursor-pointer">
+              {/* Custom Track Background */}
+              <div className="absolute w-full h-[4px] bg-white/10 rounded-full overflow-hidden">
+                {/* Custom Fill */}
+                <div 
+                  className="h-full bg-white group-hover:bg-[#FF0055] transition-colors duration-200" 
+                  style={{ width: `${progressPercent}%` }} 
+                />
+              </div>
+              
+              {/* Custom Thumb */}
+              <div 
+                className="absolute w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none"
+                style={{ 
+                  left: `${progressPercent}%`, 
+                  transform: 'translateX(-50%)' 
+                }} 
+              />
+              
+              {/* Invisible HTML Range Input (Handles Dragging & Clicking) */}
+              <input 
+                type="range" 
+                min={0} 
+                max={duration || 100} 
+                step={0.1}
+                value={progress} 
+                onChange={handleSeek} 
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
+              />
             </div>
-            <span className="w-10 text-left">{formatTime(duration)}</span>
+            
+            {/* Total Duration */}
+            <span className="w-10 text-left tabular-nums tracking-wider">{formatTime(duration)}</span>
           </div>
         </div>
 
@@ -287,9 +306,8 @@ export default function AudioPlayer() {
         <div className="hidden md:flex items-center justify-end gap-6 w-[25%]">
           <div className="flex items-center gap-3 group">
             <Volume2 size={18} className="text-zinc-400 group-hover:text-white transition-colors" />
-            <input type="range" min={0} max={1} step={0.01} value={volume} onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); if(audioRef.current) audioRef.current.volume = v; }} style={{ "--range-progress": `${volumePercent}%` } as any} className="player-slider w-24 opacity-80 group-hover:opacity-100 transition-opacity" />
+            <input type="range" min={0} max={1} step={0.01} value={volume} onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); if(audioRef.current) audioRef.current.volume = v; }} className="w-24 opacity-80 group-hover:opacity-100 transition-opacity" />
           </div>
-          <button onClick={toggleFullScreen} className="text-zinc-400 hover:text-white active:scale-90 transition-all"><Maximize2 size={18} /></button>
         </div>
 
       </div>
