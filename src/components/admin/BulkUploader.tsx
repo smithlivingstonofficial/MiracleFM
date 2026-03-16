@@ -79,7 +79,7 @@ export default function BulkUploader() {
           "-codec:a", "libmp3lame",
           "-b:a", "128k",
           "-f", "hls",
-          "-hls_time", "3",
+          "-hls_time", "2",
           "-hls_playlist_type", "vod",
           outputName
         ]);

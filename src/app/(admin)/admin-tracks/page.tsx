@@ -391,7 +391,7 @@ export default function AdminTracksPage() {
 
       {/* Floating Toolbar */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-10 duration-500">
+        <div className="fixed bottom-30 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-10 duration-500">
           <div className="bg-white text-black px-6 py-3 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] flex items-center gap-6 border border-white/20">
             <div className="flex items-center gap-3 pr-6 border-r border-black/10">
               <div className="bg-brand text-white w-7 h-7 rounded-full flex items-center justify-center font-black text-xs">{selectedIds.length}</div>
