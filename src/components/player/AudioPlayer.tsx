@@ -114,8 +114,9 @@ export default function AudioPlayer() {
     if (!("wakeLock" in navigator)) return;
     try {
       if (wakeLockRef.current?.released === false) return;
-      wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
-      wakeLockRef.current.addEventListener("release", () => {
+      const sentinel = await (navigator as any).wakeLock.request("screen") as WakeLockSentinel;
+      wakeLockRef.current = sentinel;
+      sentinel.addEventListener("release", () => {
         // OS released it (battery saver, screen lock) — re-acquire if still playing
         if (usePlayerStore.getState().isPlaying) acquireWakeLock();
       });
@@ -325,11 +326,17 @@ export default function AudioPlayer() {
     // Push metadata for the current track immediately on mount
     pushMetadata(usePlayerStore.getState().currentTrack);
 
-    // Subscribe to all future track changes — fires synchronously on playNext()
-    const unsub = usePlayerStore.subscribe(
-      (state) => state.currentTrack,
-      pushMetadata
-    );
+    // Subscribe to all future track changes — fires synchronously on playNext().
+    // Single-argument form works without subscribeWithSelector middleware.
+    // We compare the previous track reference to avoid firing on unrelated
+    // store mutations (volume changes, currentTime updates, etc.).
+    let prevTrack = usePlayerStore.getState().currentTrack;
+    const unsub = usePlayerStore.subscribe((state) => {
+      if (state.currentTrack !== prevTrack) {
+        prevTrack = state.currentTrack;
+        pushMetadata(state.currentTrack);
+      }
+    });
 
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
