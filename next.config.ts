@@ -4,38 +4,32 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
 
-  // ── 1. Image Domains (Cloudflare R2 + Google OAuth avatars) ─────────────
+  // ── 1. Image domains ──────────────────────────────────────────────────────
   images: {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "**.r2.dev",       // any public R2 bucket (pub-xxxx.r2.dev)
+        hostname: "**.r2.dev",
       },
       {
         protocol: "https",
-        hostname: "lh3.googleusercontent.com", // Google OAuth profile pictures
+        hostname: "lh3.googleusercontent.com",
       },
-      // Add a custom CDN domain here when you're ready:
-      // { protocol: "https", hostname: "media.miraclefm.com" },
     ],
   },
 
-  // ── 2. HTTP Headers ───────────────────────────────────────────────────────
+  // ── 2. HTTP headers ───────────────────────────────────────────────────────
   async headers() {
     return [
 
-      // ── A. Global headers — applied to every route ─────────────────────
+      // ── A. Every route — autoplay permission only ──────────────────────
+      // COOP/COEP are intentionally NOT here.
+      // Adding them globally breaks Google AdSense, Google Analytics,
+      // Vercel Analytics and any other cross-origin postMessage service
+      // because they cannot communicate across a cross-origin isolated context.
       {
         source: "/(.*)",
         headers: [
-          /*
-            Permissions-Policy: autoplay
-            ─────────────────────────────────────────────────────────────────
-            Chrome 66+ blocks autoplay by default. This header grants the
-            autoplay permission to the same origin so the audio element can
-            resume after a tab switch, screen lock, or navigation without
-            requiring a new user gesture each time.
-          */
           {
             key: "Permissions-Policy",
             value: "autoplay=(*), camera=(), microphone=()",
@@ -43,10 +37,10 @@ const nextConfig: NextConfig = {
         ],
       },
 
-      // ── B. /upload route — FFmpeg transcoding in the browser ───────────
-      // COOP + COEP are required for SharedArrayBuffer, which FFmpeg.wasm
-      // needs. Scoped only to /upload so it doesn't interfere with HLS
-      // workers on other pages.
+      // ── B. /upload only — COOP + COEP for FFmpeg.wasm ─────────────────
+      // SharedArrayBuffer (required by FFmpeg.wasm) needs cross-origin
+      // isolation, but that isolation must be scoped to /upload only.
+      // Applying it globally is what causes AdSense / Analytics to break.
       {
         source: "/upload",
         headers: [
@@ -61,16 +55,7 @@ const nextConfig: NextConfig = {
         ],
       },
 
-      // ── C. Service Worker — scope + no-cache ──────────────────────────
-      /*
-        Service workers are restricted to the directory of their script URL
-        by default. The Service-Worker-Allowed header extends the scope to
-        the full origin so the SW can intercept ALL audio/image fetches,
-        not just those under /sw.js's directory.
-
-        Cache-Control: no-cache ensures the browser checks for a new SW
-        version on every page load (stale SW = stale audio cache strategy).
-      */
+      // ── C. Service worker — full-origin scope + no-cache ──────────────
       {
         source: "/sw.js",
         headers: [
@@ -85,9 +70,7 @@ const nextConfig: NextConfig = {
         ],
       },
 
-      // ── D. Web App Manifest ───────────────────────────────────────────
-      // Prevents the manifest from being cached aggressively so PWA
-      // installs always see the latest icon / name / theme-color.
+      // ── D. Manifest — correct MIME + no-cache ─────────────────────────
       {
         source: "/manifest.json",
         headers: [
@@ -102,13 +85,7 @@ const nextConfig: NextConfig = {
         ],
       },
 
-      // ── E. API routes — CORS for R2 audio streaming ───────────────────
-      /*
-        hls.js fetches .m3u8 playlists and .ts segments via XHR/fetch.
-        If your Next.js API routes proxy R2 responses, these headers allow
-        the browser to accept the stream and support byte-range requests
-        (needed for scrubbing on the lock-screen slider).
-      */
+      // ── E. API routes — CORS for R2 byte-range audio streaming ────────
       {
         source: "/api/(.*)",
         headers: [
