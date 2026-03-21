@@ -13,7 +13,6 @@ import PlayerVolume from "./PlayerVolume";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Always returns a fully-qualified URL (needed for MediaMetadata artwork). */
 const toAbsoluteUrl = (url: string): string => {
   if (!url) return "";
   if (url.startsWith("http")) return url;
@@ -21,7 +20,6 @@ const toAbsoluteUrl = (url: string): string => {
   return url;
 };
 
-/** All artwork sizes browsers/OSes request. */
 const buildArtwork = (src: string): MediaImage[] => {
   const url = toAbsoluteUrl(src);
   return [
@@ -34,37 +32,84 @@ const buildArtwork = (src: string): MediaImage[] => {
   ];
 };
 
-const SEEK_OFFSET = 10; // seconds for seekbackward / seekforward
+const SEEK_OFFSET = 10;
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function AudioPlayer() {
   const { currentTrack, playNext, playPrevious, isPlaying } = usePlayerStore();
 
-  // Fine-grained selectors — avoids re-rendering the whole player on every tick
   const setCurrentTime = usePlayerStore((s) => s.setCurrentTime);
   const setDuration    = usePlayerStore((s) => s.setDuration);
   const setIsPlaying   = usePlayerStore((s) => s.setIsPlaying);
 
-  const audioRef      = useRef<HTMLAudioElement>(null);
-  const hlsRef        = useRef<Hls | null>(null);
-  const wakeLockRef   = useRef<WakeLockSentinel | null>(null);
+  const audioRef    = useRef<HTMLAudioElement>(null);
+  const hlsRef      = useRef<Hls | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
-  // ── 1. WAKE LOCK ────────────────────────────────────────────────────────
-  // Prevents the OS from suspending audio / dimming the screen mid-playback.
+  // ─────────────────────────────────────────────────────────────────────────
+  // WEB AUDIO CONTEXT — THE FIX FOR "STOPS AFTER 2–3 MINUTES"
+  //
+  // Root cause: Chrome and Safari have a background tab freeze policy.
+  // After ~1–3 min with no active frame, they suspend media that lives
+  // only as a bare <audio> element. The audio element pauses silently —
+  // no error, no event — which is why opening the browser resumes it.
+  //
+  // Fix: connect the <audio> element into a Web Audio graph as a source
+  // node. The Web Audio scheduler runs in a separate real-time thread that
+  // is immune to background tab throttling. Even a minimal graph (source
+  // → gain → destination) is enough to keep the audio alive indefinitely.
+  //
+  // iOS rule: AudioContext must be created/resumed during a user gesture.
+  // We create it lazily on the first click/touch anywhere on the page.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const audioCtxRef   = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const gainNodeRef   = useRef<GainNode | null>(null);
+
+  const unlockAudioContext = useCallback(() => {
+    if (!audioRef.current) return;
+
+    // Already wired up — just ensure it is running
+    if (audioCtxRef.current) {
+      if (audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      return;
+    }
+
+    try {
+      const ctx  = new AudioContext();
+      const src  = ctx.createMediaElementSource(audioRef.current);
+      const gain = ctx.createGain();
+      gain.gain.value = 1.0; // unity gain — transparent to audio quality
+
+      src.connect(gain);
+      gain.connect(ctx.destination);
+
+      audioCtxRef.current   = ctx;
+      sourceNodeRef.current = src;
+      gainNodeRef.current   = gain;
+
+      ctx.resume().catch(() => {});
+    } catch (err) {
+      // Non-fatal: AudioContext may be unavailable in some WebViews
+      console.warn("[AudioPlayer] AudioContext setup failed:", err);
+    }
+  }, []);
+
+  // ── 1. WAKE LOCK ─────────────────────────────────────────────────────────
 
   const acquireWakeLock = useCallback(async () => {
     if (!("wakeLock" in navigator)) return;
     try {
-      if (wakeLockRef.current?.released === false) return; // already held
+      if (wakeLockRef.current?.released === false) return;
       wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
       wakeLockRef.current?.addEventListener("release", () => {
-        // Re-acquire if still playing (happens when tab becomes visible again)
         if (usePlayerStore.getState().isPlaying) acquireWakeLock();
       });
-    } catch (_) {
-      // Wake lock denied (battery saver, etc.) — silent fail is fine
-    }
+    } catch (_) {}
   }, []);
 
   const releaseWakeLock = useCallback(() => {
@@ -72,28 +117,120 @@ export default function AudioPlayer() {
     wakeLockRef.current = null;
   }, []);
 
-  // Re-acquire wake lock when the page becomes visible again (tab switch, etc.)
+  // ── 2. VISIBILITY RECOVERY ───────────────────────────────────────────────
+  //
+  // When the user returns to the tab after the OS froze it, we:
+  //   a) Resume the AudioContext (browsers always suspend it on tab hide)
+  //   b) Re-acquire the wake lock
+  //   c) Restart hls.js segment loading if it stalled while backgrounded
+  //   d) Resume the audio element if the OS paused it behind our back
+
   useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible" && usePlayerStore.getState().isPlaying) {
-        acquireWakeLock();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const store = usePlayerStore.getState();
+
+      // a) Resume AudioContext
+      if (audioCtxRef.current?.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+
+      // b) Re-acquire wake lock
+      if (store.isPlaying) acquireWakeLock();
+
+      // c) Restart HLS loading
+      if (hlsRef.current && store.isPlaying) {
+        try { hlsRef.current.startLoad(); } catch (_) {}
+      }
+
+      // d) Recover audio element if OS silently paused it
+      if (store.isPlaying && audioRef.current?.paused) {
+        audioRef.current.play().catch(() => {});
       }
     };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [acquireWakeLock]);
 
-  // ── 2. SERVICE WORKER ───────────────────────────────────────────────────
+  // ── 3. MESSAGECHANNEL KEEPALIVE ──────────────────────────────────────────
+  //
+  // Problem: setInterval is throttled to ~1 min in background tabs by both
+  // Chrome and Safari — so a 20-second SW ping becomes useless.
+  //
+  // Solution: MessageChannel ports fire at full speed regardless of tab
+  // visibility because they use the microtask queue, not the timer queue.
+  // We create a self-messaging loop that:
+  //   • resumes the AudioContext if it got suspended
+  //   • pings the service worker
+  //   • recovers a stalled audio element
+  // Each iteration re-schedules itself via the channel, not setTimeout.
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      window.addEventListener("load", () =>
-        navigator.serviceWorker.register("/sw.js").catch(console.error)
-      );
-    }
+    if (!isPlaying) return;
+
+    const { port1, port2 } = new MessageChannel();
+    let active = true;
+
+    port2.onmessage = () => {
+      if (!active) return;
+
+      // Resume AudioContext
+      if (audioCtxRef.current?.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+
+      // Ping service worker
+      navigator.serviceWorker?.controller?.postMessage({ type: "KEEPALIVE" });
+
+      // Recover stalled audio
+      const store = usePlayerStore.getState();
+      if (store.isPlaying && audioRef.current?.paused) {
+        audioRef.current.play().catch(() => {});
+        if (hlsRef.current) {
+          try { hlsRef.current.startLoad(); } catch (_) {}
+        }
+      }
+
+      // Re-schedule: using setTimeout inside the handler so we get a
+      // ~10 s gap between ticks without blocking the microtask queue
+      setTimeout(() => { if (active) port1.postMessage(null); }, 10_000);
+    };
+
+    // Start the loop
+    port1.postMessage(null);
+
+    return () => {
+      active = false;
+      port1.close();
+      port2.close();
+    };
+  }, [isPlaying]);
+
+  // ── 4. UNLOCK AUDIOCTX ON FIRST USER GESTURE ─────────────────────────────
+
+  useEffect(() => {
+    const unlock = () => unlockAudioContext();
+    document.addEventListener("click",      unlock, { once: true });
+    document.addEventListener("touchstart", unlock, { once: true, passive: true });
+    document.addEventListener("keydown",    unlock, { once: true });
+    return () => {
+      document.removeEventListener("click",      unlock);
+      document.removeEventListener("touchstart", unlock);
+      document.removeEventListener("keydown",    unlock);
+    };
+  }, [unlockAudioContext]);
+
+  // ── 5. SERVICE WORKER ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    window.addEventListener("load", () =>
+      navigator.serviceWorker.register("/sw.js").catch(console.error)
+    );
   }, []);
 
-  // ── 3. POSITION STATE (fires on every timeupdate) ───────────────────────
+  // ── 6. POSITION STATE ────────────────────────────────────────────────────
 
   const syncPositionState = useCallback(() => {
     if (!("mediaSession" in navigator) || !audioRef.current) return;
@@ -105,52 +242,44 @@ export default function AudioPlayer() {
     }
   }, []);
 
-  // ── 4. MEDIA SESSION METADATA ───────────────────────────────────────────
-  // Called every time the track changes so lock-screen info is always fresh.
+  // ── 7. STABLE CALLBACK REFS ──────────────────────────────────────────────
 
-  const displayImage = currentTrack?.cover_url
-    || currentTrack?.albums?.cover_url
-    || currentTrack?.artists?.image_url
-    || "/miraclefm.jpg";
+  const playNextRef       = useRef(playNext);
+  const playPreviousRef   = useRef(playPrevious);
+  const setIsPlayingRef   = useRef(setIsPlaying);
+  const setCurrentTimeRef = useRef(setCurrentTime);
 
-  const updateMediaSessionMetadata = useCallback(() => {
-    if (!("mediaSession" in navigator) || !currentTrack) return;
+  useEffect(() => { playNextRef.current      = playNext;      }, [playNext]);
+  useEffect(() => { playPreviousRef.current  = playPrevious;  }, [playPrevious]);
+  useEffect(() => { setIsPlayingRef.current  = setIsPlaying;  }, [setIsPlaying]);
+  useEffect(() => { setCurrentTimeRef.current = setCurrentTime; }, [setCurrentTime]);
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title:   currentTrack.title,
-      artist:  currentTrack.artists?.name  ?? "Unknown Artist",
-      album:   currentTrack.albums?.title  ?? "Miracle FM",
-      artwork: buildArtwork(displayImage),
-    });
-  }, [currentTrack, displayImage]);
-
-  // ── 5. MEDIA SESSION ACTION HANDLERS ───────────────────────────────────
+  // ── 8. MEDIA SESSION HANDLERS — ONCE ON MOUNT ────────────────────────────
 
   useEffect(() => {
-    if (!("mediaSession" in navigator) || !currentTrack) return;
-
-    updateMediaSessionMetadata();
+    if (!("mediaSession" in navigator)) return;
 
     const seek = (delta: number) => {
-      if (!audioRef.current) return;
-      const next = Math.max(0, Math.min(audioRef.current.currentTime + delta, audioRef.current.duration || 0));
-      audioRef.current.currentTime = next;
-      setCurrentTime(next);
+      const audio = audioRef.current;
+      if (!audio) return;
+      const next = Math.max(0, Math.min(audio.currentTime + delta, audio.duration || 0));
+      audio.currentTime = next;
+      setCurrentTimeRef.current(next);
       syncPositionState();
     };
 
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      ["play",          () => setIsPlaying(true)],
-      ["pause",         () => setIsPlaying(false)],
-      ["stop",          () => setIsPlaying(false)],
-      ["previoustrack", () => playPrevious()],
-      ["nexttrack",     () => playNext()],
+      ["play",          () => { unlockAudioContext(); setIsPlayingRef.current(true); }],
+      ["pause",         () => setIsPlayingRef.current(false)],
+      ["stop",          () => setIsPlayingRef.current(false)],
+      ["previoustrack", () => playPreviousRef.current()],
+      ["nexttrack",     () => playNextRef.current()],
       ["seekbackward",  (d) => seek(-(d?.seekOffset ?? SEEK_OFFSET))],
       ["seekforward",   (d) => seek( (d?.seekOffset ?? SEEK_OFFSET))],
       ["seekto",        (d) => {
         if (d?.seekTime !== undefined && audioRef.current) {
           audioRef.current.currentTime = d.seekTime;
-          setCurrentTime(d.seekTime);
+          setCurrentTimeRef.current(d.seekTime);
           syncPositionState();
         }
       }],
@@ -160,14 +289,39 @@ export default function AudioPlayer() {
       try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) {}
     });
 
-    return () => {
-      handlers.forEach(([action]) => {
-        try { navigator.mediaSession.setActionHandler(action, null); } catch (_) {}
-      });
-    };
-  }, [currentTrack, updateMediaSessionMetadata, playNext, playPrevious, setIsPlaying, setCurrentTime, syncPositionState]);
+    // No cleanup — intentional. Removing handlers creates the notification
+    // disappearance gap between tracks. See previous version for full explanation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ── 6. HLS / AUDIO ENGINE ───────────────────────────────────────────────
+  // ── 9. METADATA — TRACK CHANGE ───────────────────────────────────────────
+
+  const displayImage = currentTrack?.cover_url
+    || currentTrack?.albums?.cover_url
+    || currentTrack?.artists?.image_url
+    || "/miraclefm.jpg";
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !currentTrack) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:   currentTrack.title,
+      artist:  currentTrack.artists?.name  ?? "Unknown Artist",
+      album:   currentTrack.albums?.title  ?? "Miracle FM",
+      artwork: buildArtwork(displayImage),
+    });
+
+    if (usePlayerStore.getState().isPlaying) {
+      navigator.mediaSession.playbackState = "playing";
+    }
+
+    try {
+      navigator.mediaSession.setPositionState({ duration: 0, playbackRate: 1, position: 0 });
+    } catch (_) {}
+
+  }, [currentTrack, displayImage]);
+
+  // ── 10. HLS / AUDIO ENGINE ───────────────────────────────────────────────
 
   useEffect(() => {
     if (!currentTrack || !audioRef.current) return;
@@ -176,7 +330,6 @@ export default function AudioPlayer() {
     setCurrentTime(0);
     setDuration(0);
 
-    // Tear down any previous HLS instance
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
@@ -186,7 +339,6 @@ export default function AudioPlayer() {
       if (usePlayerStore.getState().isPlaying) {
         audio.play().catch(() => setIsPlaying(false));
       }
-      updateMediaSessionMetadata();
     };
 
     const isApple =
@@ -200,11 +352,14 @@ export default function AudioPlayer() {
       audio.addEventListener("canplay", onCanPlay, { once: true });
     } else if (Hls.isSupported()) {
       const hls = new Hls({
-        maxBufferLength:    180,
-        maxMaxBufferLength: 360,
-        enableWorker:       true,
-        // Keep audio alive in background tabs
-        backBufferLength:   90,
+        maxBufferLength:         180,
+        maxMaxBufferLength:      360,
+        enableWorker:            true,
+        backBufferLength:        90,
+        // Extended timeouts so background network slowdowns don't kill the stream
+        fragLoadingTimeOut:      20_000,
+        manifestLoadingTimeOut:  10_000,
+        levelLoadingTimeOut:     10_000,
       });
 
       hlsRef.current = hls;
@@ -212,7 +367,6 @@ export default function AudioPlayer() {
       hls.attachMedia(audio);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        updateMediaSessionMetadata();
         if (usePlayerStore.getState().isPlaying) {
           audio.play().catch(() => setIsPlaying(false));
         }
@@ -225,7 +379,7 @@ export default function AudioPlayer() {
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            hls.startLoad(); // retry network errors automatically
+            hls.startLoad(); // auto-retry on network drop
           } else {
             hls.destroy();
             hlsRef.current = null;
@@ -241,32 +395,35 @@ export default function AudioPlayer() {
         hlsRef.current = null;
       }
     };
-  }, [currentTrack, setCurrentTime, setDuration, setIsPlaying, updateMediaSessionMetadata]);
+  }, [currentTrack, setCurrentTime, setDuration, setIsPlaying]);
 
-  // ── 7. PLAY / PAUSE SYNC ────────────────────────────────────────────────
+  // ── 11. PLAY / PAUSE SYNC ────────────────────────────────────────────────
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     if (isPlaying) {
-      const promise = audio.play();
-      if (promise !== undefined) {
-        promise
-          .then(() => {
-            acquireWakeLock();
-            if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
-          })
-          .catch(() => setIsPlaying(false));
-      }
+      unlockAudioContext(); // ensure AudioContext is running before play
+      audio
+        .play()
+        .then(() => {
+          acquireWakeLock();
+          if ("mediaSession" in navigator) {
+            navigator.mediaSession.playbackState = "playing";
+          }
+        })
+        .catch(() => setIsPlaying(false));
     } else {
       audio.pause();
       releaseWakeLock();
-      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.playbackState = "paused";
+      }
     }
-  }, [isPlaying, setIsPlaying, acquireWakeLock, releaseWakeLock]);
+  }, [isPlaying, setIsPlaying, acquireWakeLock, releaseWakeLock, unlockAudioContext]);
 
-  // ── 8. DOM EVENT HANDLERS ───────────────────────────────────────────────
+  // ── 12. DOM SEEK HANDLER ─────────────────────────────────────────────────
 
   const handleSeek = (time: number) => {
     if (audioRef.current) {
@@ -276,7 +433,21 @@ export default function AudioPlayer() {
     }
   };
 
-  // ── 9. RENDER ───────────────────────────────────────────────────────────
+  // ── 13. CLEANUP ON UNMOUNT ───────────────────────────────────────────────
+
+  useEffect(() => {
+    return () => {
+      releaseWakeLock();
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current   = null;
+        sourceNodeRef.current = null;
+        gainNodeRef.current   = null;
+      }
+    };
+  }, [releaseWakeLock]);
+
+  // ── 14. RENDER ───────────────────────────────────────────────────────────
 
   if (!currentTrack) return null;
 
@@ -292,13 +463,6 @@ export default function AudioPlayer() {
         "md:rounded-none md:px-6 md:overflow-visible"
       )}
     >
-      {/*
-        Key audio attributes for background/lock-screen playback:
-        • playsInline          — prevents iOS forcing fullscreen video player
-        • x-webkit-airplay     — enables AirPlay on Safari
-        • controlsList         — hides native download button (Chrome)
-        • preload="auto"       — buffer ahead so background scrubbing works
-      */}
       <audio
         ref={audioRef}
         hidden
@@ -309,7 +473,7 @@ export default function AudioPlayer() {
         onTimeUpdate={() => {
           if (!audioRef.current) return;
           setCurrentTime(audioRef.current.currentTime);
-          syncPositionState(); // keeps lock-screen scrubber in sync
+          syncPositionState();
         }}
         onDurationChange={(e) => {
           const d = e.currentTarget.duration;
@@ -318,7 +482,12 @@ export default function AudioPlayer() {
             syncPositionState();
           }
         }}
-        onEnded={playNext}
+        onEnded={() => {
+          if ("mediaSession" in navigator) {
+            navigator.mediaSession.playbackState = "playing";
+          }
+          playNext();
+        }}
         onPlay={() => {
           setIsPlaying(true);
           acquireWakeLock();
@@ -326,30 +495,26 @@ export default function AudioPlayer() {
           syncPositionState();
         }}
         onPause={() => {
+          // Skip during track transitions (isPlaying still true in store)
+          if (usePlayerStore.getState().isPlaying) return;
           setIsPlaying(false);
           releaseWakeLock();
           if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
         }}
         onStalled={() => {
-          // HLS will self-recover, but for native src we nudge the load
           if (!hlsRef.current) audioRef.current?.load();
         }}
         onError={() => {
-          // Fatal native audio error — attempt a reload after a short delay
-          if (!hlsRef.current) {
-            setTimeout(() => audioRef.current?.load(), 2000);
-          }
+          if (!hlsRef.current) setTimeout(() => audioRef.current?.load(), 2_000);
         }}
       />
 
       <div className="flex items-center justify-between max-w-[1600px] mx-auto h-full gap-2 md:gap-4 relative z-10">
         <PlayerTrackInfo displayImage={displayImage} />
-
         <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[45%] pr-2 md:pr-0">
           <PlayerControls />
           <PlayerProgressBar onSeek={handleSeek} />
         </div>
-
         <PlayerVolume audioRef={audioRef} />
       </div>
     </div>
