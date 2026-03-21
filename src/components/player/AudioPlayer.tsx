@@ -371,14 +371,22 @@ export default function AudioPlayer() {
       audio.addEventListener("canplay", onCanPlay, { once: true });
     } else if (Hls.isSupported()) {
       const hls = new Hls({
-        // ── Buffer configuration ─────────────────────────────────────────
-        // 60 s minimum buffer means the audio plays from pre-loaded MSE data
-        // for a full minute even if JS is completely frozen in the background.
-        // maxMaxBufferLength 600 s allows up to 10 min of pre-buffering when
-        // memory and bandwidth allow.
-        maxBufferLength:         60,
-        maxMaxBufferLength:      600,
-        backBufferLength:        30,
+        // ── Fast start ───────────────────────────────────────────────────
+        // maxBufferLength is the target buffer hls.js maintains AHEAD of
+        // the playhead. Setting this to 60 caused the startup lag — hls.js
+        // was fetching 60 s of segments before signalling readiness.
+        //
+        // 10 s is enough for instant playback start. hls.js will grow the
+        // buffer further in the background up to maxMaxBufferLength once
+        // playback is underway, so background resilience is preserved.
+        maxBufferLength:         10,
+        maxMaxBufferLength:      120,  // grow up to 2 min during playback
+        backBufferLength:        30,   // keep 30 s behind playhead for seek
+
+        // startFragPrefetch: begin fetching the first segment immediately
+        // when the manifest is parsed, before attachMedia is called.
+        // Cuts 1 full network round-trip from the startup sequence.
+        startFragPrefetch:       true,
 
         // ── Worker thread ────────────────────────────────────────────────
         // enableWorker moves segment demuxing off the main thread entirely.
