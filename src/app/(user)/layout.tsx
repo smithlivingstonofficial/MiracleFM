@@ -50,7 +50,7 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
         </main>
 
         {/* Audio Player — fixed position, sits above scroll content */}
-        <div className="z-40 pointer-events-none">
+        <div className="z-40">
           {/*
             pointer-events-none on the wrapper lets touch events pass through
             the transparent areas of the pill player on mobile.
