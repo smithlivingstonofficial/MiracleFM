@@ -3,22 +3,28 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Play, Trash2, Edit3, Loader2, Clock, Share2, MoreHorizontal, Check, X } from "lucide-react";
+import { Trash2, Edit3, Loader2, Clock, Share2, Check, X } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import PlaylistCover from "@/components/user/PlaylistCover";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import UserConfirmModal from "@/components/user/UserConfirmModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import type { Playlist, Track } from "@/types/music";
+
+type PlaylistTrackRow = {
+  tracks: Track | null;
+};
 
 export default function PlaylistPage() {
   const { id } = useParams();
+  const playlistId = (Array.isArray(id) ? id[0] : id) ?? "";
   const router = useRouter();
   const supabase = createClient();
   
   const [loading, setLoading] = useState(true);
-  const [playlist, setPlaylist] = useState<any>(null);
-  const [tracks, setTracks] = useState<any[]>([]);
+  const [playlist, setPlaylist] = useState<Playlist | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   
   // Renaming State
@@ -31,8 +37,46 @@ export default function PlaylistPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     fetchData();
-  }, [id]);
+
+    return () => {
+      cancelled = true;
+    };
+
+    async function fetchData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { data: pl } = await supabase.from("playlists").select("*").eq("id", playlistId).single();
+      if (!pl) return router.push("/");
+
+      const { data: items } = await supabase
+        .from("playlist_tracks")
+        .select(`
+          track_id, 
+          tracks (
+            *, 
+            artists (name, image_url), 
+            albums (title, cover_url)
+          )
+        `)
+        .eq("playlist_id", playlistId)
+        .order("added_at", { ascending: true });
+
+      if (cancelled) return;
+
+      setPlaylist(pl);
+      setTempTitle(pl.title);
+      setTracks(
+        items
+          ?.map((item: PlaylistTrackRow) => item.tracks)
+          .filter((track: Track | null): track is Track => track !== null && track.audio_status === "ready") || []
+      );
+      setIsOwner(user?.id === pl.user_id);
+      setLoading(false);
+    }
+  }, [playlistId, router, supabase]);
 
   useEffect(() => {
     if (isEditing && titleInputRef.current) {
@@ -40,36 +84,10 @@ export default function PlaylistPage() {
     }
   }, [isEditing]);
 
-  async function fetchData() {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    const { data: pl } = await supabase.from("playlists").select("*").eq("id", id).single();
-    if (!pl) return router.push("/");
-
-    const { data: items } = await supabase
-      .from("playlist_tracks")
-      .select(`
-        track_id, 
-        tracks (
-          *, 
-          artists (name, image_url), 
-          albums (title, cover_url)
-        )
-      `)
-      .eq("playlist_id", id)
-      .order("added_at", { ascending: true });
-
-    setPlaylist(pl);
-    setTempTitle(pl.title);
-    setTracks(items?.map((i: any) => i.tracks).filter((t: any) => t !== null) || []);
-    setIsOwner(user?.id === pl.user_id);
-    setLoading(false);
-  }
-
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/playlists/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/playlists/${playlistId}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("Playlist deleted");
         router.push("/");
@@ -77,7 +95,7 @@ export default function PlaylistPage() {
       } else {
         toast.error("Failed to delete playlist");
       }
-    } catch (error) {
+    } catch {
       toast.error("An error occurred");
     } finally {
       setIsDeleting(false);
@@ -86,32 +104,58 @@ export default function PlaylistPage() {
   };
 
   const saveTitle = async () => {
+    if (!playlist) return;
     if (!tempTitle.trim() || tempTitle === playlist.title) {
       setIsEditing(false);
       setTempTitle(playlist.title);
       return;
     }
     
-    const { error } = await supabase.from("playlists").update({ title: tempTitle }).eq("id", id);
-    if (!error) {
-      setPlaylist({ ...playlist, title: tempTitle });
+    const response = await fetch(`/api/playlists/${playlistId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: tempTitle }),
+    });
+    const result = await response.json();
+
+    if (response.ok && result.playlist) {
+      setPlaylist(result.playlist);
+      setTempTitle(result.playlist.title);
       toast.success("Playlist renamed");
       router.refresh();
     } else {
-      toast.error("Failed to rename");
+      toast.error(result.error || "Failed to rename");
+      setTempTitle(playlist.title);
     }
     setIsEditing(false);
   };
 
+  const handleShare = async () => {
+    if (!playlist || typeof window === "undefined") return;
+
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: playlist.title, text: "Listen on Miracle FM", url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Playlist link copied");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      toast.error("Unable to share playlist");
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") saveTitle();
-    if (e.key === "Escape") {
+    if (e.key === "Escape" && playlist) {
       setTempTitle(playlist.title);
       setIsEditing(false);
     }
   };
 
-  if (loading) return (
+  if (loading || !playlist) return (
     <div className="h-screen flex items-center justify-center bg-black">
       <Loader2 className="animate-spin text-[#FF0055] w-10 h-10" />
     </div>
@@ -202,7 +246,12 @@ export default function PlaylistPage() {
               <CollectionPlayButton tracks={tracks} size="large" />
               
               <div className="flex gap-2">
-                <button className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/5">
+                <button
+                  onClick={handleShare}
+                  className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/5"
+                  aria-label="Share playlist"
+                  title="Share playlist"
+                >
                   <Share2 size={18} />
                 </button>
                 {isOwner && (

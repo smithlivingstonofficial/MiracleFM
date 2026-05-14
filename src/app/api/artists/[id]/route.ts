@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { deleteR2File, deleteR2Folder } from "@/lib/r2-helpers";
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  // 1. Auth Check
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { supabase, error: authError } = await requireAdmin();
+  if (authError) return authError;
 
   const { deleteMode } = await req.json(); // 'orphan' or 'cascade'
 
@@ -52,7 +49,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

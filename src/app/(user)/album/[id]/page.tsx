@@ -4,12 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Clock, Disc, Share2, MoreHorizontal, Calendar, Music4, Play, Heart, Dot } from "lucide-react";
+import { Clock, Disc, Music4, Dot } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import StartRadio from "@/components/user/StartRadio";
-import LikeButton from "@/components/user/LikeButton"; // Assuming you have a standalone LikeButton component, otherwise use the Heart icon logic
 import HorizontalAd from "@/components/ads/HorizontalAd";
+import ShareButton from "@/components/user/ShareButton";
 
 export const revalidate = 60;
 
@@ -30,6 +30,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
     .from("tracks")
     .select("*, artists(name), albums(title, cover_url)")
     .eq("album_id", id)
+    .eq("audio_status", "ready")
     .order("created_at", { ascending: true });
 
   const releaseYear = new Date(album.created_at).getFullYear();
@@ -136,17 +137,11 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
           
           {/* Secondary Actions Row */}
           <div className="flex items-center gap-3">
-             <button className="h-12 w-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 hover:text-[#FF0055] transition-all backdrop-blur-md active:scale-90 flex items-center justify-center">
-               <Heart size={22} />
-             </button>
-             
              <div className="active:scale-90 transition-transform">
                 <StartRadio genres={genres} label={false} />
              </div>
              
-             <button className="h-12 w-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 hover:text-white transition-all backdrop-blur-md active:scale-90 flex items-center justify-center">
-               <MoreHorizontal size={22} />
-             </button>
+             <ShareButton title={album.title} className="h-12 w-12 backdrop-blur-md" iconSize={22} label="Share album" />
           </div>
 
         </div>

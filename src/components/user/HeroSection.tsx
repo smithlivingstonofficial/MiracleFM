@@ -5,10 +5,18 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Play, Info, X, Sparkles, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils"; // Assuming you have a cn utility, if not I'll handle standard classes
+import { Info, X, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export default function HeroSection({ banners }: { banners: any[] }) {
+type Banner = {
+  id?: string;
+  title: string;
+  description?: string | null;
+  image_url?: string | null;
+  target_link?: string | null;
+};
+
+export default function HeroSection({ banners }: { banners: Banner[] }) {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   if (!banners || banners.length === 0) return null;
@@ -32,7 +40,7 @@ export default function HeroSection({ banners }: { banners: any[] }) {
       ------------------------------------------------------------ */}
       <div className="absolute inset-0 w-full h-full overflow-hidden">
         <Image 
-          src={hero.image_url || "/placeholder-banner.jpg"} 
+          src={hero.image_url || "/miraclefm.jpg"} 
           alt={hero.title} 
           fill 
           className={cn(

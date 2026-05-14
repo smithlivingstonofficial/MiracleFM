@@ -4,6 +4,7 @@ import TrackRow from "@/components/user/TrackRow";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
+import type { Track } from "@/types/music";
 
 export const revalidate = 0;
 
@@ -19,7 +20,10 @@ export default async function LibraryPage() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  const tracks = likes?.map((l: any) => l.tracks).filter((t: any) => t !== null) || [];
+  const tracks =
+    likes
+      ?.map((like) => like.tracks as Track | null)
+      .filter((track): track is Track => track !== null && track.audio_status === "ready") || [];
 
   return (
     <div className="min-h-screen pb-32 bg-black relative overflow-hidden">
@@ -91,7 +95,7 @@ export default async function LibraryPage() {
 
           <div className="space-y-1">
             {tracks.length > 0 ? (
-              tracks.map((track: any, i: number) => (
+              tracks.map((track, i) => (
                 <TrackRow 
                   key={track.id} 
                   track={track} 

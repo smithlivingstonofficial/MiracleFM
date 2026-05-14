@@ -1,8 +1,10 @@
 import MixCard from "@/components/user/MixCard";
+import type { User } from "@supabase/supabase-js";
+import type { Track } from "@/types/music";
 
 interface DailyMixSectionProps {
-  user: any;
-  dailyMix: any[];
+  user: User | null;
+  dailyMix: Track[];
 }
 
 export default function DailyMixSection({ user, dailyMix }: DailyMixSectionProps) {

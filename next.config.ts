@@ -2,6 +2,16 @@
 
 import type { NextConfig } from "next";
 
+const mediaHostname = (() => {
+  const value = process.env.NEXT_PUBLIC_MEDIA_BASE_URL;
+  if (!value) return null;
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return null;
+  }
+})();
+
 const nextConfig: NextConfig = {
 
   // ── 1. Image domains ──────────────────────────────────────────────────────
@@ -15,6 +25,14 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",
       },
+      ...(mediaHostname
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: mediaHostname,
+            },
+          ]
+        : []),
     ],
   },
 

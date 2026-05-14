@@ -1,15 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Disc, Plus, Trash2, Upload, Loader2, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
+import { buildMediaUrl } from "@/lib/media";
+
+type ArtistOption = {
+  id: string;
+  name: string;
+};
+
+type Album = {
+  id: string;
+  title: string;
+  cover_url: string | null;
+  artists?: { name: string | null } | null;
+};
 
 export default function AlbumsPage() {
-  const [albums, setAlbums] = useState<any[]>([]);
-  const [artists, setArtists] = useState<any[]>([]);
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [artists, setArtists] = useState<ArtistOption[]>([]);
   
   // Form State
   const [title, setTitle] = useState("");
@@ -18,21 +31,24 @@ export default function AlbumsPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     const [albumRes, artistRes] = await Promise.all([
       supabase.from("albums").select("*, artists(name)").order("created_at", { ascending: false }),
       supabase.from("artists").select("id, name").order("name")
     ]);
+
+    if (albumRes.error) toast.error("Could not load albums", { description: albumRes.error.message });
+    if (artistRes.error) toast.error("Could not load artists", { description: artistRes.error.message });
     
-    if (albumRes.data) setAlbums(albumRes.data);
-    if (artistRes.data) setArtists(artistRes.data);
-  }
+    if (albumRes.data) setAlbums(albumRes.data as Album[]);
+    if (artistRes.data) setArtists(artistRes.data as ArtistOption[]);
+  }, [supabase]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -64,11 +80,13 @@ export default function AlbumsPage() {
           method: "POST",
           body: JSON.stringify({ fileName, contentType: imageFile.type }),
         });
+        if (!res.ok) throw new Error("Could not create cover upload URL.");
         const { url } = await res.json();
 
-        await fetch(url, { method: "PUT", body: imageFile, headers: { "Content-Type": imageFile.type } });
+        const uploadRes = await fetch(url, { method: "PUT", body: imageFile, headers: { "Content-Type": imageFile.type } });
+        if (!uploadRes.ok) throw new Error("Album cover upload failed.");
 
-        const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
+        const publicUrl = buildMediaUrl(fileName);
         await supabase.from("albums").update({ cover_url: publicUrl }).eq("id", album.id);
       }
 
@@ -78,10 +96,11 @@ export default function AlbumsPage() {
       setArtistId("");
       setImageFile(null);
       setPreviewUrl(null);
-      fetchData();
+      void fetchData();
 
     } catch (error) {
-      toast.error("Failed to create album");
+      const message = error instanceof Error ? error.message : "Unknown album creation error";
+      toast.error("Failed to create album", { description: message });
     } finally {
       setIsSubmitting(false);
     }
@@ -96,7 +115,7 @@ export default function AlbumsPage() {
     
     if(res.ok) {
       toast.success("Album and cover deleted");
-      fetchData();
+      void fetchData();
     } else {
       toast.error("Failed to delete album");
     }
@@ -120,7 +139,7 @@ export default function AlbumsPage() {
           <div className="shrink-0">
             <div className="group relative w-40 h-40 rounded-3xl bg-black border-2 border-dashed border-white/10 hover:border-brand/50 transition-all overflow-hidden flex items-center justify-center">
               {previewUrl ? (
-                <img src={previewUrl} className="w-full h-full object-cover" />
+                <img src={previewUrl} alt="Album cover preview" className="w-full h-full object-cover" />
               ) : (
                 <Disc size={40} className="text-zinc-700" />
               )}

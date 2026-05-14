@@ -1,9 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Disc, ChevronRight } from "lucide-react";
+import type { Album } from "@/types/music";
 
 interface NewReleasesSectionProps {
-  albums: any[];
+  albums: Album[];
 }
 
 export default function NewReleasesSection({ albums }: NewReleasesSectionProps) {

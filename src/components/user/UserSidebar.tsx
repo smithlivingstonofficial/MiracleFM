@@ -6,53 +6,59 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { 
-  Home, Search, Library, Plus, Heart, 
-  PanelLeftClose, PanelLeftOpen, ListMusic, Disc, Sparkles, PlusCircle 
+import {
+  Home, Search, Library, Plus, Heart,
+  PanelLeftClose, PanelLeftOpen, ListMusic, Sparkles, PlusCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import PlaylistCover from "./PlaylistCover";
+import type { Playlist } from "@/types/music";
 
 export default function UserSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [userPlaylists, setUserPlaylists] = useState<any[]>([]);
+  const [userPlaylists, setUserPlaylists] = useState<Playlist[]>([]);
 
   useEffect(() => {
-    fetchUserPlaylists();
-  }, []);
+    let cancelled = false;
 
-  async function fetchUserPlaylists() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from("playlists")
-        .select("id, title, cover_url")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      if (data) setUserPlaylists(data);
+    fetchUserPlaylists();
+
+    return () => {
+      cancelled = true;
+    };
+
+    async function fetchUserPlaylists() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("playlists")
+          .select("id, title, cover_url")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        if (data && !cancelled) setUserPlaylists(data);
+      }
     }
-  }
+  }, [supabase]);
 
   const handleCreatePlaylist = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return toast.error("Please login to create playlists");
 
-    const { data, error } = await supabase
-      .from("playlists")
-      .insert({ 
-        title: `My Playlist #${userPlaylists.length + 1}`,
-        user_id: user.id 
-      })
-      .select().single();
+    const response = await fetch("/api/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: `My Playlist #${userPlaylists.length + 1}` }),
+    });
+    const result = await response.json();
 
-    if (data) {
+    if (response.ok && result.playlist) {
       toast.success("Playlist created");
-      setUserPlaylists([data, ...userPlaylists]);
-      router.push(`/playlist/${data.id}`);
+      setUserPlaylists([result.playlist, ...userPlaylists]);
+      router.push(`/playlist/${result.playlist.id}`);
       router.refresh();
     } else {
       toast.error("Failed to create playlist");

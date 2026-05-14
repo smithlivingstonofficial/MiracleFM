@@ -5,9 +5,10 @@
 import Image from "next/image";
 import { Sparkles, Music } from "lucide-react";
 import CollectionPlayButton from "./CollectionPlayButton";
+import type { Track } from "@/types/music";
 
 interface MixCardProps {
-  tracks: any[];
+  tracks: Track[];
   title: string;
   description: string;
 }
@@ -25,7 +26,8 @@ export default function MixCard({ tracks, title, description }: MixCardProps) {
   const uniqueArtists = tracks
     .filter((t) => t.artists?.image_url)
     .map((t) => t.artists)
-    .filter((v, i, a) => a.findIndex((t2) => t2.name === v.name) === i)
+    .filter((artist): artist is { name: string; image_url: string } => Boolean(artist?.name && artist.image_url))
+    .filter((artist, i, allArtists) => allArtists.findIndex((candidate) => candidate.name === artist.name) === i)
     .slice(0, 3);
 
   if (tracks.length === 0) return null;

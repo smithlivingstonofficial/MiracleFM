@@ -2,48 +2,83 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search as SearchIcon, Disc, Mic2, Music, X, Loader2, Play, ChevronRight } from "lucide-react";
+import { Search as SearchIcon, Disc, Mic2, X, Loader2, Play } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import TrackRow from "@/components/user/TrackRow";
+import type { Album, Artist, Track } from "@/types/music";
+
+type SearchResults = {
+  tracks: Track[];
+  artists: Artist[];
+  albums: Album[];
+};
+
+const emptyResults: SearchResults = { tracks: [], artists: [], albums: [] };
+const isArtistResult = (result: Artist | Album): result is Artist => "name" in result;
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{ tracks: any[], artists: any[], albums: any[] }>({
-    tracks: [], artists:[], albums: []
-  });
+  const [results, setResults] = useState<SearchResults>(emptyResults);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const requestIdRef = useRef(0);
   const supabase = createClient();
 
   useEffect(() => {
-    // Debounce search to prevent API calls on every keystroke
+    const trimmedQuery = query.trim();
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+
     const delayDebounceFn = setTimeout(async () => {
-      if (query.trim().length > 1) {
-        setLoading(true);
+      if (trimmedQuery.length > 1) {
         const [t, a, alb] = await Promise.all([
-          supabase.from("tracks").select("*, artists(name), albums(title, cover_url)").ilike("title", `%${query}%`).limit(5),
-          supabase.from("artists").select("*").ilike("name", `%${query}%`).limit(5),
-          supabase.from("albums").select("*, artists(name)").ilike("title", `%${query}%`).limit(5)
+          supabase
+            .from("tracks")
+            .select("*, artists(name), albums(title, cover_url)")
+            .eq("audio_status", "ready")
+            .ilike("title", `%${trimmedQuery}%`)
+            .limit(5),
+          supabase.from("artists").select("*").ilike("name", `%${trimmedQuery}%`).limit(5),
+          supabase.from("albums").select("*, artists(name)").ilike("title", `%${trimmedQuery}%`).limit(5)
         ]);
+
+        if (requestIdRef.current !== requestId) return;
+
+        if (t.error || a.error || alb.error) {
+          setErrorMessage("Search is having trouble right now. Please try again.");
+          setResults(emptyResults);
+          setLoading(false);
+          return;
+        }
         
         setResults({
           tracks: t.data || [],
           artists: a.data ||[],
           albums: alb.data ||[]
         });
+        setErrorMessage("");
         setLoading(false);
       } else {
-        setResults({ tracks: [], artists: [], albums:[] });
+        setResults(emptyResults);
+        setErrorMessage("");
         setLoading(false);
       }
-    }, 400); // 400ms debounce for smoother typing feel
+    }, 400);
 
     return () => clearTimeout(delayDebounceFn);
   }, [query, supabase]);
 
   const topResult = results.artists.length > 0 ? results.artists[0] : (results.albums.length > 0 ? results.albums[0] : null);
+  const topResultIsArtist = topResult ? isArtistResult(topResult) : false;
+  const topResultImage = topResult
+    ? topResultIsArtist
+      ? topResult.image_url
+      : topResult.cover_url
+    : null;
+  const topResultTitle = topResult ? (topResultIsArtist ? topResult.name : topResult.title) : "";
 
   return (
     <div className="relative min-h-screen w-full bg-[#050505] text-zinc-100 pb-32 overflow-x-hidden selection:bg-[#FF0055] selection:text-white">
@@ -76,8 +111,9 @@ export default function SearchPage() {
             {/* Clear Button */}
             {query && (
                 <button 
-                  onClick={() => { setQuery(""); setResults({ tracks: [], artists: [], albums:[] }); }}
+                  onClick={() => { setQuery(""); setResults(emptyResults); setErrorMessage(""); }}
                   className="absolute right-5 md:right-6 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10 p-1.5 rounded-full transition-all active:scale-90"
+                  aria-label="Clear search"
                 >
                     <X size={16} />
                 </button>
@@ -101,25 +137,30 @@ export default function SearchPage() {
           <div className="space-y-12 md:space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-700">
             
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+                {errorMessage && (
+                  <div className="lg:col-span-12 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200">
+                    {errorMessage}
+                  </div>
+                )}
                 
                 {/* --- LEFT COL: TOP RESULT --- */}
                 {topResult && (
                     <div className="lg:col-span-5">
                         <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Top Result</h2>
                         <Link 
-                            href={topResult.name ? `/artist/${topResult.id}` : `/album/${topResult.id}`} 
+                            href={topResultIsArtist ? `/artist/${topResult.id}` : `/album/${topResult.id}`} 
                             className="group relative block overflow-hidden rounded-[2rem] bg-[#0A0A0A] border border-white/5 hover:border-[#FF0055]/30 p-6 md:p-8 active:scale-[0.98] md:active:scale-100 transition-all duration-500 shadow-xl hover:shadow-[0_10px_40px_rgba(255,0,85,0.15)]"
                         >
                             {/* Animated Background Glow */}
                             <div className="absolute -inset-20 bg-gradient-to-br from-[#FF0055]/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 blur-2xl transition-opacity duration-700 pointer-events-none" />
 
                             <div className="relative z-10 flex flex-col gap-6">
-                                <div className={`relative w-28 h-28 md:w-32 md:h-32 overflow-hidden shadow-2xl ${topResult.name ? 'rounded-full' : 'rounded-2xl'}`}>
-                                    {topResult.image_url || topResult.cover_url ? (
-                                        <Image src={topResult.image_url || topResult.cover_url} alt="" fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
+                                <div className={`relative w-28 h-28 md:w-32 md:h-32 overflow-hidden shadow-2xl ${topResultIsArtist ? 'rounded-full' : 'rounded-2xl'}`}>
+                                    {topResultImage ? (
+                                        <Image src={topResultImage} alt="" fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
                                     ) : (
                                         <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                                            {topResult.name ? <Mic2 size={32} className="text-zinc-600"/> : <Disc size={32} className="text-zinc-600"/>}
+                                            {topResultIsArtist ? <Mic2 size={32} className="text-zinc-600"/> : <Disc size={32} className="text-zinc-600"/>}
                                         </div>
                                     )}
                                 </div>
@@ -127,11 +168,11 @@ export default function SearchPage() {
                                 <div className="flex items-end justify-between">
                                     <div>
                                         <h3 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none group-hover:text-[#FF0055] transition-colors line-clamp-2">
-                                            {topResult.name || topResult.title}
+                                            {topResultTitle}
                                         </h3>
                                         <div className="flex items-center gap-2 mt-3">
                                             <span className="text-[10px] font-black bg-white/10 px-3 py-1 rounded-full uppercase tracking-widest text-zinc-300">
-                                                {topResult.name ? 'Artist' : 'Album'}
+                                                {topResultIsArtist ? 'Artist' : 'Album'}
                                             </span>
                                         </div>
                                     </div>

@@ -1,15 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Plus, User as UserIcon, Trash2, Upload, Loader2, AlertTriangle } from "lucide-react";
+import { Plus, User as UserIcon, Trash2, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import DeleteConfirmationModal from "@/components/admin/DeleteConfirmationModal"; // Import the modal
+import { buildMediaUrl } from "@/lib/media";
+
+type Artist = {
+  id: string;
+  name: string;
+  image_url: string | null;
+};
 
 export default function ArtistsPage() {
-  const [artists, setArtists] = useState<any[]>([]);
+  const [artists, setArtists] = useState<Artist[]>([]);
   
   // Form State
   const [name, setName] = useState("");
@@ -19,18 +26,22 @@ export default function ArtistsPage() {
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [artistToDelete, setArtistToDelete] = useState<any | null>(null);
+  const [artistToDelete, setArtistToDelete] = useState<Artist | null>(null);
   
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+
+  const fetchArtists = useCallback(async () => {
+    const { data, error } = await supabase.from("artists").select("id, name, image_url").order("name");
+    if (error) {
+      toast.error("Could not load artists", { description: error.message });
+      return;
+    }
+    if (data) setArtists(data as Artist[]);
+  }, [supabase]);
 
   useEffect(() => {
-    fetchArtists();
-  }, []);
-
-  async function fetchArtists() {
-    const { data } = await supabase.from("artists").select("*").order("name");
-    if (data) setArtists(data);
-  }
+    void fetchArtists();
+  }, [fetchArtists]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,11 +65,13 @@ export default function ArtistsPage() {
           method: "POST",
           body: JSON.stringify({ fileName, contentType: imageFile.type }),
         });
+        if (!res.ok) throw new Error("Could not create image upload URL.");
         const { url } = await res.json();
 
-        await fetch(url, { method: "PUT", body: imageFile, headers: { "Content-Type": imageFile.type } });
+        const uploadRes = await fetch(url, { method: "PUT", body: imageFile, headers: { "Content-Type": imageFile.type } });
+        if (!uploadRes.ok) throw new Error("Artist image upload failed.");
 
-        const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
+        const publicUrl = buildMediaUrl(fileName);
         await supabase.from("artists").update({ image_url: publicUrl }).eq("id", artist.id);
       }
 
@@ -66,16 +79,17 @@ export default function ArtistsPage() {
       setName("");
       setImageFile(null);
       setPreviewUrl(null);
-      fetchArtists();
+      void fetchArtists();
     } catch (error) {
-      toast.error("Failed to create artist");
+      const message = error instanceof Error ? error.message : "Unknown artist creation error";
+      toast.error("Failed to create artist", { description: message });
     } finally {
       setIsSubmitting(false);
     }
   }
 
   // --- Functions to control the new Deletion Modal ---
-  const openDeleteModal = (artist: any) => {
+  const openDeleteModal = (artist: Artist) => {
     setArtistToDelete(artist);
     setIsModalOpen(true);
   };
@@ -99,7 +113,7 @@ export default function ArtistsPage() {
       loading: "Processing deletion...",
       success: (res) => {
         if (!res.ok) throw new Error("API request failed");
-        fetchArtists(); // Refresh the list
+        void fetchArtists(); // Refresh the list
         return `Artist "${artistToDelete.name}" and assets deleted.`;
       },
       error: "Failed to delete artist."
@@ -126,7 +140,7 @@ export default function ArtistsPage() {
           <div className="shrink-0">
             <div className="group relative w-32 h-32 rounded-full bg-black border-2 border-dashed border-white/10 hover:border-brand/50 transition-all overflow-hidden flex items-center justify-center">
               {previewUrl ? (
-                <img src={previewUrl} className="w-full h-full object-cover" />
+                <img src={previewUrl} alt="Artist preview" className="w-full h-full object-cover" />
               ) : (
                 <UserIcon size={32} className="text-zinc-700" />
               )}

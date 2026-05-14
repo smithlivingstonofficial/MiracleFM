@@ -15,30 +15,30 @@ export default function UploadPage() {
               <Radio size={16} className="text-brand" />
             </div>
             <span className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-600">
-              Miracle FM · Admin
+              Miracle FM Admin
             </span>
           </div>
           <h1 className="text-5xl font-black tracking-tighter text-white">
             Ingestion
           </h1>
           <p className="text-zinc-500 mt-3 font-medium text-lg">
-            Client-side HLS transcoding pipeline — files never leave your browser.
+            Upload original masters and queue adaptive AAC HLS encoding.
           </p>
         </div>
 
         {/* Status pills */}
         <div className="flex items-center gap-3 flex-wrap">
-          <StatusPill icon={Cpu}   label="FFmpeg WASM" color="brand"  />
-          <StatusPill icon={Globe} label="R2 CDN Live"  color="green"  />
+          <StatusPill icon={Cpu}   label="Encoder Worker" color="brand"  />
+          <StatusPill icon={Globe} label="Media CDN"      color="green"  />
         </div>
       </div>
 
-      {/* Pipeline tips — shown before any files are added */}
+      {/* Pipeline tips shown before any files are added */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <TipCard
           icon={Zap}
-          title="6-second segments"
-          desc="Optimised HLS chunk size for fast playback start with minimal HTTP round-trips to R2."
+          title="Adaptive AAC ladder"
+          desc="Each upload is prepared as 64k, 128k and 256k HLS so weak networks can start quickly and upgrade cleanly."
           color="brand"
         />
         <TipCard
@@ -49,8 +49,8 @@ export default function UploadPage() {
         />
         <TipCard
           icon={ShieldCheck}
-          title="Zero server CPU"
-          desc="FFmpeg runs entirely in your browser via WebAssembly. Your server does nothing."
+          title="Originals preserved"
+          desc="Master files are stored separately so future quality ladders or lossless options can be generated later."
           color="green"
         />
       </div>
@@ -63,7 +63,7 @@ export default function UploadPage() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// Sub-components
 
 function StatusPill({
   icon: Icon,

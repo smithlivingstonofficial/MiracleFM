@@ -1,18 +1,9 @@
 import { DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { r2 } from "@/lib/r2";
+import { getMediaKeyFromUrl } from "@/lib/media";
 
 export function getKeyFromUrl(url: string | null) {
-  if (!url) return null;
-  try {
-    // Handles https://pub-xxx.r2.dev/covers/img.jpg -> covers/img.jpg
-    const parts = url.split('.dev/');
-    if (parts.length > 1) {
-      return decodeURIComponent(parts[1]);
-    }
-    return null;
-  } catch (e) {
-    return null;
-  }
+  return getMediaKeyFromUrl(url);
 }
 
 export async function deleteR2File(url: string | null) {

@@ -1,37 +1,48 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import type { User } from "@supabase/supabase-js";
 
 export default function LikeButton({ trackId }: { trackId: string }) {
   const [isLiked, setIsLiked] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const supabase = createClient();
+  const [user, setUser] = useState<User | null>(null);
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
   useEffect(() => {
-    checkUserAndLikeStatus();
-  }, [trackId]);
+    let cancelled = false;
 
-  async function checkUserAndLikeStatus() {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
+    async function checkUserAndLikeStatus() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      setUser(user);
 
-    if (user) {
+      if (!user) {
+        setIsLiked(false);
+        return;
+      }
+
       const { data } = await supabase
         .from("user_likes")
-        .select("*")
+        .select("track_id")
         .eq("user_id", user.id)
         .eq("track_id", trackId)
-        .single();
+        .maybeSingle();
       
-      if (data) setIsLiked(true);
+      if (!cancelled) setIsLiked(Boolean(data));
     }
-  }
+
+    checkUserAndLikeStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, trackId]);
 
   const toggleLike = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent playing the song when clicking heart
@@ -52,7 +63,7 @@ export default function LikeButton({ trackId }: { trackId: string }) {
         .from("user_likes")
         .insert({ user_id: user.id, track_id: trackId });
       
-      if (error) {
+      if (error && error.code !== "23505") {
         setIsLiked(previousState); // Revert
         toast.error("Failed to like song");
       } else {
@@ -82,6 +93,7 @@ export default function LikeButton({ trackId }: { trackId: string }) {
         "transition-all duration-200 hover:scale-110 active:scale-95",
         isLiked ? "text-[#FF0055]" : "text-zinc-500 hover:text-white"
       )}
+      aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
     >
       <Heart size={20} fill={isLiked ? "currentColor" : "none"} />
     </button>

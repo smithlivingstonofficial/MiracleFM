@@ -1,10 +1,10 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Sparkles, ChevronRight, Play, Music4 } from "lucide-react";
 import PlaylistCover from "@/components/user/PlaylistCover";
+import type { Playlist } from "@/types/music";
 
 interface EditorialSectionProps {
-  playlists: any[];
+  playlists: Playlist[];
 }
 
 export default function EditorialSection({ playlists }: EditorialSectionProps) {

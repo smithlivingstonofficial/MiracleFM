@@ -1,15 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Upload, Loader2, LayoutTemplate, Link as LinkIcon, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { buildMediaUrl } from "@/lib/media";
+
+type Banner = {
+  id: string;
+  title: string;
+  description: string | null;
+  target_link: string | null;
+  image_url: string;
+  is_active: boolean;
+};
 
 export default function BannersPage() {
-  const [banners, setBanners] = useState<any[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Form State
@@ -20,17 +30,19 @@ export default function BannersPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+
+  const fetchBanners = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from("banners").select("*").order("created_at", { ascending: false });
+    if (error) toast.error("Could not load banners", { description: error.message });
+    if (data) setBanners(data as Banner[]);
+    setLoading(false);
+  }, [supabase]);
 
   useEffect(() => {
-    fetchBanners();
-  }, []);
-
-  async function fetchBanners() {
-    const { data } = await supabase.from("banners").select("*").order("created_at", { ascending: false });
-    if (data) setBanners(data);
-    setLoading(false);
-  }
+    void fetchBanners();
+  }, [fetchBanners]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -52,10 +64,12 @@ export default function BannersPage() {
         method: "POST",
         body: JSON.stringify({ fileName, contentType: imageFile.type }),
       });
+      if (!res.ok) throw new Error("Could not create banner upload URL.");
       const { url } = await res.json();
-      await fetch(url, { method: "PUT", body: imageFile, headers: { "Content-Type": imageFile.type } });
+      const uploadRes = await fetch(url, { method: "PUT", body: imageFile, headers: { "Content-Type": imageFile.type } });
+      if (!uploadRes.ok) throw new Error("Banner image upload failed.");
 
-      const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${fileName}`;
+      const publicUrl = buildMediaUrl(fileName);
 
       // 2. Save to DB
       const { error } = await supabase.from("banners").insert({
@@ -70,10 +84,11 @@ export default function BannersPage() {
 
       toast.success("Banner published");
       setTitle(""); setDesc(""); setLink(""); setImageFile(null); setPreviewUrl(null);
-      fetchBanners();
+      void fetchBanners();
 
     } catch (error) {
-      toast.error("Failed to publish banner");
+      const message = error instanceof Error ? error.message : "Unknown banner publishing error";
+      toast.error("Failed to publish banner", { description: message });
     } finally {
       setIsSubmitting(false);
     }
@@ -84,15 +99,16 @@ export default function BannersPage() {
     const res = await fetch(`/api/banners/${id}`, { method: 'DELETE' });
     if (res.ok) {
       toast.success("Banner removed");
-      fetchBanners();
+      void fetchBanners();
     } else {
       toast.error("Delete failed");
     }
   }
 
   const toggleStatus = async (id: string, currentStatus: boolean) => {
-    await supabase.from("banners").update({ is_active: !currentStatus }).eq("id", id);
-    fetchBanners();
+    const { error } = await supabase.from("banners").update({ is_active: !currentStatus }).eq("id", id);
+    if (error) toast.error("Could not update banner visibility", { description: error.message });
+    else void fetchBanners();
   }
 
   return (
@@ -119,7 +135,7 @@ export default function BannersPage() {
           <div className="lg:col-span-5">
             <div className="group relative aspect-video rounded-3xl bg-black border-2 border-dashed border-white/10 hover:border-brand/50 transition-all overflow-hidden flex items-center justify-center shadow-lg">
               {previewUrl ? (
-                <img src={previewUrl} className="w-full h-full object-cover" />
+                <img src={previewUrl} alt="Banner preview" className="w-full h-full object-cover" />
               ) : (
                 <div className="text-center">
                   <LayoutTemplate size={48} className="text-zinc-800 mx-auto mb-3" />
@@ -186,6 +202,17 @@ export default function BannersPage() {
       </div>
 
       {/* Banner List */}
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="animate-spin text-brand" size={28} />
+        </div>
+      ) : banners.length === 0 ? (
+        <div className="rounded-3xl border border-white/[0.05] bg-panel p-12 text-center">
+          <LayoutTemplate className="mx-auto mb-3 text-zinc-700" size={36} />
+          <h2 className="text-lg font-bold text-white">No hero banners yet</h2>
+          <p className="mt-2 text-sm text-zinc-500">Publish a banner to feature content on the user home screen.</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {banners.map((banner) => (
           <div key={banner.id} className="group bg-panel border border-white/[0.05] rounded-[2rem] overflow-hidden hover:border-white/10 transition-all">
@@ -231,6 +258,7 @@ export default function BannersPage() {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

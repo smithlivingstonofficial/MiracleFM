@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: {
     default:  "Miracle FM",
-    template: "%s · Miracle FM",
+    template: "%s | Miracle FM",
   },
   description: "Tamil Christian Audio Streaming Platform",
   applicationName: "Miracle FM",
@@ -72,17 +72,20 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const r2Domain = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "";
+  const mediaDomain =
+    process.env.NEXT_PUBLIC_MEDIA_BASE_URL ||
+    process.env.NEXT_PUBLIC_R2_PUBLIC_URL ||
+    "";
 
   return (
     // suppressHydrationWarning avoids server/client mismatch on 'dark' class
     <html lang="ta" className="dark" suppressHydrationWarning>
       <head>
         {/* ── CDN pre-connect: zero-latency audio delivery ─────────────────── */}
-        {r2Domain && (
+        {mediaDomain && (
           <>
-            <link rel="preconnect" href={r2Domain} crossOrigin="anonymous" />
-            <link rel="dns-prefetch" href={r2Domain} />
+            <link rel="preconnect" href={mediaDomain} crossOrigin="anonymous" />
+            <link rel="dns-prefetch" href={mediaDomain} />
           </>
         )}
 

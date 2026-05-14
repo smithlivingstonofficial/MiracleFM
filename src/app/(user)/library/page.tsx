@@ -9,11 +9,12 @@ import { Heart, Plus, ListMusic, Loader2, Play, Sparkles, ChevronRight, Disc } f
 import Link from "next/link";
 import PlaylistCover from "@/components/user/PlaylistCover";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import type { User } from "@supabase/supabase-js";
+import type { Playlist } from "@/types/music";
 
 export default function LibraryPage() {
-  const[user, setUser] = useState<any>(null);
-  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [likedCount, setLikedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -22,6 +23,8 @@ export default function LibraryPage() {
   const supabase = createClient();
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchData() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -35,11 +38,16 @@ export default function LibraryPage() {
         supabase.from("user_likes").select("track_id", { count: 'exact', head: true }).eq("user_id", user.id)
       ]);
 
+      if (cancelled) return;
       if (playlistsRes.data) setPlaylists(playlistsRes.data);
       setLikedCount(likesRes.count || 0);
       setLoading(false);
     }
     fetchData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router, supabase]);
 
   const handleCreatePlaylist = async () => {
@@ -47,15 +55,20 @@ export default function LibraryPage() {
     if (isCreating) return;
     
     setIsCreating(true);
-    const { data, error } = await supabase
-      .from("playlists")
-      .insert({ title: `My Playlist #${playlists.length + 1}`, user_id: user.id })
-      .select().single();
+    try {
+      const response = await fetch("/api/playlists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: `My Playlist #${playlists.length + 1}` }),
+      });
+      const result = await response.json();
 
-    if (data) {
+      if (!response.ok || !result.playlist) throw new Error(result.error || "Failed to create playlist");
+
       toast.success("New playlist created!");
-      router.push(`/playlist/${data.id}`);
-    } else {
+      router.push(`/playlist/${result.playlist.id}`);
+      router.refresh();
+    } catch {
       toast.error("Failed to create playlist.");
       setIsCreating(false);
     }

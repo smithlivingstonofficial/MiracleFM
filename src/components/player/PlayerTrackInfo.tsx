@@ -7,6 +7,7 @@ import { usePlayerStore } from "@/store/usePlayerStore";
 import LikeButton from "../user/LikeButton";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import type { Playlist } from "@/types/music";
 
 export default function PlayerTrackInfo({ displayImage }: { displayImage: string }) {
   const currentTrack = usePlayerStore(state => state.currentTrack);
@@ -14,7 +15,7 @@ export default function PlayerTrackInfo({ displayImage }: { displayImage: string
   
   const supabase = createClient();
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
-  const [myPlaylists, setMyPlaylists] = useState<any[]>([]);
+  const [myPlaylists, setMyPlaylists] = useState<Pick<Playlist, "id" | "title">[]>([]);
 
   const fetchMyPlaylists = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -51,7 +52,7 @@ export default function PlayerTrackInfo({ displayImage }: { displayImage: string
       <div className="hidden md:flex items-center gap-3 ml-2 shrink-0">
         <LikeButton trackId={currentTrack.id} />
         <div className="relative">
-          <button onClick={fetchMyPlaylists} className="text-zinc-400 hover:text-white transition-colors active:scale-90"><PlusCircle size={20} /></button>
+          <button onClick={fetchMyPlaylists} className="text-zinc-400 hover:text-white transition-colors active:scale-90" aria-label="Save to playlist"><PlusCircle size={20} /></button>
           {showPlaylistMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowPlaylistMenu(false)} />

@@ -25,6 +25,15 @@ export default function TextVerificationModal({
   if (!isOpen) return null;
 
   const canConfirm = inputText === confirmationText;
+  const handleClose = () => {
+    setInputText("");
+    onClose();
+  };
+
+  const handleConfirm = () => {
+    setInputText("");
+    onConfirm();
+  };
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
@@ -54,13 +63,13 @@ export default function TextVerificationModal({
 
         <div className="flex justify-end gap-4">
           <button 
-            onClick={onClose} 
+            onClick={handleClose} 
             className="px-6 py-3 rounded-full font-bold text-sm bg-white/10 text-white hover:bg-white/20 transition-colors"
           >
             Cancel
           </button>
           <button 
-            onClick={onConfirm} 
+            onClick={handleConfirm} 
             disabled={!canConfirm}
             className="flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm bg-red-600 text-white shadow-lg shadow-red-600/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >

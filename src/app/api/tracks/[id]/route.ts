@@ -12,8 +12,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   try {
     const { data: track } = await supabase.from("tracks").select("cover_url").eq("id", id).single();
 
-    // 1. Delete HLS Folder (Always unique to track)
+    // 1. Delete HLS and original folders (Always unique to track)
     await deleteR2Folder(`tracks/${id}/`);
+    await deleteR2Folder(`originals/${id}/`);
 
     // 2. Smart Delete Cover: Only delete if no other track uses it
     if (track?.cover_url) {
@@ -33,7 +34,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

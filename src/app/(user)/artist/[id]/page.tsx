@@ -2,11 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Play, CheckCircle2, MoreHorizontal, Music4, Disc } from "lucide-react";
+import { Play, CheckCircle2, Music4, Disc } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import StartRadio from "@/components/user/StartRadio";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import HorizontalAd from "@/components/ads/HorizontalAd"; // Import the Ad Component
+import ShareButton from "@/components/user/ShareButton";
 
 export const revalidate = 60;
 
@@ -17,7 +18,13 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   // 1. Parallel Data Fetching
   const[artistRes, topTracksRes, albumsRes] = await Promise.all([
     supabase.from("artists").select("*").eq("id", id).single(),
-    supabase.from("tracks").select("*, albums(title, cover_url), artists(name)").eq("artist_id", id).order('play_count', { ascending: false }).limit(10),
+    supabase
+      .from("tracks")
+      .select("*, albums(title, cover_url), artists(name)")
+      .eq("artist_id", id)
+      .eq("audio_status", "ready")
+      .order('play_count', { ascending: false })
+      .limit(10),
     supabase.from("albums").select("*").eq("artist_id", id).order("created_at", { ascending: false })
   ]);
 
@@ -99,13 +106,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
              <StartRadio genres={genres} artistId={id} />
           </div>
 
-          <button className="h-12 px-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#FF0055] text-white hover:text-[#FF0055] text-xs font-black uppercase tracking-widest transition-all backdrop-blur-md active:scale-95 flex items-center justify-center">
-            Follow
-          </button>
-          
-          <button className="h-12 w-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 hover:text-white transition-all backdrop-blur-md active:scale-95 flex items-center justify-center">
-            <MoreHorizontal size={20} />
-          </button>
+          <ShareButton title={artist.name} className="h-12 w-12 backdrop-blur-md" iconSize={20} label="Share artist" />
         </div>
       </div>
 

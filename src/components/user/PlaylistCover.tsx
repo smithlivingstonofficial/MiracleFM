@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { Music4, ListMusic } from "lucide-react";
+import { ListMusic } from "lucide-react";
 
 interface Props {
   playlistId: string;
@@ -14,12 +14,21 @@ interface Props {
   size?: number; // For icons
 }
 
+type PlaylistCoverItem = {
+  tracks?: {
+    cover_url?: string | null;
+    albums?: { cover_url?: string | null } | null;
+    artists?: { image_url?: string | null } | null;
+  } | null;
+};
+
 export default function PlaylistCover({ playlistId, explicitCover, className, size = 48 }: Props) {
   const [covers, setCovers] = useState<string[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
     if (explicitCover) return;
+    let cancelled = false;
 
     async function fetchTrackCovers() {
       const { data } = await supabase
@@ -31,18 +40,22 @@ export default function PlaylistCover({ playlistId, explicitCover, className, si
 
       if (data) {
         const extracted = data
-          .map((item: any) => item.tracks.cover_url || item.tracks.albums?.cover_url || item.tracks.artists?.image_url)
-          .filter(Boolean);
-        setCovers(extracted);
+          .map((item: PlaylistCoverItem) => item.tracks?.cover_url || item.tracks?.albums?.cover_url || item.tracks?.artists?.image_url)
+          .filter((url): url is string => Boolean(url));
+        if (!cancelled) setCovers(extracted);
       }
     }
     fetchTrackCovers();
+
+    return () => {
+      cancelled = true;
+    };
   }, [playlistId, explicitCover, supabase]);
 
   if (explicitCover) {
     return (
       <div className={className}>
-        <Image src={explicitCover} alt="" fill className="object-cover" />
+        <Image src={explicitCover} alt="Playlist cover" fill className="object-cover" sizes="(max-width: 768px) 50vw, 280px" />
       </div>
     );
   }
@@ -52,7 +65,7 @@ export default function PlaylistCover({ playlistId, explicitCover, className, si
       <div className={`${className} grid grid-cols-2 grid-rows-2`}>
         {covers.slice(0, 4).map((url, i) => (
           <div key={i} className="relative w-full h-full border-[0.5px] border-black/10">
-            <Image src={url} alt="" fill className="object-cover" />
+            <Image src={url} alt="Playlist cover artwork" fill className="object-cover" sizes="140px" />
           </div>
         ))}
       </div>
@@ -62,7 +75,7 @@ export default function PlaylistCover({ playlistId, explicitCover, className, si
   if (covers.length > 0) {
     return (
       <div className={className}>
-        <Image src={covers[0]} alt="" fill className="object-cover" />
+        <Image src={covers[0]} alt="Playlist cover" fill className="object-cover" sizes="(max-width: 768px) 50vw, 280px" />
       </div>
     );
   }

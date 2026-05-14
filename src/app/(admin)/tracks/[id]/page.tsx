@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, Upload, Image as ImageIcon, Loader2, Sparkles, Disc, Grid, User, Music, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { buildMediaUrl } from "@/lib/media";
 
 // Standardized Genre List for consistency across the app
 const GENRES = [
@@ -88,7 +89,7 @@ export default function TrackEditor() {
       
       await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       
-      const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${path}`;
+      const publicUrl = buildMediaUrl(path);
       setForm(prev => ({ ...prev, cover_url: publicUrl }));
       toast.success("Artwork uploaded");
     } catch (err) {

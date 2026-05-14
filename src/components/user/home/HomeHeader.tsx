@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Search, Bell, User } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Search, User } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface HomeHeaderProps {
-  user: any;
+  user: SupabaseUser | null;
 }
 
 // 🎵 Spiritual & Praise Messages
@@ -26,17 +27,21 @@ const BLESSINGS = [
 export default function HomeHeader({ user }: HomeHeaderProps) {
   const [index, setIndex] = useState(0);
   const [fade, setFade] = useState(true);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setFade(false);
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         setIndex((prevIndex) => (prevIndex + 1) % BLESSINGS.length);
         setFade(true);
       }, 500); 
     }, 8000); 
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, []);
 
   return (
@@ -85,16 +90,13 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
         
         {/* Search */}
         <Link href="/search">
-          <button className="w-9 h-9 md:w-11 md:h-11 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-zinc-400 active:scale-90 md:hover:text-white md:hover:bg-[#FF0055] md:hover:border-[#FF0055] transition-all duration-300">
+          <button
+            className="w-9 h-9 md:w-11 md:h-11 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-zinc-400 active:scale-90 md:hover:text-white md:hover:bg-[#FF0055] md:hover:border-[#FF0055] transition-all duration-300"
+            aria-label="Search"
+          >
             <Search size={18} />
           </button>
         </Link>
-        
-        {/* Notifications */}
-        <button className="w-9 h-9 md:w-11 md:h-11 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-zinc-400 active:scale-90 md:hover:text-white md:hover:bg-[#FF0055] md:hover:border-[#FF0055] transition-all duration-300 relative group hidden sm:flex">
-          <Bell size={18} className="group-hover:animate-swing" />
-          <span className="absolute top-2.5 right-3 w-1.5 h-1.5 bg-[#FF0055] rounded-full" />
-        </button>
 
         {/* User Profile (Moved to Right) */}
         {user ? (

@@ -13,7 +13,6 @@ export default function SquareGridAd() {
     adRef.current = true;
 
     try {
-      // @ts-ignore
       (window.adsbygoogle = window.adsbygoogle ||[]).push({});
     } catch (err) {
       console.error("AdSense Error:", err);

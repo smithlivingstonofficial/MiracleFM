@@ -11,6 +11,7 @@ import {
   Check, Loader2, GripVertical, Trash2, ListFilter
 } from "lucide-react";
 import { toast } from "sonner";
+import { buildMediaUrl } from "@/lib/media";
 
 export default function PlaylistEditor() {
   const { id } = useParams();
@@ -86,7 +87,7 @@ export default function PlaylistEditor() {
       const { url } = await res.json();
       await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       
-      setDetails(prev => ({ ...prev, cover_url: `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${path}` }));
+      setDetails(prev => ({ ...prev, cover_url: buildMediaUrl(path) }));
       toast.success("Cover uploaded successfully");
     } catch {
       toast.error("Upload failed");

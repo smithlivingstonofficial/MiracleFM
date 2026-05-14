@@ -1,14 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-
-interface Track {
-  id: string;
-  title: string;
-  hls_url: string;
-  cover_url?: string;
-  artists?: { name: string; image_url?: string };
-  albums?: { title: string; cover_url?: string };
-}
+import { isPlayableTrack, type Track } from "@/types/music";
 
 type RepeatMode = "off" | "all" | "one";
 
@@ -29,6 +21,8 @@ interface PlayerState {
   // Time Synchronization State
   currentTime: number;
   duration: number;
+  seekTarget: number | null;
+  seekRequestId: number;
 
   // Actions
   setTrack: (track: Track) => void;
@@ -62,6 +56,8 @@ export const usePlayerStore = create<PlayerState>()(
       isFullScreen: false,
       currentTime: 0,
       duration: 0,
+      seekTarget: null,
+      seekRequestId: 0,
 
       // --- ACTIONS ---
 
@@ -70,31 +66,49 @@ export const usePlayerStore = create<PlayerState>()(
       toggleFullScreen: () => set((state) => ({ isFullScreen: !state.isFullScreen })),
 
       // Play a single track (creates a new queue of 1)
-      setTrack: (track) => set({ 
+      setTrack: (track) => {
+        if (!isPlayableTrack(track)) return;
+
+        set({ 
         currentTrack: track, 
         queue: [track], 
         currentIndex: 0, 
         isPlaying: true 
-      }),
+        });
+      },
 
       // Play a list of tracks (from an Album, Playlist, etc.)
-      setQueue: (tracks, startIndex = 0) => set({
-        queue: tracks,
-        currentTrack: tracks[startIndex],
-        currentIndex: startIndex,
-        isPlaying: true
-      }),
+      setQueue: (tracks, startIndex = 0) => {
+        const playableTracks = tracks.filter(isPlayableTrack);
+        if (!playableTracks.length) return;
+        const requestedTrack = tracks[startIndex];
+        const requestedPlayableIndex = requestedTrack
+          ? playableTracks.findIndex((track) => track.id === requestedTrack.id)
+          : -1;
+        const safeIndex =
+          requestedPlayableIndex >= 0
+            ? requestedPlayableIndex
+            : Math.min(Math.max(startIndex, 0), playableTracks.length - 1);
+
+        set({
+          queue: playableTracks,
+          currentTrack: playableTracks[safeIndex],
+          currentIndex: safeIndex,
+          isPlaying: true
+        });
+      },
 
       playNext: () => {
         const { queue, currentIndex, isShuffled, repeatMode } = get();
         if (queue.length === 0) return;
 
         if (repeatMode === "one") {
-          const audio = document.querySelector("audio");
-          if (audio) {
-            audio.currentTime = 0;
-            audio.play();
-          }
+          set((state) => ({
+            currentTime: 0,
+            seekTarget: 0,
+            seekRequestId: state.seekRequestId + 1,
+            isPlaying: true,
+          }));
           return;
         }
 
@@ -124,10 +138,13 @@ export const usePlayerStore = create<PlayerState>()(
         const { queue, currentIndex, isShuffled } = get();
         if (queue.length === 0) return;
 
-        const audio = document.querySelector("audio");
         // If song played for > 3 seconds, just restart it
-        if (audio && audio.currentTime > 3) {
-          audio.currentTime = 0;
+        if (get().currentTime > 3) {
+          set((state) => ({
+            currentTime: 0,
+            seekTarget: 0,
+            seekRequestId: state.seekRequestId + 1,
+          }));
           return;
         }
 
@@ -161,14 +178,11 @@ export const usePlayerStore = create<PlayerState>()(
       setDuration: (time) => set({ duration: time }),
       
       // Action triggered by UI sliders to update the <audio> element
-      seekTo: (time) => {
-        const audio = document.querySelector('audio');
-        if (audio) {
-          audio.currentTime = time;
-        }
-        // Update the state so UI sliders don't jump back
-        set({ currentTime: time });
-      }
+      seekTo: (time) => set((state) => ({
+        currentTime: time,
+        seekTarget: time,
+        seekRequestId: state.seekRequestId + 1,
+      }))
     }),
     {
       name: "miraclefm-player-storage", // The key used in localStorage

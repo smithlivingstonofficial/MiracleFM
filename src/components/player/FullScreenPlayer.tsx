@@ -7,12 +7,13 @@ import Image from "next/image";
 import { usePlayerStore } from "@/store/usePlayerStore";
 import { createClient } from "@/lib/supabase/client";
 import { 
-  ChevronDown, MoreHorizontal, Play, Pause, SkipBack, SkipForward, 
+  ChevronDown, Play, Pause, SkipBack, SkipForward, 
   Shuffle, Repeat, Repeat1, PlusCircle, ListMusic, Music2 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import LikeButton from "../user/LikeButton";
 import { toast } from "sonner";
+import type { Playlist } from "@/types/music";
 
 export default function FullScreenPlayer() {
   const { 
@@ -34,7 +35,7 @@ export default function FullScreenPlayer() {
 
   const supabase = createClient();
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
-  const [myPlaylists, setMyPlaylists] = useState<any[]>([]);
+  const [myPlaylists, setMyPlaylists] = useState<Pick<Playlist, "id" | "title">[]>([]);
   
   const[localProgress, setLocalProgress] = useState(0);
   const[isDragging, setIsDragging] = useState(false);
@@ -155,9 +156,7 @@ export default function FullScreenPlayer() {
           </p>
         </div>
         
-        <button className="p-3 -mr-3 text-white/70 hover:text-white transition-colors active:scale-90">
-          <MoreHorizontal size={24} />
-        </button>
+        <div className="w-12" aria-hidden="true" />
       </div>
 
       {/* --- MAIN CONTENT LAYOUT --- */}

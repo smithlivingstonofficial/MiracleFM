@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { usePlayerStore } from "@/store/usePlayerStore";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import type { Track } from "@/types/music";
 
 interface Props {
   genres?: string[]; // Upgraded to array to match v2.5 DB schema
@@ -25,7 +26,7 @@ export default function StartRadio({ genres, artistId, label = true }: Props) {
     }
 
     setLoading(true);
-    let tracks: any[] = [];
+    let tracks: Track[] = [];
 
     try {
       // 2. Step 1: Try Genre-Based Radio (The Algorithmic Way)
@@ -45,7 +46,8 @@ export default function StartRadio({ genres, artistId, label = true }: Props) {
         const { data } = await supabase
           .from("tracks")
           .select("*")
-          .eq("artist_id", artistId);
+          .eq("artist_id", artistId)
+          .eq("audio_status", "ready");
         
         if (data) {
           // Shuffle them manually for variety
@@ -57,11 +59,12 @@ export default function StartRadio({ genres, artistId, label = true }: Props) {
       // RPC results often lack joined tables (artists/albums). 
       // We must fetch these so the player doesn't show "Unknown Artist".
       if (tracks.length > 0) {
-        const trackIds = tracks.map(t => t.id);
+        const trackIds = tracks.map((track) => track.id);
         
         const { data: enrichedTracks, error: fetchError } = await supabase
           .from("tracks")
           .select("*, artists(name, image_url), albums(title, cover_url)")
+          .eq("audio_status", "ready")
           .in("id", trackIds);
 
         if (fetchError) throw fetchError;
@@ -77,8 +80,7 @@ export default function StartRadio({ genres, artistId, label = true }: Props) {
         toast.error("The radio is currently unavailable for this selection.");
       }
 
-    } catch (error) {
-      console.error("Radio Error:", error);
+    } catch {
       toast.error("Signal lost. Failed to start radio.");
     } finally {
       setLoading(false);

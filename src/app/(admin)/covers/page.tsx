@@ -1,32 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { ImageIcon, Trash2, Search, Music, Loader2 } from "lucide-react";
+import { Trash2, Search, Music, Loader2, ImageOff } from "lucide-react";
 import TextVerificationModal from "@/components/admin/TextVerificationModal";
 
+type CoverUsage = {
+  cover_url: string;
+  usage_count: number;
+};
+
 export default function CoverManagerPage() {
-  const [covers, setCovers] = useState<any[]>([]);
+  const [covers, setCovers] = useState<CoverUsage[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [coverToDelete, setCoverToDelete] = useState<string | null>(null);
   
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+
+  const fetchCoverUsage = useCallback(async () => {
+    setLoadError(null);
+
+    const { data, error } = await supabase.rpc("get_cover_art_usage");
+    if (error) {
+      const message = error.message || "Could not load cover art usage.";
+      setLoadError(message);
+      toast.error("Could not load cover art", { description: message });
+    } else {
+      setCovers((data || []) as CoverUsage[]);
+    }
+
+    setLoading(false);
+  }, [supabase]);
 
   useEffect(() => {
-    fetchCoverUsage();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void fetchCoverUsage();
+    }, 0);
 
-  async function fetchCoverUsage() {
-    setLoading(true);
-    const { data } = await supabase.rpc('get_cover_art_usage');
-    if (data) setCovers(data);
-    setLoading(false);
-  }
+    return () => window.clearTimeout(timer);
+  }, [fetchCoverUsage]);
 
   const openDeleteModal = (coverUrl: string) => {
     setCoverToDelete(coverUrl);
@@ -41,9 +59,9 @@ export default function CoverManagerPage() {
   const handleConfirmDelete = async () => {
     if (!coverToDelete) return;
     
-    const promise = fetch('/api/covers', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+    const promise = fetch("/api/covers", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ coverUrl: coverToDelete })
     });
 
@@ -51,7 +69,7 @@ export default function CoverManagerPage() {
       loading: "Deleting asset and unlinking from tracks...",
       success: (res) => {
         if (!res.ok) throw new Error("API request failed");
-        fetchCoverUsage();
+        void fetchCoverUsage();
         return "Cover art deleted successfully.";
       },
       error: "Failed to delete cover art."
@@ -60,8 +78,9 @@ export default function CoverManagerPage() {
     closeDeleteModal();
   };
   
-  const filteredCovers = covers.filter(cover => 
-    cover.cover_url.toLowerCase().includes(search.toLowerCase())
+  const filteredCovers = useMemo(
+    () => covers.filter((cover) => cover.cover_url.toLowerCase().includes(search.toLowerCase())),
+    [covers, search]
   );
 
   return (
@@ -90,6 +109,29 @@ export default function CoverManagerPage() {
         {loading ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="w-8 h-8 animate-spin text-brand" />
+          </div>
+        ) : loadError ? (
+          <div className="rounded-3xl border border-red-500/20 bg-red-500/[0.03] p-10 text-center">
+            <ImageOff className="mx-auto mb-3 text-red-400" size={32} />
+            <h2 className="text-lg font-bold text-white">Asset library unavailable</h2>
+            <p className="mt-2 text-sm text-zinc-500">{loadError}</p>
+            <button
+              onClick={() => {
+                setLoading(true);
+                void fetchCoverUsage();
+              }}
+              className="mt-6 rounded-full bg-white px-5 py-2 text-xs font-black uppercase tracking-widest text-black hover:bg-zinc-200"
+            >
+              Retry
+            </button>
+          </div>
+        ) : filteredCovers.length === 0 ? (
+          <div className="rounded-3xl border border-white/[0.05] bg-panel p-12 text-center">
+            <ImageOff className="mx-auto mb-3 text-zinc-700" size={36} />
+            <h2 className="text-lg font-bold text-white">No cover art found</h2>
+            <p className="mt-2 text-sm text-zinc-500">
+              {search ? "Try a different search term." : "Uploaded artwork will appear here."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">

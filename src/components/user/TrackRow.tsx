@@ -4,22 +4,23 @@ import { useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { usePlayerStore } from "@/store/usePlayerStore";
-import { Play, Pause, MoreHorizontal, Plus, ListMusic } from "lucide-react";
+import { Play, Pause, MoreHorizontal, ListMusic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import LikeButton from "./LikeButton";
 import { toast } from "sonner";
+import type { Playlist, Track } from "@/types/music";
 
 interface TrackRowProps {
-  track: any;
+  track: Track;
   index: number;
   context?: string;
-  allTracks?: any[];
+  allTracks?: Track[];
 }
 
 export default function TrackRow({ track, index, context, allTracks }: TrackRowProps) {
   const { currentTrack, isPlaying, setQueue, setIsPlaying, setTrack } = usePlayerStore();
   const [showMenu, setShowMenu] = useState(false);
-  const [myPlaylists, setMyPlaylists] = useState<any[]>([]);
+  const [myPlaylists, setMyPlaylists] = useState<Pick<Playlist, "id" | "title">[]>([]);
   const supabase = createClient();
   
   const isCurrent = currentTrack?.id === track.id;
@@ -114,13 +115,14 @@ export default function TrackRow({ track, index, context, allTracks }: TrackRowP
         </div>
         
         <span className="hidden md:block font-mono text-xs w-10 text-right text-zinc-500">
-          {formatTime(track.duration || 180)}
+          {formatTime(track.duration_seconds || track.duration || 180)}
         </span>
         
         <div className="relative">
           <button 
             onClick={fetchMyPlaylists}
             className="md:opacity-0 group-hover:opacity-100 p-2 -mr-2 text-zinc-400 hover:text-white transition-all"
+            aria-label="Track options"
           >
             <MoreHorizontal size={20} />
           </button>

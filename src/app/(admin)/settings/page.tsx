@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { 
@@ -9,18 +9,19 @@ import {
   Camera, Loader2, Globe 
 } from "lucide-react";
 import { toast } from "sonner";
+import StorageHealthPanel from "@/components/admin/StorageHealthPanel";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 export default function SettingsPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
   // State for Admin User
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [profile, setProfile] = useState({ full_name: "", avatar_url: "" });
 
-  useEffect(() => {
-    async function loadAdminData() {
+  const loadAdminData = useCallback(async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUser(user);
@@ -32,11 +33,19 @@ export default function SettingsPage() {
         if (prof) setProfile({ full_name: prof.full_name || "", avatar_url: prof.avatar_url || "" });
       }
       setLoading(false);
-    }
-    loadAdminData();
-  }, []);
+  }, [supabase]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadAdminData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadAdminData]);
 
   const handleUpdateProfile = async () => {
+    if (!user) return;
+
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
@@ -46,6 +55,17 @@ export default function SettingsPage() {
     setSaving(false);
     if (error) toast.error("Failed to update profile");
     else toast.success("Profile updated successfully");
+  };
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) return toast.error("No admin email is available for password reset.");
+
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    });
+
+    if (error) toast.error("Could not send password reset", { description: error.message });
+    else toast.success("Password reset email sent.");
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>;
@@ -100,7 +120,9 @@ export default function SettingsPage() {
             <div className="pt-4 border-t border-zinc-800">
               <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-tighter mb-2">Public CDN Endpoint</p>
               <div className="bg-black p-3 rounded-xl border border-zinc-800 flex items-center justify-between group">
-                <span className="text-xs text-zinc-400 truncate mr-2">{process.env.NEXT_PUBLIC_R2_PUBLIC_URL}</span>
+                <span className="text-xs text-zinc-400 truncate mr-2">
+                  {process.env.NEXT_PUBLIC_MEDIA_BASE_URL || process.env.NEXT_PUBLIC_R2_PUBLIC_URL}
+                </span>
                 <ExternalLink size={14} className="text-zinc-600 group-hover:text-blue-500 transition cursor-pointer" />
               </div>
             </div>
@@ -109,6 +131,7 @@ export default function SettingsPage() {
 
         {/* RIGHT COLUMN: Profile & Security */}
         <div className="lg:col-span-2 space-y-8">
+          <StorageHealthPanel />
           
           {/* Profile Section */}
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 space-y-8">
@@ -174,7 +197,10 @@ export default function SettingsPage() {
                 <p className="text-sm text-zinc-500">Reset your administrative password regularly.</p>
               </div>
             </div>
-            <Button className="bg-transparent border border-zinc-800 hover:bg-zinc-800 text-white rounded-full font-bold transition-all px-6">
+            <Button
+              onClick={handlePasswordReset}
+              className="bg-transparent border border-zinc-800 hover:bg-zinc-800 text-white rounded-full font-bold transition-all px-6"
+            >
                 Change Password
             </Button>
           </div>

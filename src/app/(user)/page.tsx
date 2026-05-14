@@ -10,6 +10,7 @@ import NewReleasesSection from "@/components/user/home/NewReleasesSection";
 import PopularArtistsSection from "@/components/user/home/PopularArtistsSection";
 import HomeFooter from "@/components/user/home/HomeFooter";
 import HorizontalAd from "@/components/ads/HorizontalAd";
+import type { Track } from "@/types/music";
 
 // We force the page to be dynamic so user auth works, 
 // but we cache the heavy database queries below.
@@ -52,14 +53,15 @@ export default async function HomePage() {
   const { banners, playlists, artists, albums } = await getCachedPublicData();
 
   // 3. Daily Mix Logic (Dynamic per request, only if logged in)
-  let dailyMix: any[] =[];
+  let dailyMix: Track[] = [];
   if (user) {
     const { data: mixData } = await supabase.rpc('get_personalized_mix', { uid: user.id, limit_count: 20 });
     if (mixData && mixData.length > 0) {
       const { data: enrichedTracks } = await supabase
         .from("tracks")
         .select("*, artists(name, image_url), albums(title, cover_url)")
-        .in("id", mixData.map((t: any) => t.id));
+        .eq("audio_status", "ready")
+        .in("id", mixData.map((track: { id: string }) => track.id));
       dailyMix = enrichedTracks ||[];
     }
   }

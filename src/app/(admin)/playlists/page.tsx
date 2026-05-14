@@ -1,23 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Plus, ListMusic, Trash2 } from "lucide-react"; // Removed unused imports
+import { Plus, ListMusic, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import TextVerificationModal from "@/components/admin/TextVerificationModal";
+
+type Playlist = {
+  id: string;
+  title: string;
+  description: string | null;
+  cover_url: string | null;
+  playlist_tracks?: { count: number }[];
+};
 
 export default function PlaylistsPage() {
-  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [playlistToDelete, setPlaylistToDelete] = useState<Playlist | null>(null);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    fetchPlaylists();
-  }, []);
-
-  async function fetchPlaylists() {
-    // UPDATED: Added .is("user_id", null) to filter out user-created playlists
+  const fetchPlaylists = useCallback(async () => {
     const { data, error } = await supabase
       .from("playlists")
       .select("*, playlist_tracks(count)")
@@ -29,11 +35,19 @@ export default function PlaylistsPage() {
       console.error(error);
     }
     
-    if (data) setPlaylists(data);
-  }
+    if (data) setPlaylists(data as Playlist[]);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchPlaylists();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [fetchPlaylists]);
 
   const createPlaylist = async () => {
-    // UPDATED: Explicitly set user_id to null to ensure it's an Editorial Playlist
     const { data, error } = await supabase
       .from("playlists")
       .insert({ 
@@ -56,27 +70,27 @@ export default function PlaylistsPage() {
     }
   };
 
-  const deletePlaylist = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); 
-    if (!confirm("Delete this playlist? This cannot be undone.")) return;
-    
-    // Using Supabase client directly is often faster/easier than an API route for simple deletes
-    // provided you have RLS policies set up for admins.
+  const deletePlaylist = async () => {
+    if (!playlistToDelete) return;
+
     const { error } = await supabase
         .from('playlists')
         .delete()
-        .eq('id', id);
+        .eq('id', playlistToDelete.id);
 
     if (error) {
         toast.error("Failed to delete");
     } else {
         toast.success("Playlist deleted");
-        fetchPlaylists(); // Refresh list
+        void fetchPlaylists();
     }
+
+    setPlaylistToDelete(null);
   };
 
   return (
-    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+    <>
+      <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       
       <div className="flex items-end justify-between">
         <div>
@@ -93,8 +107,19 @@ export default function PlaylistsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {playlists.map((playlist) => (
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="animate-spin text-brand" size={28} />
+        </div>
+      ) : playlists.length === 0 ? (
+        <div className="rounded-3xl border border-white/[0.05] bg-panel p-12 text-center">
+          <ListMusic className="mx-auto mb-3 text-zinc-700" size={36} />
+          <h2 className="text-lg font-bold text-white">No editorial playlists yet</h2>
+          <p className="mt-2 text-sm text-zinc-500">Create a playlist to start curating the home experience.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {playlists.map((playlist) => (
           <div 
             key={playlist.id}
             onClick={() => router.push(`/playlists/${playlist.id}`)}
@@ -123,15 +148,30 @@ export default function PlaylistsPage() {
                 </p>
               </div>
               <button 
-                onClick={(e) => deletePlaylist(playlist.id, e)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPlaylistToDelete(playlist);
+                }}
                 className="p-2 text-zinc-600 hover:text-red-500 transition-colors bg-white/5 rounded-full hover:bg-white/10"
+                title="Delete playlist"
               >
                 <Trash2 size={16} />
               </button>
             </div>
           </div>
-        ))}
+          ))}
+        </div>
+      )}
       </div>
-    </div>
+
+      <TextVerificationModal
+        isOpen={Boolean(playlistToDelete)}
+        onClose={() => setPlaylistToDelete(null)}
+        onConfirm={deletePlaylist}
+        title="Delete Playlist"
+        description={`This permanently deletes "${playlistToDelete?.title || "this playlist"}" and removes its track ordering. Audio files and tracks remain in the library.`}
+        confirmationText="DELETE"
+      />
+    </>
   );
 }

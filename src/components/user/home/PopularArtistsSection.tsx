@@ -1,9 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
+import type { Artist } from "@/types/music";
 
 interface PopularArtistsSectionProps {
-  artists: any[];
+  artists: Artist[];
 }
 
 export default function PopularArtistsSection({ artists }: PopularArtistsSectionProps) {

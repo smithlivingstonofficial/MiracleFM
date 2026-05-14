@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -10,25 +10,21 @@ import {
   Sparkles, Loader2, Edit3, LayoutDashboard 
 } from "lucide-react";
 import TasteProfileModal from "@/components/user/TasteProfileModal";
-import { cn } from "@/lib/utils";
+import type { User } from "@supabase/supabase-js";
 
 export default function ProfilePage() {
   const router = useRouter();
   const supabase = createClient();
   
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const[role, setRole] = useState("listener");
+  const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState("listener");
   const [stats, setStats] = useState({ likes: 0, playlists: 0 });
   const [genres, setGenres] = useState<string[]>([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  useEffect(() => {
-    fetchUserData();
-  },[]);
-
-  async function fetchUserData() {
+  const fetchUserData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       router.push("/signin");
@@ -52,7 +48,11 @@ export default function ProfilePage() {
     if (interestsRes.data?.genres) setGenres(interestsRes.data.genres);
     
     setLoading(false);
-  }
+  }, [router, supabase]);
+
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

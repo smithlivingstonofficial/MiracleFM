@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { deleteR2File } from "@/lib/r2-helpers";
 
 // DELETE method: Force delete a cover and unlink from ALL tracks
 export async function DELETE(req: Request) {
-  const supabase = await createClient();
+  const { supabase, error } = await requireAdmin();
+  if (error) return error;
+
   const { coverUrl } = await req.json();
 
   if (!coverUrl) return NextResponse.json({ error: "Missing URL" }, { status: 400 });
@@ -19,14 +21,17 @@ export async function DELETE(req: Request) {
     await deleteR2File(coverUrl);
     
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 // POST method: Check usage and delete only if unused (Smart Clean)
 export async function POST(req: Request) {
-  const supabase = await createClient();
+  const { supabase, error } = await requireAdmin();
+  if (error) return error;
+
   const { coverUrl } = await req.json();
 
   // Check how many tracks use this

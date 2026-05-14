@@ -364,7 +364,20 @@ export default function AdminTracksPage() {
                        {healthIssues && <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" title={`Missing: ${healthIssues}`} />}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                       <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider">HLS 128k</span>
+                       <span className={cn(
+                         "text-[10px] font-bold uppercase tracking-wider",
+                         track.audio_status === "ready" ? "text-green-500" :
+                         track.audio_status === "failed" ? "text-red-500" :
+                         track.audio_status === "encoding" ? "text-blue-400" :
+                         track.audio_status === "queued" ? "text-yellow-400" :
+                         "text-zinc-600"
+                       )}>
+                         {track.audio_status === "ready" ? "Adaptive AAC" :
+                          track.audio_status === "failed" ? "Encoding failed" :
+                          track.audio_status === "encoding" ? "Encoding" :
+                          track.audio_status === "queued" ? "Queued" :
+                          "Legacy HLS"}
+                       </span>
                        <button onClick={(e) => handleCopyId(track.id, e)} className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-400 transition-opacity" title="Copy ID"><Copy size={10} /></button>
                     </div>
                   </div>
