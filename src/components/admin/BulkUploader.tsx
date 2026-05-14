@@ -78,8 +78,8 @@ const STATUS_LABEL: Record<ItemStatus, string> = {
   idle: "Selected",
   uploading: "Uploading original",
   stored: "Original stored",
-  queued: "Waiting for encoder",
-  encoding: "Encoding HLS",
+  queued: "Queued locally",
+  encoding: "Worker encoding",
   ready: "Stream ready",
   error: "Failed",
 };
@@ -304,7 +304,7 @@ export default function BulkUploader() {
       updateItem(idx, {
         status: "encoding",
         progress: 94,
-        errorMessage: "Encoder is processing this track.",
+        errorMessage: "Local encoder worker is processing this track.",
       });
       return;
     }
@@ -312,7 +312,7 @@ export default function BulkUploader() {
     updateItem(idx, {
       status: originalExists ? "queued" : "stored",
       progress: originalExists ? 88 : 78,
-      errorMessage: status.nextAction,
+      errorMessage: status.nextAction || "Uploaded and queued. Run the encoder worker to publish streams.",
     });
   }, [updateItem]);
 
@@ -399,7 +399,7 @@ export default function BulkUploader() {
         updateItem(idx, {
           status: "queued",
           progress: 88,
-          errorMessage: "Supabase row and encoding job created. Encoder will publish HLS in the background.",
+          errorMessage: "Uploaded and queued. Run npm run worker:encode:drain to publish streams.",
         });
       } catch (err) {
         failed += 1;
@@ -548,7 +548,7 @@ export default function BulkUploader() {
             <div className="flex items-center justify-center gap-3 py-6 text-zinc-400">
               <Loader2 className="animate-spin" size={18} />
               <span className="text-sm font-semibold">
-                Storing originals and queueing Supabase jobs. Encoding status updates in the background.
+                Storing originals and queueing Supabase jobs. Run the local encoder worker after upload.
               </span>
             </div>
           )}

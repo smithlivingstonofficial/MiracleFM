@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "worker:encode": "node scripts/encode-worker.mjs"
+    "worker:encode": "node scripts/encode-worker.mjs",
+    "worker:encode:watch": "node scripts/encode-worker.mjs",
+    "worker:encode:drain": "node scripts/encode-worker.mjs --drain",
+    "worker:encode:track": "node scripts/encode-worker.mjs --track"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.980.0",

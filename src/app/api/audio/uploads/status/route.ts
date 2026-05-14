@@ -123,6 +123,6 @@ export async function GET(request: Request) {
       ? "Audio is ready to stream."
       : failed
       ? track.audio_error || "Review the encoding error, fix the source or worker, then retry the upload."
-      : "Original is stored; keep the encoder worker running until validated HLS and fallback audio are published.",
+      : "Uploaded and queued. Run the encoder worker to publish streams.",
   });
 }

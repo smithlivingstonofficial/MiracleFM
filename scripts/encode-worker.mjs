@@ -85,6 +85,10 @@ const pollIntervalMs = Number(process.env.ENCODER_POLL_INTERVAL_MS || 15_000);
 const maxAttempts = Number(process.env.ENCODER_MAX_ATTEMPTS || 3);
 const hlsTimeSeconds = Number(process.env.ENCODER_HLS_TIME || 6);
 const uploadConcurrency = Math.max(1, Number(process.env.ENCODER_UPLOAD_CONCURRENCY || 8));
+const stuckJobTimeoutMs = Math.max(
+  60_000,
+  Number(process.env.ENCODER_STUCK_JOB_TIMEOUT_MS || 30 * 60_000)
+);
 
 if (trackArgIndex !== -1 && (!forcedTrackId || forcedTrackId.startsWith("--"))) {
   console.error("[encode-worker] --track requires a track id.");
@@ -161,6 +165,96 @@ async function getNextJob() {
 
   if (error) throw error;
   return data;
+}
+
+async function resetStuckEncodingJobs() {
+  const staleBefore = new Date(Date.now() - stuckJobTimeoutMs).toISOString();
+
+  const { data, error } = await supabase
+    .from("encoding_jobs")
+    .select("id, track_id, attempts, started_at, updated_at")
+    .eq("status", "encoding")
+    .lt("updated_at", staleBefore);
+
+  if (error) throw error;
+  if (!data?.length) return 0;
+
+  const resetAt = new Date().toISOString();
+  const retryableJobs = data.filter((job) => (job.attempts || 0) < maxAttempts);
+  const terminalJobs = data.filter((job) => (job.attempts || 0) >= maxAttempts);
+
+  if (retryableJobs.length > 0) {
+    const retryMessage = `Encoder job timed out locally after ${Math.round(
+      stuckJobTimeoutMs / 60_000
+    )} minutes; queued for retry.`;
+
+    const { error: jobError } = await supabase
+      .from("encoding_jobs")
+      .update({
+        status: "queued",
+        error: retryMessage,
+        updated_at: resetAt,
+      })
+      .in(
+        "id",
+        retryableJobs.map((job) => job.id)
+      );
+
+    if (jobError) throw jobError;
+
+    const { error: trackError } = await supabase
+      .from("tracks")
+      .update({
+        audio_status: "queued",
+        audio_error: retryMessage,
+      })
+      .in(
+        "id",
+        retryableJobs.map((job) => job.track_id)
+      );
+
+    if (trackError) throw trackError;
+  }
+
+  if (terminalJobs.length > 0) {
+    const failedMessage = `Encoder job timed out locally after ${Math.round(
+      stuckJobTimeoutMs / 60_000
+    )} minutes and reached the maximum attempt count.`;
+
+    const { error: jobError } = await supabase
+      .from("encoding_jobs")
+      .update({
+        status: "failed",
+        error: failedMessage,
+        updated_at: resetAt,
+      })
+      .in(
+        "id",
+        terminalJobs.map((job) => job.id)
+      );
+
+    if (jobError) throw jobError;
+
+    const { error: trackError } = await supabase
+      .from("tracks")
+      .update({
+        audio_status: "failed",
+        audio_error: failedMessage,
+      })
+      .in(
+        "id",
+        terminalJobs.map((job) => job.track_id)
+      );
+
+    if (trackError) throw trackError;
+  }
+
+  console.log(
+    `[encode-worker] Recovered ${retryableJobs.length} stuck job${
+      retryableJobs.length === 1 ? "" : "s"
+    }; marked ${terminalJobs.length} stuck job${terminalJobs.length === 1 ? "" : "s"} failed`
+  );
+  return data.length;
 }
 
 async function getJobForTrack(trackId) {
@@ -599,6 +693,7 @@ if (forcedTrackId) {
 }
 
 do {
+  await resetStuckEncodingJobs();
   const processed = await tick();
   if (pollOnce) break;
   if (drainQueue && !processed) break;

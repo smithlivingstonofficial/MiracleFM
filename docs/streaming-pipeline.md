@@ -7,7 +7,7 @@ New uploads follow this path:
 1. Admin uploads the original file through `/upload`.
 2. `POST /api/audio/uploads/init` creates a signed R2 PUT URL for `originals/{trackId}/source.ext`.
 3. `POST /api/audio/uploads/complete` creates the `tracks` row and queues `encoding_jobs`.
-4. `npm run worker:encode` pulls queued jobs, encodes AAC HLS variants plus a progressive AAC fallback, uploads `tracks/{trackId}/audio/v2/*`, validates the public objects, and marks the track ready.
+4. A local encoder command pulls queued jobs, encodes AAC HLS variants plus a progressive AAC fallback, uploads `tracks/{trackId}/audio/v2/*`, validates the public objects, and marks the track ready.
 5. The player reads `tracks.hls_url` first and immediately falls back to `tracks.fallback_audio_url` if HLS preparation or playback fails.
 
 Tracks stay hidden from user-facing queues until `audio_status = 'ready'`. Browser autoplay policies still apply: playback starts from the user's play gesture, then the app preserves that intent across HLS preparation and fallback loading.
@@ -99,10 +99,22 @@ The v2 fields are `hls_url`, `fallback_audio_url`, `audio_status`, `audio_versio
 
 ## Worker
 
-Run continuously in production:
+After a bulk upload from `/upload`, drain every queued local job and exit:
+
+```bash
+npm run worker:encode:drain
+```
+
+Run continuously from your PC:
 
 ```bash
 npm run worker:encode
+```
+
+The watch alias does the same thing:
+
+```bash
+npm run worker:encode:watch
 ```
 
 Run one job and exit:
@@ -117,4 +129,8 @@ Force-repair a previously encoded track after fixing encoder output:
 npm run worker:encode -- --track TRACK_ID --force
 ```
 
-The worker produces `64k`, `128k`, and `256k` AAC fMP4 HLS variants, plus `fallback.m4a` AAC-LC at 160k. It sets immutable cache headers on versioned audio objects and only marks tracks ready after validation.
+The package script `npm run worker:encode:track -- TRACK_ID --force` is also available if you prefer the named helper.
+
+The worker produces `64k`, `128k`, and `256k` AAC fMP4 HLS variants, plus `fallback.m4a` AAC-LC at 160k. It sets immutable cache headers on versioned audio objects and only marks tracks ready after validation. If a local encoder process stops while a job is marked `encoding`, the next worker run resets jobs older than `ENCODER_STUCK_JOB_TIMEOUT_MS` back to `queued`; the default timeout is 30 minutes.
+
+Keep local encoding sequential unless the job claim flow is upgraded to use an atomic database lock. Running multiple workers today can make two processes pick the same queued job.
