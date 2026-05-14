@@ -74,11 +74,13 @@ export default function SearchPage() {
   const topResult = results.artists.length > 0 ? results.artists[0] : (results.albums.length > 0 ? results.albums[0] : null);
   const topResultIsArtist = topResult ? isArtistResult(topResult) : false;
   const topResultImage = topResult
-    ? topResultIsArtist
-      ? topResult.image_url
-      : topResult.cover_url
+    ? (topResultIsArtist
+      ? (topResult as any).image_url
+      : ("cover_url" in topResult ? (topResult as any).cover_url : null))
     : null;
-  const topResultTitle = topResult ? (topResultIsArtist ? topResult.name : topResult.title) : "";
+  const topResultTitle = topResult
+    ? ('name' in topResult ? topResult.name : (topResult as any).title)
+    : "";
 
   return (
     <div className="relative min-h-screen w-full bg-[#050505] text-zinc-100 pb-32 overflow-x-hidden selection:bg-[#FF0055] selection:text-white">

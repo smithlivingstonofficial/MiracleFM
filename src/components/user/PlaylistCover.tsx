@@ -41,7 +41,7 @@ export default function PlaylistCover({ playlistId, explicitCover, className, si
       if (data) {
         const extracted = data
           .map((item: PlaylistCoverItem) => item.tracks?.cover_url || item.tracks?.albums?.cover_url || item.tracks?.artists?.image_url)
-          .filter((url): url is string => Boolean(url));
+          .filter((url: string | null | undefined): url is string => Boolean(url));
         if (!cancelled) setCovers(extracted);
       }
     }

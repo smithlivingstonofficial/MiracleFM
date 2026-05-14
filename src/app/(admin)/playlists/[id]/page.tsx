@@ -61,7 +61,7 @@ export default function PlaylistEditor() {
       .eq("playlist_id", id)
       .order("added_at", { ascending: true });
     
-    if (tracks) setPlaylistTracks(tracks.map(t => t.tracks));
+    if (tracks) setPlaylistTracks(tracks.map((t: { tracks: any }) => t.tracks));
   }
 
   async function searchTracks() {

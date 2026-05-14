@@ -22,7 +22,12 @@ export default async function LibraryPage() {
 
   const tracks =
     likes
-      ?.map((like) => like.tracks as Track | null)
+      ?.map((like) => {
+        // Supabase can return joined rows as an object or an array; normalize to single Track or null
+        const raw = like.tracks;
+        const t = Array.isArray(raw) ? raw[0] : raw;
+        return (t as Track) ?? null;
+      })
       .filter((track): track is Track => track !== null && track.audio_status === "ready") || [];
 
   return (

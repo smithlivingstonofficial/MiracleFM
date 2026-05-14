@@ -105,11 +105,11 @@ export default function ProfilePage() {
             
             {/* Avatar */}
             <div className="relative w-32 h-32 md:w-40 md:h-40 rounded-[2rem] overflow-hidden bg-black border-4 border-zinc-800 shadow-[0_0_40px_rgba(255,0,85,0.2)] shrink-0 group-hover:border-[#FF0055]/50 transition-colors duration-500">
-              {user.user_metadata?.avatar_url ? (
+              {user?.user_metadata?.avatar_url ? (
                 <Image src={user.user_metadata.avatar_url} alt="Profile" fill className="object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-4xl font-black text-zinc-600">
-                  {user.email?.charAt(0).toUpperCase()}
+                  {user?.email?.charAt(0).toUpperCase()}
                 </div>
               )}
             </div>
@@ -121,9 +121,9 @@ export default function ProfilePage() {
                 {role === "admin" ? "System Administrator" : "Premium Member"}
               </div>
               <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter truncate w-full">
-                {user.user_metadata?.full_name || user.email?.split('@')[0]}
+                {user?.user_metadata?.full_name || user?.email?.split('@')[0]}
               </h1>
-              <p className="text-zinc-400 font-medium mt-2">{user.email}</p>
+              <p className="text-zinc-400 font-medium mt-2">{user?.email}</p>
               
               {role === "admin" && (
                 <Link href="/dashboard" className="inline-flex items-center gap-2 mt-6 px-6 py-3 rounded-full bg-white text-black font-bold text-sm hover:scale-105 transition-transform shadow-xl">
