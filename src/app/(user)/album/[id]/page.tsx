@@ -8,10 +8,40 @@ import { Clock, Disc, Music4, Dot } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import StartRadio from "@/components/user/StartRadio";
-import HorizontalAd from "@/components/ads/HorizontalAd";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import ShareButton from "@/components/user/ShareButton";
+import SaveAlbumButton from "@/components/user/SaveAlbumButton";
+import type { Metadata } from "next";
 
 export const revalidate = 60;
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: album } = await supabase
+    .from("albums")
+    .select("title, cover_url, artists(name)")
+    .eq("id", id)
+    .single();
+
+  if (!album) return { title: "Album" };
+
+  const artist = Array.isArray(album.artists) ? album.artists[0] : album.artists;
+  const description = artist?.name
+    ? `Listen to ${album.title} by ${artist.name} on Miracle FM.`
+    : `Listen to ${album.title} on Miracle FM.`;
+
+  return {
+    title: album.title,
+    description,
+    openGraph: {
+      title: album.title,
+      description,
+      type: "music.album",
+      images: album.cover_url ? [{ url: album.cover_url }] : [{ url: "/miraclefm.jpg" }],
+    },
+  };
+}
 
 export default async function AlbumPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -137,6 +167,8 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
           
           {/* Secondary Actions Row */}
           <div className="flex items-center gap-3">
+             <SaveAlbumButton albumId={id} />
+
              <div className="active:scale-90 transition-transform">
                 <StartRadio genres={genres} label={false} />
              </div>
@@ -183,7 +215,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
         {/* --- ADD AD AT THE BOTTOM OF THE LIST --- */}
         {tracks && tracks.length > 3 && (
           <div className="pt-8 pb-4">
-            <HorizontalAd />
+            <ResponsiveAd variant="banner" className="px-0 md:px-0" />
           </div>
         )}
 

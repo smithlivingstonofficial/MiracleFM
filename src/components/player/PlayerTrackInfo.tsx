@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Maximize2, PlusCircle, ListMusic } from "lucide-react";
+import { Maximize2, Music2, PlusCircle, ListMusic } from "lucide-react";
 import { usePlayerStore } from "@/store/usePlayerStore";
 import LikeButton from "../user/LikeButton";
 import { createClient } from "@/lib/supabase/client";
@@ -19,7 +19,7 @@ export default function PlayerTrackInfo({ displayImage }: { displayImage: string
 
   const fetchMyPlaylists = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return toast.error("Login to add to playlist");
+    if (!user) return toast.message("Sign in to add this song to a playlist.");
     const { data } = await supabase.from("playlists").select("id, title").eq("user_id", user.id);
     if (data) setMyPlaylists(data);
     setShowPlaylistMenu(!showPlaylistMenu);
@@ -37,16 +37,22 @@ export default function PlayerTrackInfo({ displayImage }: { displayImage: string
 
   return (
     <div className="flex items-center gap-3 md:gap-4 w-auto md:w-[30%] min-w-0 h-full flex-1 md:flex-none">
-      <button onClick={toggleFullScreen} className="relative w-12 h-12 md:w-16 md:h-16 rounded-[1rem] md:rounded-[1.25rem] overflow-hidden bg-zinc-800 shrink-0 group shadow-lg active:scale-95 transition-transform">
-        {displayImage && <Image src={displayImage} alt="" fill className="object-cover" />}
+      <button onClick={toggleFullScreen} className="relative h-[52px] w-[52px] md:w-16 md:h-16 rounded-[1.15rem] md:rounded-[1.25rem] overflow-hidden bg-zinc-800 shrink-0 group shadow-lg active:scale-95 transition-transform border border-white/10">
+        {displayImage ? (
+          <Image src={displayImage} alt="" fill className="object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-zinc-600">
+            <Music2 size={22} />
+          </div>
+        )}
         <div className="hidden md:flex absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 items-center justify-center transition-opacity">
           <Maximize2 size={20} className="text-white" />
         </div>
       </button>
       
       <div className="min-w-0 flex-1 pr-2 cursor-pointer active:opacity-70 transition-opacity" onClick={toggleFullScreen}>
-        <p className="text-[13px] md:text-base font-black text-white truncate drop-shadow-md">{currentTrack.title}</p>
-        <p className="text-[10px] md:text-xs font-bold text-zinc-400 truncate uppercase tracking-wide mt-0.5">{currentTrack.artists?.name}</p>
+        <p className="text-[13px] md:text-base font-black text-white truncate drop-shadow-md leading-tight">{currentTrack.title}</p>
+        <p className="text-[10px] md:text-xs font-bold text-zinc-400 truncate uppercase tracking-wide mt-1">{currentTrack.artists?.name}</p>
       </div>
 
       <div className="hidden md:flex items-center gap-3 ml-2 shrink-0">

@@ -48,7 +48,7 @@ export default function LikeButton({ trackId }: { trackId: string }) {
     e.stopPropagation(); // Prevent playing the song when clicking heart
 
     if (!user) {
-      toast.error("Please login to save songs");
+      toast.message("Sign in to save this song to your worship collection.");
       router.push("/signin");
       return;
     }

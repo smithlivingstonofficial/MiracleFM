@@ -4,8 +4,16 @@ import UserSidebar from "@/components/user/UserSidebar";
 import MobileNav from "@/components/user/MobileNav";
 import AudioPlayer from "@/components/player/AudioPlayer";
 import FullScreenPlayer from "@/components/player/FullScreenPlayer";
+import HomeHeader from "@/components/user/home/HomeHeader";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
+import { createClient } from "@/lib/supabase/server";
 
-export default function UserLayout({ children }: { children: React.ReactNode }) {
+export default async function UserLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     /*
       IMPORTANT — why these classes were changed:
@@ -39,12 +47,13 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
           id="main-content"
           className="flex-1 overflow-y-auto scroll-smooth no-scrollbar w-full bg-[#050505]"
         >
+          <HomeHeader user={user} />
           {/*
             Padding keeps content clear of the fixed player and nav:
             • Mobile:  pb-48  (MobileNav ~60px + Player ~64px + buffer)
             • Desktop: pb-32  (Player 96px + buffer)
           */}
-          <div className="pb-48 md:pb-32 min-h-full">
+          <div className="pb-56 md:pb-36 min-h-full">
             {children}
           </div>
         </main>
@@ -65,6 +74,8 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
 
       {/* 4. Full Screen Player Overlay */}
       <FullScreenPlayer />
+
+      <InstallPrompt />
     </div>
   );
 }

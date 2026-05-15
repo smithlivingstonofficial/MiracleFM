@@ -52,7 +52,7 @@ export const usePlayerStore = create<PlayerState>()(
       // Default to Shuffle ON
       isShuffled: true,
       
-      repeatMode: "off",
+      repeatMode: "all",
       isFullScreen: false,
       currentTime: 0,
       duration: 0,
@@ -125,10 +125,22 @@ export const usePlayerStore = create<PlayerState>()(
         if (nextIndex >= queue.length) {
           if (repeatMode === "all") {
             nextIndex = 0; // Loop back to the start
+          } else if (queue.length > 1) {
+            nextIndex = 0; // Keep worship playing through a queued session
           } else {
             set({ isPlaying: false }); // Stop at the end
             return; 
           }
+        }
+
+        if (nextIndex === currentIndex) {
+          set((state) => ({
+            currentTime: 0,
+            seekTarget: 0,
+            seekRequestId: state.seekRequestId + 1,
+            isPlaying: true,
+          }));
+          return;
         }
 
         set({ currentTrack: queue[nextIndex], currentIndex: nextIndex, isPlaying: true });

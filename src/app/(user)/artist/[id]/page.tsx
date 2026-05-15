@@ -6,10 +6,37 @@ import { Play, CheckCircle2, Music4, Disc } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import StartRadio from "@/components/user/StartRadio";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
-import HorizontalAd from "@/components/ads/HorizontalAd"; // Import the Ad Component
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import ShareButton from "@/components/user/ShareButton";
+import FollowArtistButton from "@/components/user/FollowArtistButton";
+import type { Metadata } from "next";
 
 export const revalidate = 60;
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: artist } = await supabase
+    .from("artists")
+    .select("name, image_url, bio")
+    .eq("id", id)
+    .single();
+
+  if (!artist) return { title: "Artist" };
+
+  const description = artist.bio || `Listen to ${artist.name}'s Tamil Christian worship songs on Miracle FM.`;
+
+  return {
+    title: artist.name,
+    description,
+    openGraph: {
+      title: artist.name,
+      description,
+      type: "profile",
+      images: artist.image_url ? [{ url: artist.image_url }] : [{ url: "/miraclefm.jpg" }],
+    },
+  };
+}
 
 export default async function ArtistPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,7 +47,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
     supabase.from("artists").select("*").eq("id", id).single(),
     supabase
       .from("tracks")
-      .select("*, albums(title, cover_url), artists(name)")
+      .select("*, albums(title, cover_url), artists(name, image_url)")
       .eq("artist_id", id)
       .eq("audio_status", "ready")
       .order('play_count', { ascending: false })
@@ -42,10 +69,10 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   ));
 
   return (
-    <div className="bg-[#050505] min-h-screen pb-32 relative overflow-x-hidden text-white selection:bg-[#FF0055] selection:text-white">
+    <div className="bg-[#050505] min-h-screen pb-40 relative overflow-x-hidden text-white selection:bg-[#FF0055] selection:text-white">
       
       {/* --- 1. IMMERSIVE HERO SECTION --- */}
-      <div className="relative w-full pt-20 md:pt-32 pb-8 md:pb-12 flex flex-col items-center md:items-start justify-end min-h-[55vh] md:min-h-[50vh] px-4 md:px-12 mt-[-80px]">
+      <div className="relative w-full pt-10 md:pt-20 pb-8 md:pb-12 flex flex-col items-center md:items-start justify-end min-h-[48vh] md:min-h-[46vh] px-4 md:px-12">
         
         {/* Cinematic Background Blur */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
@@ -67,7 +94,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
         <div className="relative z-10 w-full flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-10">
           
           {/* Circular Avatar with Glowing Ring */}
-          <div className="relative w-40 h-40 md:w-56 md:h-56 rounded-full p-[4px] bg-gradient-to-b from-[#FF0055] via-[#ff1a66] to-[#4d001a] shadow-[0_0_30px_rgba(255,0,85,0.3)] shrink-0 animate-in zoom-in duration-700">
+          <div className="relative w-36 h-36 md:w-56 md:h-56 rounded-full p-[4px] bg-gradient-to-b from-[#FF0055] via-[#ff1a66] to-[#4d001a] shadow-[0_0_30px_rgba(255,0,85,0.3)] shrink-0 animate-in zoom-in duration-700">
              <div className="absolute inset-[-10%] bg-[conic-gradient(from_0deg,transparent_0%,#FF0055_50%,transparent_100%)] animate-[spin_4s_linear_infinite] opacity-40 mix-blend-overlay rounded-full" />
              <div className="w-full h-full rounded-full overflow-hidden bg-[#050505] border-[4px] border-[#050505] relative z-10 shadow-inner">
                 {artist.image_url ? (
@@ -84,7 +111,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
               <CheckCircle2 size={16} className="text-[#FF0055] fill-current" />
               <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-zinc-200">Verified Artist</span>
             </div>
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl">
+            <h1 className="break-words text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl">
               {artist.name}
             </h1>
             <p className="text-zinc-400 text-xs md:text-sm font-medium mt-4 md:mt-6 max-w-2xl line-clamp-2 md:line-clamp-3 leading-relaxed px-4 md:px-0">
@@ -105,6 +132,8 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           <div className="active:scale-95 transition-transform duration-300">
              <StartRadio genres={genres} artistId={id} />
           </div>
+
+          <FollowArtistButton artistId={id} />
 
           <ShareButton title={artist.name} className="h-12 w-12 backdrop-blur-md" iconSize={20} label="Share artist" />
         </div>
@@ -131,7 +160,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
         {/* --- ADVERTISEMENT BANNER --- */}
         {/* Inserted cleanly between Tracks and Albums with animation */}
         <section className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
-          <HorizontalAd />
+          <ResponsiveAd variant="banner" className="px-0 md:px-0" />
         </section>
 
         {/* --- 4. DISCOGRAPHY (ALBUMS) --- */}

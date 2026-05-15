@@ -47,7 +47,8 @@ type HlsProbe = {
 };
 
 const SEEK_OFFSET = 10;
-const PREFETCH_THRESHOLD = 0.8;
+const PREFETCH_THRESHOLD = 0.65;
+const BACKGROUND_KEEPALIVE_MS = 25_000;
 const HLS_TYPES = ["application/vnd.apple.mpegurl", "application/x-mpegurl", "audio/mpegurl", "audio/x-mpegurl"];
 const MEDIA_TYPES = ["audio/mp4", "audio/mpeg", "video/mp4", "video/iso.segment", "application/octet-stream"];
 
@@ -430,15 +431,15 @@ export default function AudioPlayer() {
           testBandwidth: false,
           startFragPrefetch: true,
           enableWorker: true,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 90,
-          backBufferLength: 45,
+          maxBufferLength: 90,
+          maxMaxBufferLength: 240,
+          backBufferLength: 30,
           fragLoadingTimeOut: 20_000,
-          fragLoadingMaxRetry: 4,
+          fragLoadingMaxRetry: 6,
           levelLoadingTimeOut: 10_000,
-          levelLoadingMaxRetry: 3,
+          levelLoadingMaxRetry: 5,
           manifestLoadingTimeOut: 10_000,
-          manifestLoadingMaxRetry: 3,
+          manifestLoadingMaxRetry: 5,
           abrEwmaDefaultEstimate: 160_000,
         });
 
@@ -570,12 +571,25 @@ export default function AudioPlayer() {
       syncPositionState();
     };
 
+    const continueFromMediaControl = (action: "next" | "previous") => {
+      userWantsPlayRef.current = true;
+      setIsPlayingRef.current(true);
+      navigator.mediaSession.playbackState = "playing";
+
+      if (action === "next") playNextRef.current();
+      else playPreviousRef.current();
+
+      window.setTimeout(() => {
+        if (userWantsPlayRef.current) playIfWanted();
+      }, 0);
+    };
+
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
       ["play", () => setIsPlayingRef.current(true)],
       ["pause", () => setIsPlayingRef.current(false)],
       ["stop", () => setIsPlayingRef.current(false)],
-      ["previoustrack", () => playPreviousRef.current()],
-      ["nexttrack", () => playNextRef.current()],
+      ["previoustrack", () => continueFromMediaControl("previous")],
+      ["nexttrack", () => continueFromMediaControl("next")],
       ["seekbackward", (details) => seek(-(details?.seekOffset ?? SEEK_OFFSET))],
       ["seekforward", (details) => seek(details?.seekOffset ?? SEEK_OFFSET)],
       [
@@ -594,7 +608,7 @@ export default function AudioPlayer() {
         navigator.mediaSession.setActionHandler(action, handler);
       } catch {}
     });
-  }, [syncPositionState]);
+  }, [playIfWanted, syncPositionState]);
 
   useEffect(() => {
     if (!currentTrack || !("mediaSession" in navigator)) return;
@@ -619,7 +633,6 @@ export default function AudioPlayer() {
       }
     };
 
-    const onFreeze = () => hlsRef.current?.stopLoad();
     const onResume = () => {
       if (!userWantsPlayRef.current) return;
       hlsRef.current?.startLoad();
@@ -627,15 +640,30 @@ export default function AudioPlayer() {
     };
 
     document.addEventListener("visibilitychange", onVisible);
-    document.addEventListener("freeze", onFreeze);
     document.addEventListener("resume", onResume);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      document.removeEventListener("freeze", onFreeze);
       document.removeEventListener("resume", onResume);
     };
   }, [acquireWakeLock, playIfWanted, syncPositionState]);
+
+  useEffect(() => {
+    if (!isPlaying || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+
+    const pingWorker = () => {
+      navigator.serviceWorker.controller?.postMessage({
+        type: "KEEPALIVE",
+        reason: "audio-playback",
+        trackId: currentTrack?.id,
+        ts: Date.now(),
+      });
+    };
+
+    pingWorker();
+    const interval = window.setInterval(pingWorker, BACKGROUND_KEEPALIVE_MS);
+    return () => window.clearInterval(interval);
+  }, [currentTrack?.id, isPlaying]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
@@ -777,7 +805,12 @@ export default function AudioPlayer() {
             sendPlayEvent("complete", { metadata: { sourceKind: sourceKindRef.current } });
           }
           if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
-          playNext();
+          userWantsPlayRef.current = true;
+          setIsPlaying(true);
+          playNextRef.current();
+          window.setTimeout(() => {
+            if (userWantsPlayRef.current) playIfWanted();
+          }, 0);
         }}
         onError={async () => {
           const track = currentTrack;
@@ -805,18 +838,19 @@ export default function AudioPlayer() {
         <div
           className={cn(
             "fixed left-0 right-0 z-40 transition-all duration-300",
-            "bottom-[90px] left-1/2 -translate-x-1/2 w-[92%] max-w-[420px] h-[66px]",
-            "bg-[#101010]/90 backdrop-blur-3xl border border-white/10 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.85)]",
-            "rounded-[1.75rem] px-2 overflow-hidden",
+            "bottom-[92px] left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[430px] h-[74px]",
+            "bg-[linear-gradient(135deg,rgba(24,24,27,0.96),rgba(5,5,5,0.96))] backdrop-blur-3xl border border-white/10 shadow-[0_24px_60px_-18px_rgba(0,0,0,0.95)]",
+            "rounded-[1.75rem] px-2.5 overflow-hidden ring-1 ring-white/[0.04]",
             "md:bottom-0 md:left-0 md:translate-x-0 md:w-full md:max-w-none md:h-[96px]",
             "md:bg-[#050505]/95 md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-6 md:overflow-visible"
           )}
           data-source-kind={sourceKind}
           data-load-status={loadStatus}
         >
-          <div className="flex items-center justify-between max-w-[1600px] mx-auto h-full gap-2 md:gap-4 relative z-10">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,0,85,0.18),transparent_38%)] md:hidden" />
+          <div className="flex items-center justify-between max-w-[1600px] mx-auto h-full gap-2.5 md:gap-4 relative z-10">
             <PlayerTrackInfo displayImage={displayImage} />
-            <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[45%] pr-2 md:pr-0">
+            <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[44%] pr-1 md:pr-0">
               <PlayerControls />
               <PlayerProgressBar onSeek={handleSeek} />
             </div>

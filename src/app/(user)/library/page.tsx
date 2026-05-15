@@ -5,9 +5,11 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Heart, Plus, ListMusic, Loader2, Play, Sparkles, ChevronRight, Disc } from "lucide-react";
+import { Heart, Plus, ListMusic, Loader2, Play, Sparkles, ChevronRight, Disc, Bookmark, UserCheck, History } from "lucide-react";
 import Link from "next/link";
 import PlaylistCover from "@/components/user/PlaylistCover";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import { CardGridSkeleton, PageHeaderSkeleton } from "@/components/user/Skeletons";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { Playlist } from "@/types/music";
@@ -16,6 +18,8 @@ export default function LibraryPage() {
   const [user, setUser] = useState<User | null>(null);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [likedCount, setLikedCount] = useState(0);
+  const [savedAlbumsCount, setSavedAlbumsCount] = useState(0);
+  const [followedArtistsCount, setFollowedArtistsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -33,14 +37,18 @@ export default function LibraryPage() {
       }
       setUser(user);
 
-      const [playlistsRes, likesRes] = await Promise.all([
-        supabase.from("playlists").select("id, title, cover_url").eq("user_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("user_likes").select("track_id", { count: 'exact', head: true }).eq("user_id", user.id)
+      const [playlistsRes, likesRes, savedAlbumsRes, followedArtistsRes] = await Promise.all([
+        supabase.from("playlists").select("id, title, description, cover_url, is_public").eq("user_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("user_likes").select("track_id", { count: 'exact', head: true }).eq("user_id", user.id),
+        supabase.from("saved_albums").select("album_id", { count: 'exact', head: true }).eq("user_id", user.id),
+        supabase.from("followed_artists").select("artist_id", { count: 'exact', head: true }).eq("user_id", user.id),
       ]);
 
       if (cancelled) return;
       if (playlistsRes.data) setPlaylists(playlistsRes.data);
       setLikedCount(likesRes.count || 0);
+      setSavedAlbumsCount(savedAlbumsRes.count || 0);
+      setFollowedArtistsCount(followedArtistsRes.count || 0);
       setLoading(false);
     }
     fetchData();
@@ -75,13 +83,11 @@ export default function LibraryPage() {
   };
 
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#050505]">
-      <div className="relative w-20 h-20 flex items-center justify-center">
-         <div className="absolute inset-0 border-t-2 border-[#FF0055] rounded-full animate-spin" />
-         <div className="absolute inset-2 border-r-2 border-[#ff1a66] rounded-full animate-[spin_1.5s_linear_infinite_reverse]" />
-         <ListMusic size={24} className="text-zinc-500 animate-pulse" />
+    <div className="min-h-screen bg-[#050505] px-4 py-10 pb-40 md:px-10">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <PageHeaderSkeleton />
+        <CardGridSkeleton cards={6} />
       </div>
-      <p className="text-zinc-500 font-black text-[10px] uppercase tracking-[0.3em] mt-6">Loading Library</p>
     </div>
   );
 
@@ -148,6 +154,52 @@ export default function LibraryPage() {
             </div>
           </div>
         </Link>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
+          {[
+            {
+              href: "/library/history",
+              icon: History,
+              label: "Recently Played",
+              value: "History",
+              description: "Valid listens from your account",
+            },
+            {
+              href: "/library/albums",
+              icon: Bookmark,
+              label: "Saved Albums",
+              value: `${savedAlbumsCount}`,
+              description: savedAlbumsCount === 1 ? "album saved" : "albums saved",
+            },
+            {
+              href: "/library/artists",
+              icon: UserCheck,
+              label: "Followed Artists",
+              value: `${followedArtistsCount}`,
+              description: followedArtistsCount === 1 ? "artist followed" : "artists followed",
+            },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="group flex items-center gap-4 rounded-[1.5rem] border border-white/5 bg-white/[0.03] p-4 transition-all hover:border-[#FF0055]/30 hover:bg-white/[0.06] active:scale-[0.98]"
+              >
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FF0055]/15 text-[#FF0055]">
+                  <Icon size={22} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-black text-white">{item.label}</p>
+                  <p className="mt-0.5 text-xs font-medium text-zinc-500">{item.value} · {item.description}</p>
+                </div>
+                <ChevronRight size={18} className="text-zinc-600 transition-transform group-hover:translate-x-1 group-hover:text-white" />
+              </Link>
+            );
+          })}
+        </div>
+
+        <ResponsiveAd variant="banner" className="px-0" />
 
         {/* --- USER PLAYLISTS GRID --- */}
         <div>

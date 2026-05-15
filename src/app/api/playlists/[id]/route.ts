@@ -5,7 +5,7 @@ import { deleteR2File } from "@/lib/r2-helpers";
 async function getOwnedPlaylist(supabase: Awaited<ReturnType<typeof createClient>>, id: string, userId: string) {
   const { data: playlist, error } = await supabase
     .from("playlists")
-    .select("id, title, cover_url, user_id")
+    .select("id, title, description, cover_url, user_id, is_public")
     .eq("id", id)
     .single();
 
@@ -37,13 +37,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const body = await request.json().catch(() => ({}));
     const title = typeof body.title === "string" ? body.title.trim().slice(0, 80) : "";
     if (!title) return NextResponse.json({ error: "Playlist title is required" }, { status: 400 });
+    const description =
+      typeof body.description === "string" ? body.description.trim().slice(0, 240) : null;
+    const isPublic = typeof body.is_public === "boolean" ? body.is_public : false;
 
     const { data, error } = await supabase
       .from("playlists")
-      .update({ title })
+      .update({ title, description, is_public: isPublic, updated_at: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", user.id)
-      .select("id, title, cover_url, user_id, created_at")
+      .select("id, title, description, cover_url, user_id, created_at, updated_at, is_public")
       .single();
 
     if (error) throw error;

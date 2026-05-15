@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import Link from "next/link";
 import { Disc, Search, Sparkles, Play } from "lucide-react";
-import HomeHeader from "@/components/user/home/HomeHeader";
 import SquareGridAd from "@/components/ads/SquareGridAd"; // Import the Ad Component
 import React from "react"; // Required for React.Fragment
 
@@ -29,8 +28,6 @@ export default async function AllAlbumsPage() {
       <div className="absolute top-0 inset-x-0 h-[400px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/90 to-[#050505] -z-10" />
       <div className="absolute top-[-100px] right-[-100px] w-[300px] h-[300px] bg-[#FF0055]/10 rounded-full blur-[120px] pointer-events-none -z-10" />
       <div className="absolute top-[20%] left-[-10%] w-[400px] h-[400px] bg-indigo-900/10 rounded-full blur-[120px] pointer-events-none -z-10" />
-
-      <HomeHeader user={user} />
 
       <div className="px-4 md:px-12 mt-8 md:mt-12 space-y-12">
         

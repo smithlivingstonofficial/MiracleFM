@@ -13,11 +13,13 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const title = typeof body.title === "string" ? body.title.trim() : "My Playlist";
     const safeTitle = title.slice(0, 80) || "My Playlist";
+    const description = typeof body.description === "string" ? body.description.trim().slice(0, 240) : null;
+    const isPublic = typeof body.is_public === "boolean" ? body.is_public : false;
 
     const { data, error } = await supabase
       .from("playlists")
-      .insert({ title: safeTitle, user_id: user.id })
-      .select("id, title, cover_url, user_id, created_at")
+      .insert({ title: safeTitle, description, is_public: isPublic, user_id: user.id })
+      .select("id, title, description, cover_url, user_id, created_at, updated_at, is_public")
       .single();
 
     if (error) throw error;

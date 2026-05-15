@@ -9,8 +9,8 @@ interface NewReleasesSectionProps {
 
 export default function NewReleasesSection({ albums }: NewReleasesSectionProps) {
   return (
-    <section>
-      <div className="flex items-center justify-between mb-8 px-2">
+    <section className="px-4 md:px-8">
+      <div className="flex items-center justify-between gap-4 mb-5 md:mb-8">
         <h2 className="text-2xl md:text-4xl font-black text-white tracking-tighter">New Releases</h2>
         
         {/* VIEW ALL LINK */}
@@ -22,7 +22,7 @@ export default function NewReleasesSection({ albums }: NewReleasesSectionProps) 
         </Link>
       </div>
       
-      <div className="flex gap-4 md:gap-8 overflow-x-auto pb-6 snap-x snap-mandatory no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+      <div className="flex gap-4 md:gap-8 overflow-x-auto pb-6 snap-x snap-mandatory no-scrollbar -mx-4 px-4 md:-mx-2 md:px-2">
         {albums.map((album) => (
           <Link key={album.id} href={`/album/${album.id}`} className="min-w-[150px] md:min-w-[220px] snap-start group block">
             <div className="aspect-square relative rounded-2xl md:rounded-[2.5rem] overflow-hidden bg-zinc-900 shadow-xl group-hover:opacity-90 transition-all border border-white/5 group-hover:border-[#FF0055]/30 duration-500">

@@ -3,11 +3,13 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Trash2, Edit3, Loader2, Clock, Share2, Check, X } from "lucide-react";
+import { Trash2, Edit3, Clock, Share2, Check, X, Lock, Globe2, MinusCircle } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import PlaylistCover from "@/components/user/PlaylistCover";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import UserConfirmModal from "@/components/user/UserConfirmModal";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import { PageHeaderSkeleton, TrackListSkeleton } from "@/components/user/Skeletons";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Playlist, Track } from "@/types/music";
@@ -30,6 +32,8 @@ export default function PlaylistPage() {
   // Renaming State
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState("");
+  const [tempDescription, setTempDescription] = useState("");
+  const [tempIsPublic, setTempIsPublic] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Deletion State
@@ -68,6 +72,8 @@ export default function PlaylistPage() {
 
       setPlaylist(pl);
       setTempTitle(pl.title);
+      setTempDescription(pl.description || "");
+      setTempIsPublic(Boolean(pl.is_public));
       setTracks(
         items
           ?.map((item: PlaylistTrackRow) => item.tracks)
@@ -103,25 +109,30 @@ export default function PlaylistPage() {
     }
   };
 
-  const saveTitle = async () => {
+  const savePlaylistDetails = async () => {
     if (!playlist) return;
-    if (!tempTitle.trim() || tempTitle === playlist.title) {
+    const nextTitle = tempTitle.trim();
+    if (!nextTitle) {
       setIsEditing(false);
       setTempTitle(playlist.title);
+      setTempDescription(playlist.description || "");
+      setTempIsPublic(Boolean(playlist.is_public));
       return;
     }
     
     const response = await fetch(`/api/playlists/${playlistId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: tempTitle }),
+      body: JSON.stringify({ title: nextTitle, description: tempDescription, is_public: tempIsPublic }),
     });
     const result = await response.json();
 
     if (response.ok && result.playlist) {
       setPlaylist(result.playlist);
       setTempTitle(result.playlist.title);
-      toast.success("Playlist renamed");
+      setTempDescription(result.playlist.description || "");
+      setTempIsPublic(Boolean(result.playlist.is_public));
+      toast.success("Playlist updated");
       router.refresh();
     } else {
       toast.error(result.error || "Failed to rename");
@@ -148,16 +159,32 @@ export default function PlaylistPage() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") saveTitle();
+    if (e.key === "Enter") savePlaylistDetails();
     if (e.key === "Escape" && playlist) {
       setTempTitle(playlist.title);
+      setTempDescription(playlist.description || "");
+      setTempIsPublic(Boolean(playlist.is_public));
       setIsEditing(false);
     }
   };
 
+  const removeTrack = async (trackId: string) => {
+    const response = await fetch(`/api/playlists/${playlistId}/tracks/${trackId}`, { method: "DELETE" });
+    if (!response.ok) {
+      toast.error("Could not remove song");
+      return;
+    }
+    setTracks((current) => current.filter((track) => track.id !== trackId));
+    toast.success("Song removed");
+    router.refresh();
+  };
+
   if (loading || !playlist) return (
-    <div className="h-screen flex items-center justify-center bg-black">
-      <Loader2 className="animate-spin text-[#FF0055] w-10 h-10" />
+    <div className="min-h-screen bg-black px-4 py-10 pb-40 md:px-10">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <PageHeaderSkeleton />
+        <TrackListSkeleton rows={7} />
+      </div>
     </div>
   );
 
@@ -204,10 +231,10 @@ export default function PlaylistPage() {
                       placeholder="Playlist Name"
                     />
                     <div className="flex gap-2">
-                      <button onClick={saveTitle} className="p-3 bg-[#FF0055] rounded-full text-black hover:scale-110 transition shadow-lg">
+                      <button onClick={savePlaylistDetails} className="p-3 bg-[#FF0055] rounded-full text-black hover:scale-110 transition shadow-lg">
                         <Check size={20} strokeWidth={3} />
                       </button>
-                      <button onClick={() => { setIsEditing(false); setTempTitle(playlist.title); }} className="p-3 bg-zinc-800 rounded-full text-white hover:bg-zinc-700 transition">
+                      <button onClick={() => { setIsEditing(false); setTempTitle(playlist.title); setTempDescription(playlist.description || ""); setTempIsPublic(Boolean(playlist.is_public)); }} className="p-3 bg-zinc-800 rounded-full text-white hover:bg-zinc-700 transition">
                         <X size={20} />
                       </button>
                     </div>
@@ -231,6 +258,38 @@ export default function PlaylistPage() {
                   </div>
                 )}
               </div>
+
+              {isEditing ? (
+                <div className="mt-4 max-w-2xl space-y-3">
+                  <textarea
+                    value={tempDescription}
+                    onChange={(event) => setTempDescription(event.target.value)}
+                    placeholder="Add a short playlist note"
+                    className="min-h-20 w-full resize-none rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-medium text-zinc-200 outline-none transition-colors focus:border-[#FF0055]/50"
+                    maxLength={240}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setTempIsPublic((value) => !value)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-widest text-zinc-300"
+                  >
+                    {tempIsPublic ? <Globe2 size={15} className="text-[#FF0055]" /> : <Lock size={15} />}
+                    {tempIsPublic ? "Public" : "Private"}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 flex flex-col items-center gap-3 md:items-start">
+                  {playlist.description && (
+                    <p className="max-w-2xl text-sm font-medium leading-6 text-zinc-400 md:text-base">
+                      {playlist.description}
+                    </p>
+                  )}
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/5 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    {playlist.is_public ? <Globe2 size={13} className="text-[#FF0055]" /> : <Lock size={13} />}
+                    {playlist.is_public ? "Public playlist" : "Private playlist"}
+                  </span>
+                </div>
+              )}
               
               <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 pt-2 justify-center md:justify-start">
                 <div className="flex items-center gap-2 text-white/90">
@@ -269,6 +328,8 @@ export default function PlaylistPage() {
           </div>
         </div>
 
+        {tracks.length > 3 && <ResponsiveAd variant="banner" className="px-0" />}
+
         {/* 2. Track List */}
         <div className="space-y-4 px-2">
           {tracks.length > 0 && (
@@ -283,13 +344,26 @@ export default function PlaylistPage() {
           <div className="space-y-1">
             {tracks.length > 0 ? (
               tracks.map((track, i) => (
-                <TrackRow 
-                  key={track.id} 
-                  track={track} 
-                  index={i} 
-                  context="Playlist" 
-                  allTracks={tracks}
-                />
+                <div key={track.id} className="group/playlist-row flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <TrackRow 
+                      track={track} 
+                      index={i} 
+                      context="Playlist" 
+                      allTracks={tracks}
+                    />
+                  </div>
+                  {isOwner && (
+                    <button
+                      onClick={() => removeTrack(track.id)}
+                      className="mr-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400 group-hover/playlist-row:flex md:flex"
+                      aria-label={`Remove ${track.title} from playlist`}
+                      title="Remove from playlist"
+                    >
+                      <MinusCircle size={18} />
+                    </button>
+                  )}
+                </div>
               ))
             ) : (
               <div className="py-20 text-center space-y-4 border-2 border-dashed border-white/5 rounded-[2rem] bg-zinc-900/20">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { usePlayerStore } from "@/store/usePlayerStore";
 import { Play, Pause, MoreHorizontal, ListMusic } from "lucide-react";
@@ -41,7 +42,7 @@ export default function TrackRow({ track, index, context, allTracks }: TrackRowP
   const fetchMyPlaylists = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent playing when clicking menu
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return toast.error("Login to add to playlist");
+    if (!user) return toast.message("Sign in to add this song to a playlist.");
     
     const { data } = await supabase.from("playlists").select("id, title").eq("user_id", user.id);
     if (data) setMyPlaylists(data);
@@ -56,14 +57,15 @@ export default function TrackRow({ track, index, context, allTracks }: TrackRowP
   };
 
   // Helper for Duration
-  const formatTime = (seconds: number) => {
-    if (!seconds) return "--:--";
+  const formatTime = (value?: number | null) => {
+    if (!value || !Number.isFinite(value)) return "--:--";
+    const seconds = Math.max(0, Math.round(value > 10_000 ? value / 1000 : value));
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
-    return `${min}:${sec < 10 ? "0" : ""}${sec}`;
+    return `${min}:${sec.toString().padStart(2, "0")}`;
   };
 
-  const displayImage = track.cover_url || track.albums?.cover_url || track.artists?.image_url;
+  const displayImage = track.cover_url || track.albums?.cover_url || track.artists?.image_url || "/miraclefm-192.png";
 
   return (
     <div 
@@ -90,13 +92,17 @@ export default function TrackRow({ track, index, context, allTracks }: TrackRowP
       <div className="flex-1 flex items-center gap-3 md:gap-4 min-w-0">
         {context !== "Album" && (
           <div className="relative w-11 h-11 md:w-11 md:h-11 shrink-0 rounded-lg overflow-hidden bg-zinc-800 shadow-sm">
-            {displayImage && <Image src={displayImage} alt="" fill className="object-cover" />}
+            <Image src={displayImage} alt="" fill className="object-cover" />
           </div>
         )}
         <div className="min-w-0">
-          <p className={cn("font-bold truncate text-sm md:text-base", isCurrent ? "text-[#FF0055]" : "text-white")}>
+          <Link
+            href={`/song/${track.id}`}
+            onClick={(event) => event.stopPropagation()}
+            className={cn("block truncate text-sm font-bold hover:underline md:text-base", isCurrent ? "text-[#FF0055]" : "text-white")}
+          >
             {track.title}
-          </p>
+          </Link>
           <p className="text-xs md:text-sm text-zinc-400 truncate group-hover:text-zinc-300 transition-colors">
             {track.artists?.name}
           </p>
@@ -114,8 +120,8 @@ export default function TrackRow({ track, index, context, allTracks }: TrackRowP
            <LikeButton trackId={track.id} />
         </div>
         
-        <span className="hidden md:block font-mono text-xs w-10 text-right text-zinc-500">
-          {formatTime(track.duration_seconds || track.duration || 180)}
+        <span className="hidden md:block font-mono text-xs w-12 text-right text-zinc-500 tabular-nums">
+          {formatTime(track.duration_seconds || track.duration)}
         </span>
         
         <div className="relative">

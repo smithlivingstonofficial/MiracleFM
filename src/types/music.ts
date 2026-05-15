@@ -16,6 +16,7 @@ export type Album = {
 export type Track = {
   id: string;
   title: string;
+  lyrics?: string | null;
   hls_url?: string | null;
   fallback_audio_url?: string | null;
   audio_status?: "legacy" | "queued" | "encoding" | "ready" | "failed";
@@ -36,9 +37,12 @@ export type PlayableTrack = Track & {
 export type Playlist = {
   id: string;
   title: string;
+  description?: string | null;
   cover_url?: string | null;
   user_id?: string | null;
   created_at?: string;
+  updated_at?: string;
+  is_public?: boolean;
 };
 
 export const isPlayableTrack = (track: Track | null | undefined): track is PlayableTrack =>

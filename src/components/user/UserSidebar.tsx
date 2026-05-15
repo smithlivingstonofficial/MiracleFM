@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  Home, Search, Library, Plus, Heart,
+  BookOpen, Home, Search, Library, Plus, Heart,
   PanelLeftClose, PanelLeftOpen, ListMusic, Sparkles, PlusCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,7 @@ export default function UserSidebar() {
     { label: "Home", icon: Home, href: "/" },
     { label: "Search", icon: Search, href: "/search" },
     { label: "Library", icon: Library, href: "/library" },
+    { label: "Faith", icon: BookOpen, href: "/faith" },
   ];
 
   return (
@@ -122,7 +123,7 @@ export default function UserSidebar() {
       {/* --- 2. NAVIGATION LINKS --- */}
       <div className="px-4 space-y-2">
         {navRoutes.map((route) => {
-          const isActive = pathname === route.href;
+          const isActive = route.href === "/" ? pathname === route.href : pathname.startsWith(route.href);
           return (
             <Link
               key={route.href}

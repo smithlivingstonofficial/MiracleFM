@@ -4,26 +4,44 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search as SearchIcon, Disc, Mic2, X, Loader2, Play } from "lucide-react";
+import { Search as SearchIcon, Disc, Mic2, X, Loader2, Play, ListMusic } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import TrackRow from "@/components/user/TrackRow";
-import type { Album, Artist, Track } from "@/types/music";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import type { Album, Artist, Playlist, Track } from "@/types/music";
 
 type SearchResults = {
   tracks: Track[];
   artists: Artist[];
   albums: Album[];
+  playlists: Playlist[];
 };
 
-const emptyResults: SearchResults = { tracks: [], artists: [], albums: [] };
+type SearchTab = "all" | "songs" | "artists" | "albums" | "playlists";
+
+const emptyResults: SearchResults = { tracks: [], artists: [], albums: [], playlists: [] };
 const isArtistResult = (result: Artist | Album): result is Artist => "name" in result;
+
+const mergeTracks = (primary: Track[], secondary: Track[]) => {
+  const seen = new Set<string>();
+  return [...primary, ...secondary].filter((track) => {
+    if (seen.has(track.id)) return false;
+    seen.add(track.id);
+    return true;
+  });
+};
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>(emptyResults);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    return JSON.parse(localStorage.getItem("miraclefm-recent-searches") || "[]");
+  });
+  const [activeTab, setActiveTab] = useState<SearchTab>("all");
   const requestIdRef = useRef(0);
   const supabase = createClient();
 
@@ -34,20 +52,33 @@ export default function SearchPage() {
 
     const delayDebounceFn = setTimeout(async () => {
       if (trimmedQuery.length > 1) {
-        const [t, a, alb] = await Promise.all([
+        const [t, a, alb, pl, lyrics] = await Promise.all([
           supabase
             .from("tracks")
             .select("*, artists(name), albums(title, cover_url)")
             .eq("audio_status", "ready")
             .ilike("title", `%${trimmedQuery}%`)
-            .limit(5),
+            .limit(8),
           supabase.from("artists").select("*").ilike("name", `%${trimmedQuery}%`).limit(5),
-          supabase.from("albums").select("*, artists(name)").ilike("title", `%${trimmedQuery}%`).limit(5)
+          supabase.from("albums").select("*, artists(name)").ilike("title", `%${trimmedQuery}%`).limit(5),
+          supabase
+            .from("playlists")
+            .select("id, title, cover_url, user_id, is_public")
+            .or("user_id.is.null,is_public.eq.true")
+            .ilike("title", `%${trimmedQuery}%`)
+            .limit(5),
+          supabase
+            .from("tracks")
+            .select("*, artists(name), albums(title, cover_url)")
+            .eq("audio_status", "ready")
+            .ilike("lyrics", `%${trimmedQuery}%`)
+            .limit(5),
         ]);
 
         if (requestIdRef.current !== requestId) return;
 
-        if (t.error || a.error || alb.error) {
+        const allCoreSearchesFailed = Boolean(t.error && a.error && alb.error && pl.error);
+        if (allCoreSearchesFailed) {
           setErrorMessage("Search is having trouble right now. Please try again.");
           setResults(emptyResults);
           setLoading(false);
@@ -55,12 +86,20 @@ export default function SearchPage() {
         }
         
         setResults({
-          tracks: t.data || [],
-          artists: a.data ||[],
-          albums: alb.data ||[]
+          tracks: mergeTracks(t.data || [], lyrics.error ? [] : lyrics.data || []).slice(0, 8),
+          artists: a.error ? [] : a.data ||[],
+          albums: alb.error ? [] : alb.data ||[],
+          playlists: pl.error ? [] : pl.data ||[],
         });
         setErrorMessage("");
         setLoading(false);
+        if (!t.error || !a.error || !alb.error || !pl.error) {
+          setRecentSearches((current) => {
+            const next = [trimmedQuery, ...current.filter((item) => item.toLowerCase() !== trimmedQuery.toLowerCase())].slice(0, 5);
+            localStorage.setItem("miraclefm-recent-searches", JSON.stringify(next));
+            return next;
+          });
+        }
       } else {
         setResults(emptyResults);
         setErrorMessage("");
@@ -71,15 +110,20 @@ export default function SearchPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [query, supabase]);
 
-  const topResult = results.artists.length > 0 ? results.artists[0] : (results.albums.length > 0 ? results.albums[0] : null);
+  const resultCount = results.tracks.length + results.artists.length + results.albums.length + results.playlists.length;
+  const showSongs = activeTab === "all" || activeTab === "songs";
+  const showArtists = activeTab === "all" || activeTab === "artists";
+  const showAlbums = activeTab === "all" || activeTab === "albums";
+  const showPlaylists = activeTab === "all" || activeTab === "playlists";
+  const topResult: Artist | Album | null = results.artists.length > 0 ? results.artists[0] : (results.albums.length > 0 ? results.albums[0] : null);
   const topResultIsArtist = topResult ? isArtistResult(topResult) : false;
   const topResultImage = topResult
-    ? (topResultIsArtist
-      ? (topResult as any).image_url
-      : ("cover_url" in topResult ? (topResult as any).cover_url : null))
+    ? (isArtistResult(topResult)
+      ? topResult.image_url
+      : topResult.cover_url)
     : null;
   const topResultTitle = topResult
-    ? ('name' in topResult ? topResult.name : (topResult as any).title)
+    ? (isArtistResult(topResult) ? topResult.name : topResult.title)
     : "";
 
   return (
@@ -105,7 +149,7 @@ export default function SearchPage() {
                   setQuery(e.target.value);
                   if(e.target.value.trim().length > 1) setLoading(true);
               }}
-              placeholder="What do you want to listen to?"
+              placeholder="Search songs, artists, albums, or lyrics when available"
               className="w-full bg-[#0A0A0A] border border-white/10 rounded-full py-4 md:py-5 pl-14 md:pl-16 pr-14 md:pr-16 text-white text-base md:text-lg font-black outline-none focus:bg-black focus:border-[#FF0055]/50 focus:ring-4 focus:ring-[#FF0055]/10 transition-all placeholder:text-zinc-600 shadow-2xl"
               autoFocus
             />
@@ -129,8 +173,21 @@ export default function SearchPage() {
             <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(255,255,255,0.02)] animate-[pulse_4s_ease-in-out_infinite]">
                 <SearchIcon size={40} className="text-zinc-700" />
             </div>
-            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-2">Discover New Music</h2>
-            <p className="text-sm md:text-base font-medium text-zinc-500 max-w-sm">Search for your favorite songs, artists, or explore new albums.</p>
+            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-2">Find Your Worship</h2>
+            <p className="text-sm md:text-base font-medium text-zinc-500 max-w-sm">Search for songs, artists, albums, or lyrics when available.</p>
+            {recentSearches.length > 0 && (
+              <div className="mt-8 flex flex-wrap justify-center gap-2">
+                {recentSearches.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => setQuery(item)}
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -190,7 +247,7 @@ export default function SearchPage() {
                 )}
 
                 {/* --- RIGHT COL: SONGS --- */}
-                {results.tracks.length > 0 && (
+                {showSongs && results.tracks.length > 0 && (
                     <div className={topResult ? "lg:col-span-7" : "lg:col-span-12"}>
                         <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Songs</h2>
                         <div className="space-y-1">
@@ -209,8 +266,36 @@ export default function SearchPage() {
                 )}
             </div>
 
+            {resultCount > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {[
+                  ["all", "All", resultCount],
+                  ["songs", "Songs", results.tracks.length],
+                  ["artists", "Artists", results.artists.length],
+                  ["albums", "Albums", results.albums.length],
+                  ["playlists", "Playlists", results.playlists.length],
+                ].map(([value, label, count]) => (
+                  <button
+                    key={value}
+                    onClick={() => setActiveTab(value as SearchTab)}
+                    className={`shrink-0 rounded-full border px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors ${
+                      activeTab === value
+                        ? "border-[#FF0055] bg-[#FF0055] text-white"
+                        : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10"
+                    }`}
+                  >
+                    {label} {count}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {resultCount > 0 && (
+              <ResponsiveAd variant="banner" className="px-0" />
+            )}
+
             {/* --- ARTISTS ROW (Story Ring Design) --- */}
-            {results.artists.length > 0 && (
+            {showArtists && results.artists.length > 0 && (
               <section className="-mx-4 px-4 md:mx-0 md:px-0">
                 <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Artists</h2>
                 <div className="flex gap-4 md:gap-8 overflow-x-auto pb-6 snap-x snap-mandatory no-scrollbar pr-4 md:pr-0">
@@ -236,7 +321,7 @@ export default function SearchPage() {
             )}
 
             {/* --- ALBUMS GRID --- */}
-            {results.albums.length > 0 && (
+            {showAlbums && results.albums.length > 0 && (
               <section>
                 <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Albums</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
@@ -260,14 +345,33 @@ export default function SearchPage() {
               </section>
             )}
 
+            {showPlaylists && results.playlists.length > 0 && (
+              <section>
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Playlists</h2>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {results.playlists.map((playlist) => (
+                    <Link key={playlist.id} href={`/playlist/${playlist.id}`} className="group flex items-center gap-4 rounded-2xl border border-white/5 bg-white/[0.03] p-4 transition-colors hover:border-[#FF0055]/30 hover:bg-white/[0.06]">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-zinc-900 text-[#FF0055]">
+                        {playlist.cover_url ? <Image src={playlist.cover_url} alt="" width={56} height={56} className="h-full w-full object-cover" /> : <ListMusic size={24} />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-white">{playlist.title}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Playlist</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* --- NO RESULTS MESSAGE --- */}
-            {query && !loading && results.tracks.length === 0 && results.artists.length === 0 && results.albums.length === 0 && (
+            {query && !loading && resultCount === 0 && (
               <div className="text-center py-20 text-zinc-500 animate-in fade-in">
                 <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5">
                     <SearchIcon size={32} className="text-zinc-600" />
                 </div>
-                <p className="font-black text-lg text-white mb-1">No results found</p>
-                <p className="text-sm">Please make sure your words are spelled correctly.</p>
+                <p className="font-black text-lg text-white mb-1">No worship results found</p>
+                <p className="text-sm">Try a song title, artist, album, or lyric when available.</p>
               </div>
             )}
 
