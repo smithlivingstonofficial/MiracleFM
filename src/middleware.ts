@@ -37,7 +37,7 @@ export async function middleware(request: NextRequest) {
   // --- SECURITY LOGIC ---
 
   // A. Protect Admin Routes
-  const adminPaths = ['/dashboard', '/upload', '/tracks', '/artists', '/albums', '/covers', '/settings', '/admin-tracks']
+  const adminPaths = ['/dashboard', '/upload', '/tracks', '/artists', '/albums', '/covers', '/settings', '/admin-tracks', '/recommendations', '/genres']
   if (adminPaths.some(path => url.pathname.startsWith(path))) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))

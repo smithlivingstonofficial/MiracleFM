@@ -10,8 +10,10 @@ import PopularArtistsSection from "@/components/user/home/PopularArtistsSection"
 import ContinueListeningSection from "@/components/user/home/ContinueListeningSection";
 import GuestRecentlyPlayedSection from "@/components/user/home/GuestRecentlyPlayedSection";
 import HomeTrackSection from "@/components/user/home/HomeTrackSection";
+import RecommendationMixSection from "@/components/user/home/RecommendationMixSection";
 import HomeFooter from "@/components/user/home/HomeFooter";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import { getRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
 import type { Track } from "@/types/music";
 
 // We force the page to be dynamic so user auth works, 
@@ -89,6 +91,7 @@ export default async function HomePage() {
 
   // 2. Get Cached Public Data (Instant load, 0 DB cost)
   const { banners, playlists, artists, albums, newTracks, popularTracks, trendingTracks } = await getCachedPublicData();
+  const recommendationSections = await getRecommendationSections(supabase, user);
 
   // 3. Daily Mix Logic (Dynamic per request, only if logged in)
   let dailyMix: Track[] = [];
@@ -151,6 +154,7 @@ export default async function HomePage() {
   }
 
   recommendedTracks = dailyMix.length > 0 ? dailyMix : relatedTracks.length > 0 ? relatedTracks : trendingTracks.length > 0 ? trendingTracks : popularTracks;
+  const recommendationPlaylists = await getRecommendationPlaylists(supabase, recommendationSections, user, 12);
 
   // Note: "Greeting" logic is handled internally by <HomeHeader /> for animation
 
@@ -179,6 +183,8 @@ export default async function HomePage() {
       <div className="space-y-12 md:space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200 fill-mode-forwards">
         
         <EditorialSection playlists={playlists} />
+
+        <RecommendationMixSection playlists={recommendationPlaylists} />
 
         <ContinueListeningSection tracks={recentTracks} />
 

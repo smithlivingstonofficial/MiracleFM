@@ -6,7 +6,7 @@ import Link from "next/link";
 import { 
   LayoutDashboard, LayoutTemplate, Upload, Music, ListMusic, 
   ImageIcon, Disc, Users, Settings, LogOut, ChevronRight, 
-  UserCircle, PanelLeftClose, PanelLeftOpen 
+  UserCircle, PanelLeftClose, PanelLeftOpen, Sparkles, Tags
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -28,6 +28,8 @@ export default function AdminSidebar() {
     { name: "Media Library", icon: Music, href: "/admin-tracks" },
     { name: "Albums", icon: Disc, href: "/albums" },
     { name: "Playlists", icon: ListMusic, href: "/playlists" },
+    { name: "Recommendations", icon: Sparkles, href: "/recommendations" },
+    { name: "Genres", icon: Tags, href: "/genres" },
     { name: "Artists", icon: Users, href: "/artists" },
     { name: "Cover Art", icon: ImageIcon, href: "/covers" },
     { name: "Settings", icon: Settings, href: "/settings" },

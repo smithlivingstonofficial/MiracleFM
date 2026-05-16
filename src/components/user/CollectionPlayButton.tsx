@@ -9,11 +9,11 @@ import { isPlayableTrack, type Track } from "@/types/music";
 
 interface Props {
   tracks: Track[];
-  size?: "default" | "large";
+  size?: "sm" | "default" | "large";
 }
 
 export default function CollectionPlayButton({ tracks, size = "large" }: Props) {
-  const { setQueue, isPlaying, setIsPlaying, currentTrack, queue } = usePlayerStore();
+  const { setQueue, isPlaying, setIsPlaying, queue } = usePlayerStore();
 
   const playableTracks = tracks.filter(isPlayableTrack);
   const trackIds = playableTracks.map((track) => track.id).join("|");
@@ -41,13 +41,13 @@ export default function CollectionPlayButton({ tracks, size = "large" }: Props) 
       className={cn(
         "flex items-center justify-center rounded-full bg-[#FF0055] text-black hover:bg-[#E6004D] hover:scale-105 transition-all shadow-[0_0_30px_rgba(255,0,85,0.4)] active:scale-95",
         "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100",
-        size === "large" ? "w-14 h-14 md:w-16 md:h-16" : "w-12 h-12"
+        size === "large" ? "w-14 h-14 md:w-16 md:h-16" : size === "sm" ? "w-10 h-10" : "w-12 h-12"
       )}
     >
       {isPlayingThisCollection ? (
-        <Pause fill="black" size={size === "large" ? 28 : 24} />
+        <Pause fill="black" size={size === "large" ? 28 : size === "sm" ? 20 : 24} />
       ) : (
-        <Play fill="black" size={size === "large" ? 28 : 24} className="ml-1" />
+        <Play fill="black" size={size === "large" ? 28 : size === "sm" ? 20 : 24} className="ml-1" />
       )}
     </button>
   );

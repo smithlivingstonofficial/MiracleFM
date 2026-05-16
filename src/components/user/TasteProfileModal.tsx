@@ -3,13 +3,10 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Sparkles, Check, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-const GENRES =[
-  "Worship", "Gospel", "Contemporary", "Instrumental", "Hymns", 
-  "Christian Pop", "Tamil Christian", "Sermon", "Kids", "Devotional", "Live", "Acoustic"
-];
+import { Sparkles, X } from "lucide-react";
+import GenrePicker from "@/components/admin/GenrePicker";
+import { fallbackGenreRows } from "@/lib/genres";
+import type { Genre } from "@/types/music";
 
 interface Props {
   isOpen: boolean;
@@ -19,6 +16,7 @@ interface Props {
 
 export default function TasteProfileModal({ isOpen, onClose, initialGenres = [] }: Props) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [genres, setGenres] = useState<Genre[]>(fallbackGenreRows());
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
 
@@ -29,10 +27,19 @@ export default function TasteProfileModal({ isOpen, onClose, initialGenres = [] 
     }
   }, [isOpen, initialGenres]);
 
-  const toggle = (g: string) => {
-    if (selected.includes(g)) setSelected(selected.filter(i => i !== g));
-    else setSelected([...selected, g]);
-  };
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetch("/api/genres")
+      .then((response) => response.json())
+      .then((result: { genres?: Genre[] }) => {
+        if (!cancelled && result.genres?.length) setGenres(result.genres);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   const savePreferences = async () => {
     if (selected.length < 1) return toast.error("Please select at least one style");
@@ -78,25 +85,13 @@ export default function TasteProfileModal({ isOpen, onClose, initialGenres = [] 
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-3 mb-10 max-h-[40vh] overflow-y-auto no-scrollbar pb-4">
-            {GENRES.map(g => {
-              const active = selected.includes(g);
-              return (
-                <button
-                  key={g}
-                  onClick={() => toggle(g)}
-                  className={cn(
-                    "px-5 py-3 rounded-full text-sm font-bold border-2 transition-all duration-300 flex items-center gap-2",
-                    active 
-                      ? "bg-[#FF0055] border-[#FF0055] text-white shadow-[0_0_20px_rgba(255,0,85,0.3)] scale-105" 
-                      : "bg-transparent border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-white"
-                  )}
-                >
-                  {active && <Check size={14} strokeWidth={3} />}
-                  {g}
-                </button>
-              )
-            })}
+          <div className="mb-10 max-h-[40vh] overflow-y-auto no-scrollbar pb-4">
+            <GenrePicker
+              genres={genres}
+              selected={selected}
+              onChange={setSelected}
+              label="Styles"
+            />
           </div>
 
           <button 

@@ -8,12 +8,9 @@ import { ArrowLeft, Upload, Image as ImageIcon, Loader2, Sparkles, Disc, Grid, U
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { buildMediaUrl } from "@/lib/media";
-
-// Standardized Genre List for consistency across the app
-const GENRES = [
-  "Worship", "Gospel", "Contemporary", "Instrumental", "Hymns", 
-  "Christian Pop", "Tamil Christian", "Sermon", "Kids", "Devotional", "Live", "Acoustic"
-];
+import GenrePicker from "@/components/admin/GenrePicker";
+import { fallbackGenreRows } from "@/lib/genres";
+import type { Genre } from "@/types/music";
 
 type LibraryImage = {
   url: string;
@@ -43,6 +40,7 @@ export default function TrackEditor() {
   
   const [artists, setArtists] = useState<any[]>([]);
   const [albums, setAlbums] = useState<any[]>([]);
+  const [genres, setGenres] = useState<Genre[]>(fallbackGenreRows());
   
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [coverLibrary, setCoverLibrary] = useState<LibraryImage[]>([]);
@@ -73,6 +71,19 @@ export default function TrackEditor() {
     init();
   }, [id, supabase]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/genres")
+      .then((response) => response.json())
+      .then((result: { genres?: Genre[] }) => {
+        if (!cancelled && result.genres?.length) setGenres(result.genres);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -96,14 +107,6 @@ export default function TrackEditor() {
       toast.error("Upload failed");
     } finally {
       setUploadingImage(false);
-    }
-  };
-
-  const toggleGenre = (g: string) => {
-    if (form.genre.includes(g)) {
-      setForm({ ...form, genre: form.genre.filter(item => item !== g) });
-    } else {
-      setForm({ ...form, genre: [...form.genre, g] });
     }
   };
 
@@ -228,27 +231,12 @@ export default function TrackEditor() {
             
             {/* --- NEW MULTI-SELECT GENRE UI --- */}
             <div className="bg-panel rounded-[3rem] p-10 border border-white/5 space-y-6">
-              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] ml-2">Genres & Moods</label>
-              <div className="flex flex-wrap gap-3">
-                {GENRES.map(g => {
-                  const isSelected = form.genre.includes(g);
-                  return (
-                    <button
-                      key={g}
-                      onClick={() => toggleGenre(g)}
-                      className={cn(
-                        "px-4 py-2.5 rounded-full text-xs font-bold border-2 transition-all duration-300 active:scale-95 flex items-center gap-2.5",
-                        isSelected 
-                          ? "bg-brand border-transparent text-white shadow-lg shadow-brand/20" 
-                          : "bg-black/20 border-white/10 text-zinc-400 hover:border-white/30 hover:text-white"
-                      )}
-                    >
-                      {isSelected && <Check size={14} strokeWidth={3} />}
-                      {g}
-                    </button>
-                  )
-                })}
-              </div>
+              <GenrePicker
+                genres={genres}
+                selected={form.genre}
+                onChange={(genre) => setForm({ ...form, genre })}
+                label="Genres & Moods"
+              />
             </div>
 
             <div className="bg-panel rounded-[3rem] p-8 border border-white/5">

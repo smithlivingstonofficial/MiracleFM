@@ -34,6 +34,17 @@ export type PlayableTrack = Track & {
   audio_status: "ready";
 };
 
+export type Genre = {
+  id?: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type Playlist = {
   id: string;
   title: string;
@@ -43,6 +54,41 @@ export type Playlist = {
   created_at?: string;
   updated_at?: string;
   is_public?: boolean;
+};
+
+export type RecommendationAlgorithm =
+  | "daily_mix"
+  | "because_liked"
+  | "genre_affinity"
+  | "trending"
+  | "top_listened"
+  | "on_repeat"
+  | "playlist_vibes"
+  | "new_for_you"
+  | "artist_discovery";
+
+export type RecommendationSection = {
+  id?: string;
+  slug: string;
+  title: string;
+  description: string;
+  enabled: boolean;
+  sort_order: number;
+  algorithm_type: RecommendationAlgorithm;
+  fallback_genres?: string[] | null;
+  track_limit: number;
+  freshness_days: number;
+  min_signals: number;
+};
+
+export type RecommendedTrack = Track & {
+  recommendation_score?: number;
+  recommendation_reason?: string;
+};
+
+export type GeneratedPlaylist = {
+  section: RecommendationSection;
+  tracks: RecommendedTrack[];
 };
 
 export const isPlayableTrack = (track: Track | null | undefined): track is PlayableTrack =>

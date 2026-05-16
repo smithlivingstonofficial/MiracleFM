@@ -8,16 +8,21 @@ import {
   Search, Music, Edit2, Trash2, Play, Pause, Plus, 
   Calendar, Disc, CheckSquare, Square, X, Filter, 
   UserPlus, ListPlus, Loader2, Album, ChevronDown, 
-  ArrowUpDown, Copy, Check
+  ArrowUpDown, Copy, Check, Tags
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import TextVerificationModal from "@/components/admin/TextVerificationModal";
+import GenrePicker from "@/components/admin/GenrePicker";
+import { fallbackGenreRows, normalizeGenreList } from "@/lib/genres";
+import type { Genre } from "@/types/music";
 
-type FilterType = "all" | "no_artist" | "no_album" | "no_cover" | "no_genre";
+type FilterType = "all" | "no_artist" | "no_album" | "no_cover" | "no_genre" | "has_genre";
 type SortField = "created_at" | "title" | "artist" | "album";
 type SortOrder = "asc" | "desc";
+type BulkGenreMode = "replace" | "add" | "remove";
+const FILTER_OPTIONS: FilterType[] = ["all", "no_artist", "no_album", "no_cover", "no_genre", "has_genre"];
 
 export default function AdminTracksPage() {
   // --- STATE ---
@@ -25,11 +30,13 @@ export default function AdminTracksPage() {
   const [artists, setArtists] = useState<any[]>([]);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [albums, setAlbums] = useState<any[]>([]);
+  const [genreOptions, setGenreOptions] = useState<Genre[]>(fallbackGenreRows());
   const [loading, setLoading] = useState(true);
   
   // Filters & Sorting
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const [activeGenreFilter, setActiveGenreFilter] = useState("");
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ field: SortField; order: SortOrder }>({ field: "created_at", order: "desc" });
   
@@ -40,7 +47,9 @@ export default function AdminTracksPage() {
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const lastSelectedIndex = useRef<number>(-1); 
-  const [bulkActionType, setBulkActionType] = useState<"artist" | "playlist" | "album" | null>(null);
+  const [bulkActionType, setBulkActionType] = useState<"artist" | "playlist" | "album" | "genre" | null>(null);
+  const [bulkGenres, setBulkGenres] = useState<string[]>([]);
+  const [bulkGenreMode, setBulkGenreMode] = useState<BulkGenreMode>("add");
   
   // Modals
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -57,16 +66,18 @@ export default function AdminTracksPage() {
 
   async function fetchInitialData() {
     setLoading(true);
-    const [tRes, aRes, pRes, albRes] = await Promise.all([
+    const [tRes, aRes, pRes, albRes, genreRes] = await Promise.all([
       supabase.from("tracks").select("*, artists(name, image_url), albums(title, cover_url)"), 
       supabase.from("artists").select("id, name").order("name"),
       supabase.from("playlists").select("id, title").is("user_id", null),
-      supabase.from("albums").select("id, title").order("title")
+      supabase.from("albums").select("id, title").order("title"),
+      fetch("/api/genres").then((response) => response.json()).catch(() => ({ genres: fallbackGenreRows() }))
     ]);
     if (tRes.data) setTracks(tRes.data);
     if (aRes.data) setArtists(aRes.data);
     if (pRes.data) setPlaylists(pRes.data);
     if (albRes.data) setAlbums(albRes.data);
+    if (genreRes.genres?.length) setGenreOptions(genreRes.genres);
     setLoading(false);
   }
 
@@ -85,8 +96,12 @@ export default function AdminTracksPage() {
         case "no_album": return !t.album_id;
         case "no_cover": return !t.cover_url;
         case "no_genre": return !t.genre || t.genre.length === 0;
+        case "has_genre": return Array.isArray(t.genre) && t.genre.length > 0;
         default: return true;
       }
+    }).filter((track) => {
+      if (!activeGenreFilter) return true;
+      return Array.isArray(track.genre) && track.genre.includes(activeGenreFilter);
     });
 
     return result.sort((a, b) => {
@@ -198,6 +213,48 @@ export default function AdminTracksPage() {
     }
   };
 
+  const applyBulkGenre = async (mode: BulkGenreMode, selectedGenres = bulkGenres) => {
+    const normalized = normalizeGenreList(selectedGenres);
+    if (mode !== "replace" && normalized.length === 0) {
+      toast.error("Select at least one genre");
+      return;
+    }
+
+    const selectedSet = new Set(selectedIds);
+    const oldTracks = [...tracks];
+    const nextTracks = tracks.map((track) => {
+      if (!selectedSet.has(track.id)) return track;
+      const currentGenres = normalizeGenreList(Array.isArray(track.genre) ? track.genre : []);
+      let nextGenre: string[];
+      if (mode === "replace") nextGenre = normalized;
+      else if (mode === "add") nextGenre = normalizeGenreList([...currentGenres, ...normalized]);
+      else nextGenre = currentGenres.filter((genre) => !normalized.includes(genre));
+      return { ...track, genre: nextGenre };
+    });
+
+    setTracks(nextTracks);
+
+    const updates = nextTracks
+      .filter((track) => selectedSet.has(track.id))
+      .map((track) => supabase.from("tracks").update({ genre: track.genre || [] }).eq("id", track.id));
+    const results = await Promise.all(updates);
+    const failed = results.some((result) => result.error);
+
+    if (failed) {
+      setTracks(oldTracks);
+      toast.error("Genre update failed");
+      return;
+    }
+
+    toast.success(`Updated genres for ${selectedIds.length} tracks`);
+    setBulkGenres([]);
+    resetBulkState();
+  };
+
+  const clearBulkGenres = async () => {
+    await applyBulkGenre("replace", []);
+  };
+
   const handleBulkDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
@@ -217,8 +274,11 @@ export default function AdminTracksPage() {
   const resetBulkState = () => {
     setSelectedIds([]);
     setBulkActionType(null);
+    setBulkGenres([]);
     fetchInitialData();
   };
+
+  const activeGenreNames = new Set(genreOptions.filter((genre) => genre.is_active).map((genre) => genre.name));
 
   const getHealthStatus = (track: any) => {
     const missing = [];
@@ -262,9 +322,9 @@ export default function AdminTracksPage() {
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setIsFilterMenuOpen(false)} />
                 <div className="absolute right-0 top-full mt-2 w-48 bg-[#121212] border border-white/10 rounded-2xl shadow-2xl z-20 overflow-hidden animate-in fade-in zoom-in-95">
-                   {['all', 'no_artist', 'no_album', 'no_cover', 'no_genre'].map((f: any) => (
+                   {FILTER_OPTIONS.map((f) => (
                      <button key={f} onClick={() => { setActiveFilter(f); setIsFilterMenuOpen(false); }} className={cn("w-full text-left px-4 py-3 text-xs font-bold hover:bg-white/5 transition-colors flex items-center justify-between", activeFilter === f ? "text-brand" : "text-zinc-400")}>
-                       {f.replace('no_', 'Missing ').replace('all', 'Show All')}
+                       {f.replace('no_', 'Missing ').replace('has_genre', 'Has Genre').replace('all', 'Show All')}
                        {activeFilter === f && <Check size={14} />}
                      </button>
                    ))}
@@ -272,6 +332,19 @@ export default function AdminTracksPage() {
               </>
             )}
           </div>
+
+          <select
+            value={activeGenreFilter}
+            onChange={(event) => setActiveGenreFilter(event.target.value)}
+            className="hidden h-[54px] rounded-full border border-white/[0.05] bg-panel px-4 text-sm font-bold text-zinc-400 outline-none transition focus:border-brand/30 md:block"
+          >
+            <option value="">All Genres</option>
+            {genreOptions.map((genre) => (
+              <option key={genre.slug} value={genre.name}>
+                {genre.name}
+              </option>
+            ))}
+          </select>
 
           <div className="relative group flex-1 md:flex-none">
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-brand transition-colors" size={20} />
@@ -387,6 +460,19 @@ export default function AdminTracksPage() {
                 <div className="col-span-3 hidden md:block">
                   <p className={cn("text-xs font-bold", track.artists ? "text-zinc-300" : "text-red-500 italic")}>{track.artists?.name || "Unassigned Artist"}</p>
                   <p className={cn("text-[10px] font-medium mt-1", track.albums ? "text-zinc-500" : "text-red-900 italic")}>{track.albums?.title || "No Album"}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {normalizeGenreList(Array.isArray(track.genre) ? track.genre : []).slice(0, 3).map((genre) => (
+                      <span
+                        key={genre}
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
+                          activeGenreNames.has(genre) ? "bg-white/5 text-zinc-500" : "bg-yellow-500/10 text-yellow-300"
+                        )}
+                      >
+                        {genre}
+                      </span>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="col-span-2 hidden md:block">
@@ -422,6 +508,39 @@ export default function AdminTracksPage() {
               <div className="relative">
                 <button onClick={() => setBulkActionType(bulkActionType === 'playlist' ? null : 'playlist')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 rounded-full transition-colors font-bold text-xs uppercase"><ListPlus size={16} /> Playlist</button>
                 {bulkActionType === 'playlist' && <div className="absolute bottom-full mb-4 left-0 w-64 bg-[#121212] text-white rounded-2xl shadow-2xl p-2 border border-white/10 max-h-60 overflow-y-auto custom-scrollbar">{playlists.map(p => <button key={p.id} onClick={() => applyBulkPlaylist(p.id)} className="w-full text-left px-4 py-3 hover:bg-white/5 rounded-xl text-xs font-bold transition-colors">{p.title}</button>)}</div>}
+              </div>
+              <div className="relative">
+                <button onClick={() => setBulkActionType(bulkActionType === 'genre' ? null : 'genre')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 rounded-full transition-colors font-bold text-xs uppercase"><Tags size={16} /> Genre</button>
+                {bulkActionType === 'genre' && (
+                  <div className="absolute bottom-full mb-4 left-0 w-[360px] bg-[#121212] text-white rounded-2xl shadow-2xl p-4 border border-white/10 max-h-[520px] overflow-y-auto custom-scrollbar">
+                    <div className="mb-4 grid grid-cols-3 gap-2">
+                      {(["add", "replace", "remove"] as BulkGenreMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setBulkGenreMode(mode)}
+                          className={cn("rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-widest", bulkGenreMode === mode ? "bg-brand text-white" : "bg-white/5 text-zinc-400")}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                    <GenrePicker
+                      genres={genreOptions}
+                      selected={bulkGenres}
+                      onChange={setBulkGenres}
+                      compact
+                      label="Bulk Genres"
+                    />
+                    <div className="mt-4 flex gap-2">
+                      <button onClick={() => applyBulkGenre(bulkGenreMode)} className="flex-1 rounded-full bg-brand px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                        Apply
+                      </button>
+                      <button onClick={clearBulkGenres} className="rounded-full border border-red-500/20 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-400">
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="h-6 w-[1px] bg-black/10 mx-2" />
               <button onClick={() => setIsDeleteModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 hover:bg-red-50 text-red-600 rounded-full transition-colors font-bold text-xs uppercase"><Trash2 size={16} /> Delete</button>
