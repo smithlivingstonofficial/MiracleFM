@@ -2,11 +2,15 @@ import { DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from 
 import { r2 } from "@/lib/r2";
 import { getMediaKeyFromUrl } from "@/lib/media";
 
+type DeleteOptions = {
+  throwOnError?: boolean;
+};
+
 export function getKeyFromUrl(url: string | null) {
   return getMediaKeyFromUrl(url);
 }
 
-export async function deleteR2File(url: string | null) {
+export async function deleteR2File(url: string | null, options: DeleteOptions = {}) {
   const key = getKeyFromUrl(url);
   if (!key) return;
 
@@ -18,24 +22,41 @@ export async function deleteR2File(url: string | null) {
     console.log(`[R2] Deleted file: ${key}`);
   } catch (err) {
     console.error(`[R2] Delete failed for ${key}:`, err);
+    if (options.throwOnError) throw err;
   }
 }
 
-export async function deleteR2Folder(prefix: string) {
+export async function deleteR2Folder(prefix: string, options: DeleteOptions = {}) {
   try {
-    // List all files in the folder (HLS segments)
-    const listParams = { Bucket: process.env.R2_BUCKET_NAME, Prefix: prefix };
-    const listedObjects = await r2.send(new ListObjectsV2Command(listParams));
+    let continuationToken: string | undefined;
+    let deletedCount = 0;
 
-    if (listedObjects.Contents && listedObjects.Contents.length > 0) {
-      const deleteParams = {
-        Bucket: process.env.R2_BUCKET_NAME,
-        Delete: { Objects: listedObjects.Contents.map((obj) => ({ Key: obj.Key })) }
-      };
-      await r2.send(new DeleteObjectsCommand(deleteParams));
-      console.log(`[R2] Deleted folder: ${prefix}`);
-    }
+    do {
+      const listedObjects = await r2.send(
+        new ListObjectsV2Command({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        })
+      );
+
+      const objects = listedObjects.Contents?.filter((obj) => obj.Key).map((obj) => ({ Key: obj.Key })) || [];
+      if (objects.length > 0) {
+        await r2.send(
+          new DeleteObjectsCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Delete: { Objects: objects },
+          })
+        );
+        deletedCount += objects.length;
+      }
+
+      continuationToken = listedObjects.IsTruncated ? listedObjects.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    if (deletedCount > 0) console.log(`[R2] Deleted folder: ${prefix} (${deletedCount} objects)`);
   } catch (err) {
     console.error(`[R2] Folder delete failed for ${prefix}:`, err);
+    if (options.throwOnError) throw err;
   }
 }

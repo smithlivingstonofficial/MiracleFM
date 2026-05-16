@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { deleteR2File, deleteR2Folder } from "@/lib/r2-helpers";
+import { deleteR2File } from "@/lib/r2-helpers";
+import { deleteTrackMedia } from "@/lib/track-media-cleanup";
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,23 +18,13 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       // --- CASCADE MODE: Deep Clean ---
       
       // A. Find all tracks associated with this artist
-      const { data: tracks } = await supabase.from("tracks").select("id, cover_url").eq("artist_id", id);
+      const { data: tracks } = await supabase.from("tracks").select("id").eq("artist_id", id);
 
       if (tracks && tracks.length > 0) {
         for (const track of tracks) {
-          // B. Delete HLS Audio Folder
-          await deleteR2Folder(`tracks/${track.id}/`);
-          
-          // C. Delete Track Cover (Smart check: only if specific to track)
-          if (track.cover_url) {
-             // Optional: Check usage count if using shared library, but for cascade we usually wipe.
-             // For strict safety, we just unlink DB, but user requested deletion.
-             // We will attempt delete.
-             await deleteR2File(track.cover_url);
-          }
+          await deleteTrackMedia(supabase, track.id, { strict: true });
         }
         
-        // D. Delete Track Records
         const trackIds = tracks.map(t => t.id);
         await supabase.from("tracks").delete().in("id", trackIds);
       }

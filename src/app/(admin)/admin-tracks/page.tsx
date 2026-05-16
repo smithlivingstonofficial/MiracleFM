@@ -259,12 +259,17 @@ export default function AdminTracksPage() {
     setIsDeleting(true);
     try {
       for (const id of selectedIds) {
-        await fetch(`/api/tracks/${id}`, { method: 'DELETE' });
+        const response = await fetch(`/api/tracks/${id}`, { method: 'DELETE' });
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result.error || `Could not delete track ${id}`);
+        }
       }
       toast.success(`Deleted ${selectedIds.length} tracks`);
       resetBulkState();
     } catch (e) {
-      toast.error("Batch deletion failed");
+      const message = e instanceof Error ? e.message : "Batch deletion failed";
+      toast.error(message);
     } finally {
       setIsDeleting(false);
       setIsDeleteModalOpen(false);
