@@ -2,9 +2,8 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAnonClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 
-import HeroSection from "@/components/user/HeroSection";
-import DailyMixSection from "@/components/user/home/DailyMixSection";
-import EditorialSection from "@/components/user/home/EditorialSection";
+import HomeHeroMosaic from "@/components/user/home/HomeHeroMosaic";
+import FeaturedCollectionShelf from "@/components/user/home/FeaturedCollectionShelf";
 import NewReleasesSection from "@/components/user/home/NewReleasesSection";
 import PopularArtistsSection from "@/components/user/home/PopularArtistsSection";
 import ContinueListeningSection from "@/components/user/home/ContinueListeningSection";
@@ -15,6 +14,16 @@ import HomeFooter from "@/components/user/home/HomeFooter";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { getRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
 import type { Track } from "@/types/music";
+
+type TrackMap = Record<string, Track[]>;
+type PlaylistTrackRow = {
+  playlist_id: string;
+  tracks: Track | Track[] | null;
+};
+type TrackWithRelations = Track & {
+  artist_id?: string | null;
+  album_id?: string | null;
+};
 
 // We force the page to be dynamic so user auth works, 
 // but we cache the heavy database queries below.
@@ -34,7 +43,7 @@ const getCachedPublicData = unstable_cache(
       supabaseAnon.from("banners").select("*").eq("is_active", true).order("created_at", { ascending: false }),
       supabaseAnon.from("playlists").select("*").is("user_id", null).limit(6),
       supabaseAnon.from("artists").select("*").limit(12),
-      supabaseAnon.from("albums").select("*, artists(name)").order("created_at", { ascending: false }).limit(10),
+      supabaseAnon.from("albums").select("*, artists(id, name, image_url)").order("created_at", { ascending: false }).limit(10),
       supabaseAnon
         .from("tracks")
         .select("*, artists(name, image_url), albums(title, cover_url)")
@@ -70,6 +79,54 @@ const getCachedPublicData = unstable_cache(
       }
     }
 
+    const playlistIds = (playlistsRes.data || []).map((playlist) => playlist.id).filter(Boolean);
+    const albumIds = (albumsRes.data || []).map((album) => album.id).filter(Boolean);
+
+    const [playlistTracksRes, albumTracksRes] = await Promise.all([
+      playlistIds.length > 0
+        ? supabaseAnon
+            .from("playlist_tracks")
+            .select("playlist_id, tracks(*, artists(name, image_url), albums(title, cover_url))")
+            .in("playlist_id", playlistIds)
+            .order("added_at", { ascending: true })
+        : Promise.resolve({ data: [] }),
+      albumIds.length > 0
+        ? supabaseAnon
+            .from("tracks")
+            .select("*, artists(name, image_url), albums(title, cover_url)")
+            .eq("audio_status", "ready")
+            .in("album_id", albumIds)
+            .order("created_at", { ascending: true })
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const playlistTracks = ((playlistTracksRes.data || []) as PlaylistTrackRow[]).reduce<TrackMap>((acc, row) => {
+      const track = Array.isArray(row.tracks) ? row.tracks[0] : row.tracks;
+      if (!track || track.audio_status !== "ready") return acc;
+      acc[row.playlist_id] = [...(acc[row.playlist_id] || []), track];
+      return acc;
+    }, {});
+
+    const albumTracks = ((albumTracksRes.data || []) as TrackWithRelations[]).reduce<TrackMap>((acc, track) => {
+      const albumId = track.album_id;
+      if (!albumId || track.audio_status !== "ready") return acc;
+      acc[albumId] = [...(acc[albumId] || []), track];
+      return acc;
+    }, {});
+
+    const artistTracks = [
+      ...((trendingTracks || []) as TrackWithRelations[]),
+      ...((popularTracksRes.data || []) as TrackWithRelations[]),
+      ...((newTracksRes.data || []) as TrackWithRelations[]),
+      ...(Object.values(albumTracks).flat() as TrackWithRelations[]),
+    ].reduce<TrackMap>((acc, track) => {
+      const artistId = track.artist_id || track.artists?.id;
+      if (!artistId || track.audio_status !== "ready") return acc;
+      if (acc[artistId]?.some((existing) => existing.id === track.id)) return acc;
+      acc[artistId] = [...(acc[artistId] || []), track];
+      return acc;
+    }, {});
+
     return {
       banners: bannersRes.data || [],
       playlists: playlistsRes.data ||[],
@@ -78,6 +135,9 @@ const getCachedPublicData = unstable_cache(
       newTracks: newTracksRes.data || [],
       popularTracks: popularTracksRes.data || [],
       trendingTracks,
+      playlistTracks,
+      albumTracks,
+      artistTracks,
     };
   },
   ['home-page-public-data'], // Cache Key
@@ -90,7 +150,7 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   // 2. Get Cached Public Data (Instant load, 0 DB cost)
-  const { banners, playlists, artists, albums, newTracks, popularTracks, trendingTracks } = await getCachedPublicData();
+  const { banners, playlists, artists, albums, newTracks, popularTracks, trendingTracks, playlistTracks, albumTracks, artistTracks } = await getCachedPublicData();
   const recommendationSections = await getRecommendationSections(supabase, user);
 
   // 3. Daily Mix Logic (Dynamic per request, only if logged in)
@@ -156,6 +216,49 @@ export default async function HomePage() {
   recommendedTracks = dailyMix.length > 0 ? dailyMix : relatedTracks.length > 0 ? relatedTracks : trendingTracks.length > 0 ? trendingTracks : popularTracks;
   const recommendationPlaylists = await getRecommendationPlaylists(supabase, recommendationSections, user, 12);
 
+  const userSignalTracks = user ? [...dailyMix, ...recentTracks, ...relatedTracks] : [];
+  const fallbackSignalTracks = [...trendingTracks, ...popularTracks, ...newTracks];
+  const signalTracks = userSignalTracks.length > 0 ? userSignalTracks : fallbackSignalTracks;
+  const signalArtistIds = new Set(
+    signalTracks
+      .map((track) => (track as TrackWithRelations).artist_id || track.artists?.id)
+      .filter((value): value is string => Boolean(value))
+  );
+  const signalGenres = new Set(
+    signalTracks.flatMap((track) => track.genre || []).map((genre) => genre.toLowerCase())
+  );
+  const trendingTrackIds = new Set(trendingTracks.map((track) => track.id));
+  const popularTrackIds = new Set(popularTracks.map((track) => track.id));
+
+  const rankedAlbums = [...albums].sort((a, b) => {
+    const scoreAlbum = (album: (typeof albums)[number]) => {
+      const tracks = album.id ? albumTracks[album.id] || [] : [];
+      const artistId = album.artists?.id;
+      const interestScore = tracks.some((track) => signalArtistIds.has((track as TrackWithRelations).artist_id || track.artists?.id || "")) || (artistId && signalArtistIds.has(artistId)) ? 80 : 0;
+      const genreScore = tracks.some((track) => (track.genre || []).some((genre) => signalGenres.has(genre.toLowerCase()))) ? 45 : 0;
+      const trendingScore = tracks.filter((track) => trendingTrackIds.has(track.id)).length * 20;
+      const popularScore = tracks.filter((track) => popularTrackIds.has(track.id)).length * 12;
+      const playableScore = Math.min(tracks.length, 8) * 3;
+      const recencyScore = album.created_at ? Math.max(0, 20 - Math.floor((Date.now() - new Date(album.created_at).getTime()) / 86_400_000)) : 0;
+      return interestScore + genreScore + trendingScore + popularScore + playableScore + recencyScore;
+    };
+    return scoreAlbum(b) - scoreAlbum(a);
+  });
+
+  const rankedArtists = [...artists].sort((a, b) => {
+    const scoreArtist = (artist: (typeof artists)[number]) => {
+      const artistId = artist.id || "";
+      const tracks = artistTracks[artistId] || [];
+      const interestScore = signalArtistIds.has(artistId) ? 100 : 0;
+      const genreScore = tracks.some((track) => (track.genre || []).some((genre) => signalGenres.has(genre.toLowerCase()))) ? 40 : 0;
+      const trendingScore = tracks.filter((track) => trendingTrackIds.has(track.id)).length * 24;
+      const popularScore = tracks.filter((track) => popularTrackIds.has(track.id)).length * 14;
+      const playableScore = Math.min(tracks.length, 8) * 4;
+      return interestScore + genreScore + trendingScore + popularScore + playableScore;
+    };
+    return scoreArtist(b) - scoreArtist(a);
+  });
+
   // Note: "Greeting" logic is handled internally by <HomeHeader /> for animation
 
   return (
@@ -165,24 +268,32 @@ export default async function HomePage() {
       <div className="absolute top-0 inset-x-0 h-[500px] md:h-[600px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
       <div className="absolute top-[-100px] right-[-50px] md:top-[-200px] md:right-[-100px] w-[300px] h-[300px] md:w-[500px] md:h-[500px] bg-[#FF0055]/10 md:bg-[#FF0055]/5 rounded-full blur-[100px] md:blur-[120px] pointer-events-none -z-10" />
 
-      {/* 2. Hero & Mix Grid */}
-      <div className="px-4 md:px-8 mt-4 md:mt-6 mb-10 md:mb-14 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-          
-          {/* Hero Slider */}
-          <div className="lg:col-span-2 w-full active:scale-[0.98] transition-transform duration-300 md:active:scale-100">
-             <HeroSection banners={banners} />
-          </div>
-
-          {/* Daily Mix Card */}
-          <DailyMixSection user={user} dailyMix={dailyMix} />
-        </div>
+      {/* 2. Hero & Always-Filled Feature Rail */}
+      <div className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-700 md:mt-6">
+        <HomeHeroMosaic
+          banners={banners}
+          dailyMix={dailyMix}
+          recommendationPlaylists={recommendationPlaylists}
+          playlists={playlists}
+          albums={albums}
+          trendingTracks={trendingTracks}
+          popularTracks={popularTracks}
+          playlistTracks={playlistTracks}
+          albumTracks={albumTracks}
+          isSignedIn={Boolean(user)}
+        />
       </div>
 
       {/* 3. Sections Stack */}
-      <div className="space-y-12 md:space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200 fill-mode-forwards">
+      <div className="mt-10 space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200 fill-mode-forwards md:mt-12 md:space-y-12">
         
-        <EditorialSection playlists={playlists} />
+        <FeaturedCollectionShelf
+          playlists={playlists}
+          albums={albums}
+          recommendationPlaylists={recommendationPlaylists}
+          playlistTracks={playlistTracks}
+          albumTracks={albumTracks}
+        />
 
         <RecommendationMixSection playlists={recommendationPlaylists} />
 
@@ -220,11 +331,11 @@ export default async function HomePage() {
           />
         )}
         
-        <NewReleasesSection albums={albums} />
+        <NewReleasesSection albums={rankedAlbums} albumTracks={albumTracks} personalized={Boolean(user && userSignalTracks.length > 0)} />
 
         <ResponsiveAd variant="feed" />
           
-        <PopularArtistsSection artists={artists} />
+        <PopularArtistsSection artists={rankedArtists} artistTracks={artistTracks} personalized={Boolean(user && userSignalTracks.length > 0)} />
 
       </div>
 

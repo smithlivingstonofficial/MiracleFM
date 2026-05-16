@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
-import TrackRow from "@/components/user/TrackRow";
+import HomeTrackCard from "@/components/user/home/HomeTrackCard";
 import type { Track } from "@/types/music";
 
 type HomeTrackSectionProps = {
@@ -11,7 +11,7 @@ type HomeTrackSectionProps = {
   context: string;
 };
 
-export default function HomeTrackSection({ title, description, tracks, viewAllHref, context }: HomeTrackSectionProps) {
+export default function HomeTrackSection({ title, description, tracks, viewAllHref }: HomeTrackSectionProps) {
   if (tracks.length === 0) return null;
 
   return (
@@ -31,11 +31,9 @@ export default function HomeTrackSection({ title, description, tracks, viewAllHr
         )}
       </div>
 
-      <div className="grid gap-2 md:gap-3 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-2 md:gap-3 lg:grid-cols-2">
         {tracks.slice(0, 8).map((track, index) => (
-          <div key={track.id} className="rounded-2xl border border-white/[0.03] bg-[#0A0A0A]/80 shadow-[0_10px_30px_rgba(0,0,0,0.18)] md:bg-[#0A0A0A]/45">
-            <TrackRow track={track} index={index} context={context} allTracks={tracks} />
-          </div>
+          <HomeTrackCard key={track.id} track={track} index={index} tracks={tracks} />
         ))}
       </div>
     </section>

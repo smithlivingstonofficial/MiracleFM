@@ -11,9 +11,10 @@ interface MixCardProps {
   tracks: Track[];
   title: string;
   description: string;
+  badgeText?: string;
 }
 
-export default function MixCard({ tracks, title, description }: MixCardProps) {
+export default function MixCard({ tracks, title, description, badgeText = "Daily" }: MixCardProps) {
   // 1. EXTRACT UNIQUE IMAGES
   // We use a Set to ensure we don't have duplicates
   const uniqueImages = Array.from(new Set(
@@ -88,7 +89,7 @@ export default function MixCard({ tracks, title, description }: MixCardProps) {
          {/* Left: Text Info */}
          <div className="space-y-2 pr-2">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FF0055]/10 border border-[#FF0055]/20 text-[#FF0055] text-[9px] font-black uppercase tracking-[0.2em]">
-                <Sparkles size={10} className="animate-pulse" /> Daily
+                <Sparkles size={10} className="animate-pulse" /> {badgeText}
             </div>
             <div>
                 <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter leading-none">{title}</h2>
