@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { toast } from "sonner";
 import { usePlayerStore } from "@/store/usePlayerStore";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import type { Track } from "@/types/music";
 
 import PlayerTrackInfo from "./PlayerTrackInfo";
 import PlayerControls from "./PlayerControls";
@@ -49,6 +51,8 @@ type HlsProbe = {
 const SEEK_OFFSET = 10;
 const PREFETCH_THRESHOLD = 0.65;
 const BACKGROUND_KEEPALIVE_MS = 25_000;
+const AUTO_FILL_MIN_QUEUE = 6;
+const AUTO_FILL_FETCH_LIMIT = 40;
 const HLS_TYPES = ["application/vnd.apple.mpegurl", "application/x-mpegurl", "audio/mpegurl", "audio/x-mpegurl"];
 const MEDIA_TYPES = ["audio/mp4", "audio/mpeg", "video/mp4", "video/iso.segment", "application/octet-stream"];
 
@@ -101,6 +105,15 @@ const canPrefetch = () => {
   if (connection?.effectiveType && /(^|-)2g$/.test(connection.effectiveType)) return false;
   return true;
 };
+
+const isExpectedPlayInterruption = (error: Error) =>
+  error.name === "AbortError" ||
+  /play\(\) request was interrupted|interrupted by a new load request|interrupted by a call to pause/i.test(
+    error.message
+  );
+
+const shuffled = <T,>(items: T[]) =>
+  [...items].sort(() => Math.random() - 0.5);
 
 const resolveMediaUrl = (line: string, baseUrl: string) => new URL(line.trim(), baseUrl).toString();
 
@@ -210,6 +223,7 @@ export default function AudioPlayer() {
   const setCurrentTime = usePlayerStore((state) => state.setCurrentTime);
   const setDuration = usePlayerStore((state) => state.setDuration);
   const setIsPlaying = usePlayerStore((state) => state.setIsPlaying);
+  const appendToQueue = usePlayerStore((state) => state.appendToQueue);
   const seekTarget = usePlayerStore((state) => state.seekTarget);
   const seekRequestId = usePlayerStore((state) => state.seekRequestId);
 
@@ -229,11 +243,13 @@ export default function AudioPlayer() {
   const qualifiedListenRef = useRef(false);
   const completedRef = useRef(false);
   const stallStartedAtRef = useRef<number | null>(null);
+  const autoFillInFlightRef = useRef(false);
 
   const playNextRef = useRef(playNext);
   const playPreviousRef = useRef(playPrevious);
   const setIsPlayingRef = useRef(setIsPlaying);
   const setCurrentTimeRef = useRef(setCurrentTime);
+  const appendToQueueRef = useRef(appendToQueue);
 
   useEffect(() => {
     playNextRef.current = playNext;
@@ -250,6 +266,10 @@ export default function AudioPlayer() {
   useEffect(() => {
     setCurrentTimeRef.current = setCurrentTime;
   }, [setCurrentTime]);
+
+  useEffect(() => {
+    appendToQueueRef.current = appendToQueue;
+  }, [appendToQueue]);
 
   useEffect(() => {
     userWantsPlayRef.current = isPlaying;
@@ -324,12 +344,13 @@ export default function AudioPlayer() {
     hlsRef.current = null;
   }, []);
 
-  const playIfWanted = useCallback(async () => {
+  const playIfWanted = useCallback(async (expectedToken = loadTokenRef.current) => {
     const audio = audioRef.current;
     if (!audio || !userWantsPlayRef.current) return false;
 
     try {
       await audio.play();
+      if (loadTokenRef.current !== expectedToken) return false;
       setLoadStatus("playing");
       await acquireWakeLock();
       if ("mediaSession" in navigator) {
@@ -339,6 +360,15 @@ export default function AudioPlayer() {
       return true;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
+
+      if (
+        loadTokenRef.current !== expectedToken ||
+        !userWantsPlayRef.current ||
+        isExpectedPlayInterruption(err)
+      ) {
+        return false;
+      }
+
       sendPlayEvent("error", {
         error_code: err.name || "play-failed",
         metadata: { message: err.message, sourceKind: sourceKindRef.current },
@@ -357,6 +387,53 @@ export default function AudioPlayer() {
       return false;
     }
   }, [acquireWakeLock, sendPlayEvent, setIsPlaying, syncPositionState]);
+
+  const autoFillQueueIfNeeded = useCallback(async () => {
+    if (autoFillInFlightRef.current) return false;
+
+    const store = usePlayerStore.getState();
+    const { queue, currentIndex } = store;
+    const remainingTracks = queue.length - currentIndex - 1;
+    const needsMoreTracks =
+      queue.length <= 1 || remainingTracks <= 0 || (store.isPlaying && queue.length < AUTO_FILL_MIN_QUEUE);
+
+    if (!needsMoreTracks) return false;
+
+    autoFillInFlightRef.current = true;
+    try {
+      const existingIds = new Set(queue.map((track) => track.id));
+      const { data, error } = await createClient()
+        .from("tracks")
+        .select("*, artists(name, image_url), albums(title, cover_url)")
+        .eq("audio_status", "ready")
+        .order("created_at", { ascending: false })
+        .limit(AUTO_FILL_FETCH_LIMIT);
+
+      if (error || !data?.length) return false;
+
+      const nextTracks = shuffled((data as Track[]).filter((track) => !existingIds.has(track.id))).slice(
+        0,
+        AUTO_FILL_MIN_QUEUE
+      );
+      if (!nextTracks.length) return false;
+
+      appendToQueueRef.current(nextTracks);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      autoFillInFlightRef.current = false;
+    }
+  }, []);
+
+  const continueToNextTrack = useCallback(async () => {
+    userWantsPlayRef.current = true;
+    setIsPlayingRef.current(true);
+    if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+
+    await autoFillQueueIfNeeded();
+    playNextRef.current();
+  }, [autoFillQueueIfNeeded]);
 
   const loadFallback = useCallback(
     async (track: NonNullable<CurrentTrack>, token: number, reason: string) => {
@@ -464,8 +541,9 @@ export default function AudioPlayer() {
 
         hlsPlayer.on(Hls.Events.FRAG_BUFFERED, (_, data) => {
           if (data.frag.type !== "main") return;
+          if (loadTokenRef.current !== token) return;
           setLoadStatus("ready");
-          playIfWanted();
+          playIfWanted(token);
         });
 
         let mediaRecoveryAttempts = 0;
@@ -576,12 +654,12 @@ export default function AudioPlayer() {
       setIsPlayingRef.current(true);
       navigator.mediaSession.playbackState = "playing";
 
-      if (action === "next") playNextRef.current();
-      else playPreviousRef.current();
+      if (action === "next") {
+        continueToNextTrack();
+        return;
+      }
 
-      window.setTimeout(() => {
-        if (userWantsPlayRef.current) playIfWanted();
-      }, 0);
+      playPreviousRef.current();
     };
 
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
@@ -608,7 +686,7 @@ export default function AudioPlayer() {
         navigator.mediaSession.setActionHandler(action, handler);
       } catch {}
     });
-  }, [playIfWanted, syncPositionState]);
+  }, [continueToNextTrack, syncPositionState]);
 
   useEffect(() => {
     if (!currentTrack || !("mediaSession" in navigator)) return;
@@ -804,13 +882,7 @@ export default function AudioPlayer() {
             completedRef.current = true;
             sendPlayEvent("complete", { metadata: { sourceKind: sourceKindRef.current } });
           }
-          if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
-          userWantsPlayRef.current = true;
-          setIsPlaying(true);
-          playNextRef.current();
-          window.setTimeout(() => {
-            if (userWantsPlayRef.current) playIfWanted();
-          }, 0);
+          continueToNextTrack();
         }}
         onError={async () => {
           const track = currentTrack;

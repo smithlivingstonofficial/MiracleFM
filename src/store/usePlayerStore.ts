@@ -27,6 +27,7 @@ interface PlayerState {
   // Actions
   setTrack: (track: Track) => void;
   setQueue: (tracks: Track[], startIndex?: number) => void;
+  appendToQueue: (tracks: Track[]) => void;
   setIsPlaying: (playing: boolean) => void;
   playNext: () => void;
   playPrevious: () => void;
@@ -95,6 +96,19 @@ export const usePlayerStore = create<PlayerState>()(
           currentTrack: playableTracks[safeIndex],
           currentIndex: safeIndex,
           isPlaying: true
+        });
+      },
+
+      appendToQueue: (tracks) => {
+        const playableTracks = tracks.filter(isPlayableTrack);
+        if (!playableTracks.length) return;
+
+        set((state) => {
+          const existingIds = new Set(state.queue.map((track) => track.id));
+          const newTracks = playableTracks.filter((track) => !existingIds.has(track.id));
+          if (!newTracks.length) return {};
+
+          return { queue: [...state.queue, ...newTracks] };
         });
       },
 
