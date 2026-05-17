@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock3, History } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import TrackRow from "@/components/user/TrackRow";
 import { TrackListSkeleton } from "@/components/user/Skeletons";
 import type { Track } from "@/types/music";
@@ -79,11 +80,14 @@ export default function HistoryPage() {
         {loading ? (
           <TrackListSkeleton rows={8} />
         ) : tracks.length > 0 ? (
-          <div className="rounded-[2rem] border border-white/5 bg-white/[0.02] p-2">
-            {tracks.map((track, index) => (
-              <TrackRow key={track.id} track={track} index={index} context="History" allTracks={tracks} />
-            ))}
-          </div>
+          <>
+            <div className="rounded-[2rem] border border-white/5 bg-white/[0.02] p-2">
+              {tracks.map((track, index) => (
+                <TrackRow key={track.id} track={track} index={index} context="History" allTracks={tracks} />
+              ))}
+            </div>
+            {tracks.length >= 8 && <ResponsiveAd variant="banner" className="px-0" />}
+          </>
         ) : (
           <div className="rounded-[2rem] border border-dashed border-white/10 bg-white/[0.03] px-6 py-16 text-center">
             <Clock3 size={40} className="mx-auto mb-4 text-zinc-700" />

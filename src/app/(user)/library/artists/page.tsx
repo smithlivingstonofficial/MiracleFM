@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mic2, UserCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { CardGridSkeleton } from "@/components/user/Skeletons";
 import type { Artist } from "@/types/music";
 
@@ -68,8 +69,11 @@ export default function FollowedArtistsPage() {
           <CardGridSkeleton cards={8} />
         ) : artists.length > 0 ? (
           <div className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-4 lg:grid-cols-6">
-            {artists.map((artist) => (
-              <Link key={artist.id} href={`/artist/${artist.id}`} className="group flex flex-col items-center text-center active:scale-95">
+            {artists.map((artist, index) => (
+              <Fragment key={artist.id}>
+                {artists.length >= 14 && index === 12 && <ResponsiveAd variant="grid" />}
+
+              <Link href={`/artist/${artist.id}`} className="group flex flex-col items-center text-center active:scale-95">
                 <div className="relative h-32 w-32 overflow-hidden rounded-full border-4 border-[#FF0055] bg-zinc-900 shadow-[0_0_25px_rgba(255,0,85,0.25)] md:h-40 md:w-40">
                   {artist.image_url ? (
                     <Image src={artist.image_url} alt={artist.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
@@ -82,6 +86,7 @@ export default function FollowedArtistsPage() {
                 <h2 className="mt-3 w-full truncate text-sm font-black text-white md:text-base">{artist.name}</h2>
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Artist</p>
               </Link>
+              </Fragment>
             ))}
           </div>
         ) : (

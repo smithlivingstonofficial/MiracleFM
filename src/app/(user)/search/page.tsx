@@ -111,6 +111,7 @@ export default function SearchPage() {
   }, [query, supabase]);
 
   const resultCount = results.tracks.length + results.artists.length + results.albums.length + results.playlists.length;
+  const showSearchAd = query.trim().length > 1 && !loading && !errorMessage && resultCount > 0;
   const showSongs = activeTab === "all" || activeTab === "songs";
   const showArtists = activeTab === "all" || activeTab === "artists";
   const showAlbums = activeTab === "all" || activeTab === "albums";
@@ -290,7 +291,7 @@ export default function SearchPage() {
               </div>
             )}
 
-            {resultCount > 0 && (
+            {showSearchAd && (
               <ResponsiveAd variant="banner" className="px-0" />
             )}
 

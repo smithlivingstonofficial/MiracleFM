@@ -2,19 +2,19 @@ import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import Link from "next/link";
 import { Mic2, Sparkles, Search } from "lucide-react";
+import { Fragment } from "react";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 
 export const revalidate = 60;
 
 export default async function AllArtistsPage() {
   const supabase = await createClient();
 
-  // 1. Fetch User & Artists in Parallel
-  const [userRes, artistsRes] = await Promise.all([
-    supabase.auth.getUser(),
+  // 1. Fetch Artists
+  const [artistsRes] = await Promise.all([
     supabase.from("artists").select("*").order("name", { ascending: true })
   ]);
 
-  const user = userRes.data.user;
   const artists = artistsRes.data || [];
 
   return (
@@ -52,8 +52,10 @@ export default async function AllArtistsPage() {
         {/* 3. Artists Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-10 md:gap-x-8 md:gap-y-16">
           {artists.map((artist, i) => (
+            <Fragment key={artist.id}>
+              {artists.length >= 14 && i === 12 && <ResponsiveAd variant="grid" />}
+
             <Link 
-              key={artist.id} 
               href={`/artist/${artist.id}`} 
               className="flex flex-col items-center group active:scale-95 transition-transform duration-300 animate-in fade-in slide-in-from-bottom-8 fill-mode-backwards"
               style={{ animationDelay: `${i * 50}ms`, animationDuration: '700ms' }} // Staggered animation
@@ -97,6 +99,7 @@ export default async function AllArtistsPage() {
                 </div>
               </div>
             </Link>
+            </Fragment>
           ))}
         </div>
       </div>

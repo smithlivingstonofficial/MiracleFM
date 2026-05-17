@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import Link from "next/link";
 import { Disc, Search, Sparkles, Play } from "lucide-react";
-import SquareGridAd from "@/components/ads/SquareGridAd"; // Import the Ad Component
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import React from "react"; // Required for React.Fragment
 
 export const revalidate = 60;
@@ -10,15 +10,13 @@ export const revalidate = 60;
 export default async function AllAlbumsPage() {
   const supabase = await createClient();
 
-  const [userRes, albumsRes] = await Promise.all([
-    supabase.auth.getUser(),
+  const [albumsRes] = await Promise.all([
     supabase
       .from("albums")
       .select("*, artists(name)")
       .order("created_at", { ascending: false })
   ]);
 
-  const user = userRes.data.user;
   const albums = albumsRes.data ||[];
 
   return (
@@ -57,9 +55,9 @@ export default async function AllAlbumsPage() {
           {albums.map((album, i) => (
             <React.Fragment key={album.id}>
               
-              {/* Inject Ad after the 4th item (index 3) and 14th item (index 13) */}
-              {(i === 3 || i === 14) && (
-                <SquareGridAd />
+              {/* Gentle sponsored breaks after enough real album cards */}
+              {((albums.length >= 10 && i === 8) || (albums.length >= 24 && i === 20)) && (
+                <ResponsiveAd variant="grid" />
               )}
 
               <Link 

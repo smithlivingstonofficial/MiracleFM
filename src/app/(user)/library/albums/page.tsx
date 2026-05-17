@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bookmark, Disc } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { CardGridSkeleton } from "@/components/user/Skeletons";
 import type { Album } from "@/types/music";
 
@@ -68,8 +69,11 @@ export default function SavedAlbumsPage() {
           <CardGridSkeleton cards={8} />
         ) : albums.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-            {albums.map((album) => (
-              <Link key={album.id} href={`/album/${album.id}`} className="group active:scale-95">
+            {albums.map((album, index) => (
+              <Fragment key={album.id}>
+                {albums.length >= 10 && index === 8 && <ResponsiveAd variant="grid" />}
+
+              <Link href={`/album/${album.id}`} className="group active:scale-95">
                 <div className="relative aspect-square overflow-hidden rounded-[1.5rem] border border-white/5 bg-zinc-900">
                   {album.cover_url ? (
                     <Image src={album.cover_url} alt={album.title} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
@@ -82,6 +86,7 @@ export default function SavedAlbumsPage() {
                 <h2 className="mt-3 truncate text-sm font-black text-white">{album.title}</h2>
                 <p className="truncate text-xs font-bold text-zinc-500">{album.artists?.name}</p>
               </Link>
+              </Fragment>
             ))}
           </div>
         ) : (

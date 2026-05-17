@@ -159,9 +159,11 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
 
         {/* --- ADVERTISEMENT BANNER --- */}
         {/* Inserted cleanly between Tracks and Albums with animation */}
-        <section className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
-          <ResponsiveAd variant="banner" className="px-0 md:px-0" />
-        </section>
+        {topTracks.length > 3 && (
+          <section className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+            <ResponsiveAd variant="banner" className="px-0 md:px-0" />
+          </section>
+        )}
 
         {/* --- 4. DISCOGRAPHY (ALBUMS) --- */}
         {albums.length > 0 && (

@@ -328,8 +328,6 @@ export default function PlaylistPage() {
           </div>
         </div>
 
-        {tracks.length > 3 && <ResponsiveAd variant="banner" className="px-0" />}
-
         {/* 2. Track List */}
         <div className="space-y-4 px-2">
           {tracks.length > 0 && (
@@ -378,6 +376,8 @@ export default function PlaylistPage() {
             )}
           </div>
         </div>
+
+        {tracks.length > 3 && <ResponsiveAd variant="banner" className="px-0" />}
 
       </div>
 

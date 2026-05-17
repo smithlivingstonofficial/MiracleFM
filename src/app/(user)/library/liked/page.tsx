@@ -4,6 +4,7 @@ import TrackRow from "@/components/user/TrackRow";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import type { Track } from "@/types/music";
 
 export const revalidate = 0;
@@ -125,6 +126,8 @@ export default async function LibraryPage() {
               </div>
             )}
           </div>
+
+          {tracks.length >= 8 && <ResponsiveAd variant="banner" className="px-0" />}
         </div>
       </div>
     </div>
