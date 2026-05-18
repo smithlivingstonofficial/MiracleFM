@@ -60,7 +60,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
 
   const { data: tracks } = await supabase
     .from("tracks")
-    .select("*, artists(name), albums(title, cover_url)")
+    .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
     .eq("album_id", id)
     .eq("audio_status", "ready")
     .order("created_at", { ascending: true });

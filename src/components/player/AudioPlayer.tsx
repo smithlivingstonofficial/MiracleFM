@@ -404,7 +404,7 @@ export default function AudioPlayer() {
       const existingIds = new Set(queue.map((track) => track.id));
       const { data, error } = await createClient()
         .from("tracks")
-        .select("*, artists(name, image_url), albums(title, cover_url)")
+        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
         .eq("audio_status", "ready")
         .order("created_at", { ascending: false })
         .limit(AUTO_FILL_FETCH_LIMIT);

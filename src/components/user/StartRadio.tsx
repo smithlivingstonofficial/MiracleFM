@@ -63,7 +63,7 @@ export default function StartRadio({ genres, artistId, label = true }: Props) {
         
         const { data: enrichedTracks, error: fetchError } = await supabase
           .from("tracks")
-          .select("*, artists(name, image_url), albums(title, cover_url)")
+          .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
           .eq("audio_status", "ready")
           .in("id", trackIds);
 

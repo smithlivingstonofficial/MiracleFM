@@ -18,7 +18,7 @@ export default async function FaithPage() {
 
   const { data: worshipTracks } = await supabase
     .from("tracks")
-    .select("*, artists(name, image_url), albums(title, cover_url)")
+    .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
     .eq("audio_status", "ready")
     .order("play_count", { ascending: false })
     .limit(8);

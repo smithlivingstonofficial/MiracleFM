@@ -46,13 +46,13 @@ const getCachedPublicData = unstable_cache(
       supabaseAnon.from("albums").select("*, artists(id, name, image_url)").order("created_at", { ascending: false }).limit(10),
       supabaseAnon
         .from("tracks")
-        .select("*, artists(name, image_url), albums(title, cover_url)")
+        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
         .eq("audio_status", "ready")
         .order("created_at", { ascending: false })
         .limit(12),
       supabaseAnon
         .from("tracks")
-        .select("*, artists(name, image_url), albums(title, cover_url)")
+        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
         .eq("audio_status", "ready")
         .order("play_count", { ascending: false })
         .limit(12),
@@ -69,7 +69,7 @@ const getCachedPublicData = unstable_cache(
     if (trendingIds.length > 0) {
       const { data: statTracks } = await supabaseAnon
         .from("tracks")
-        .select("*, artists(name, image_url), albums(title, cover_url)")
+        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
         .eq("audio_status", "ready")
         .in("id", trendingIds);
 
@@ -86,14 +86,14 @@ const getCachedPublicData = unstable_cache(
       playlistIds.length > 0
         ? supabaseAnon
             .from("playlist_tracks")
-            .select("playlist_id, tracks(*, artists(name, image_url), albums(title, cover_url))")
+            .select("playlist_id, tracks(*, artists(id, name, image_url), albums(id, title, cover_url))")
             .in("playlist_id", playlistIds)
             .order("added_at", { ascending: true })
         : Promise.resolve({ data: [] }),
       albumIds.length > 0
         ? supabaseAnon
             .from("tracks")
-            .select("*, artists(name, image_url), albums(title, cover_url)")
+            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
             .eq("audio_status", "ready")
             .in("album_id", albumIds)
             .order("created_at", { ascending: true })
@@ -163,7 +163,7 @@ export default async function HomePage() {
     if (mixData && mixData.length > 0) {
       const { data: enrichedTracks } = await supabase
         .from("tracks")
-        .select("*, artists(name, image_url), albums(title, cover_url)")
+        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
         .eq("audio_status", "ready")
         .in("id", mixData.map((track: { id: string }) => track.id));
       dailyMix = enrichedTracks ||[];
@@ -171,7 +171,7 @@ export default async function HomePage() {
 
     const { data: recentEvents } = await supabase
       .from("play_events")
-      .select("track_id, tracks(*, artists(name, image_url), albums(title, cover_url))")
+      .select("track_id, tracks(*, artists(id, name, image_url), albums(id, title, cover_url))")
       .eq("user_id", user.id)
       .eq("event_type", "listen_qualified")
       .order("created_at", { ascending: false })
@@ -203,7 +203,7 @@ export default async function HomePage() {
     if (recentArtistIds.length > 0) {
       const { data: relatedData } = await supabase
         .from("tracks")
-        .select("*, artists(name, image_url), albums(title, cover_url)")
+        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
         .eq("audio_status", "ready")
         .in("artist_id", recentArtistIds)
         .limit(16);

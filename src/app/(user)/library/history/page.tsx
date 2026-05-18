@@ -47,7 +47,7 @@ export default function HistoryPage() {
 
       const { data } = await supabase
         .from("play_events")
-        .select("track_id, created_at, tracks(*, artists(name, image_url), albums(title, cover_url))")
+        .select("track_id, created_at, tracks(*, artists(id, name, image_url), albums(id, title, cover_url))")
         .eq("user_id", user.id)
         .eq("event_type", "listen_qualified")
         .order("created_at", { ascending: false })

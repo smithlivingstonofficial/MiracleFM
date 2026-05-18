@@ -57,7 +57,7 @@ export default function SearchPage() {
         const [t, a, alb, pl, lyrics] = await Promise.all([
           supabase
             .from("tracks")
-            .select("*, artists(name), albums(title, cover_url)")
+            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
             .eq("audio_status", "ready")
             .ilike("title", `%${trimmedQuery}%`)
             .limit(8),
@@ -71,7 +71,7 @@ export default function SearchPage() {
             .limit(5),
           supabase
             .from("tracks")
-            .select("*, artists(name), albums(title, cover_url)")
+            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
             .eq("audio_status", "ready")
             .ilike("lyrics", `%${trimmedQuery}%`)
             .limit(5),

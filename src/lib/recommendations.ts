@@ -154,7 +154,7 @@ export async function getRecommendationPlaylist(
   if (trackIds.length > 0) {
     const { data } = await supabase
       .from("tracks")
-      .select("*, artists(name, image_url), albums(title, cover_url)")
+      .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
       .eq("audio_status", "ready")
       .in("id", trackIds);
 
@@ -178,7 +178,7 @@ export async function getRecommendationPlaylist(
   if (tracks.length === 0) {
     const { data } = await supabase
       .from("tracks")
-      .select("*, artists(name, image_url), albums(title, cover_url)")
+      .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
       .eq("audio_status", "ready")
       .order(section.algorithm_type === "new_for_you" ? "created_at" : "play_count", { ascending: false })
       .limit(limit);

@@ -49,7 +49,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
     supabase.from("artists").select("*").eq("id", id).single(),
     supabase
       .from("tracks")
-      .select("*, albums(title, cover_url), artists(name, image_url)")
+      .select("*, albums(id, title, cover_url), artists(id, name, image_url)")
       .eq("artist_id", id)
       .eq("audio_status", "ready")
       .order('play_count', { ascending: false })

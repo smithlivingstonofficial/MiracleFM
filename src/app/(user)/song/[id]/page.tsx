@@ -76,7 +76,7 @@ export default async function SongPage({ params }: { params: Promise<{ id: strin
     artistId
       ? supabase
           .from("tracks")
-          .select("*, artists(name, image_url), albums(title, cover_url)")
+          .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
           .eq("artist_id", artistId)
           .eq("audio_status", "ready")
           .neq("id", id)

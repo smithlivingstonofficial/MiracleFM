@@ -16,6 +16,8 @@ export type Album = {
 export type Track = {
   id: string;
   title: string;
+  artist_id?: string | null;
+  album_id?: string | null;
   lyrics?: string | null;
   hls_url?: string | null;
   fallback_audio_url?: string | null;

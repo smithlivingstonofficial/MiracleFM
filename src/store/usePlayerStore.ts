@@ -218,6 +218,7 @@ export const usePlayerStore = create<PlayerState>()(
         queue: state.queue,
         currentTrack: state.currentTrack,
         currentIndex: state.currentIndex,
+        isFullScreen: state.isFullScreen,
         isShuffled: state.isShuffled,
         repeatMode: state.repeatMode,
       }),

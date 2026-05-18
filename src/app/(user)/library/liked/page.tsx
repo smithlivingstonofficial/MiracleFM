@@ -19,7 +19,7 @@ export default async function LibraryPage() {
 
   const { data: likes } = await supabase
     .from("user_likes")
-    .select("track_id, tracks(*, artists(name), albums(title, cover_url))")
+    .select("track_id, tracks(*, artists(id, name, image_url), albums(id, title, cover_url))")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
