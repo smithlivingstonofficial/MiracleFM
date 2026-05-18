@@ -9,9 +9,11 @@ import PlaylistCover from "@/components/user/PlaylistCover";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import UserConfirmModal from "@/components/user/UserConfirmModal";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import SongListAdRow from "@/components/ads/SongListAdRow";
 import { PageHeaderSkeleton, TrackListSkeleton } from "@/components/user/Skeletons";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Playlist, Track } from "@/types/music";
 
 type PlaylistTrackRow = {
@@ -342,24 +344,29 @@ export default function PlaylistPage() {
           <div className="space-y-1">
             {tracks.length > 0 ? (
               tracks.map((track, i) => (
-                <div key={track.id} className="group/playlist-row flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <TrackRow 
-                      track={track} 
-                      index={i} 
-                      context="Playlist" 
-                      allTracks={tracks}
-                    />
+                <div key={track.id}>
+                  <div className="group/playlist-row flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <TrackRow 
+                        track={track} 
+                        index={i} 
+                        context="Playlist" 
+                        allTracks={tracks}
+                      />
+                    </div>
+                    {isOwner && (
+                      <button
+                        onClick={() => removeTrack(track.id)}
+                        className="mr-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400 group-hover/playlist-row:flex md:flex"
+                        aria-label={`Remove ${track.title} from playlist`}
+                        title="Remove from playlist"
+                      >
+                        <MinusCircle size={18} />
+                      </button>
+                    )}
                   </div>
-                  {isOwner && (
-                    <button
-                      onClick={() => removeTrack(track.id)}
-                      className="mr-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400 group-hover/playlist-row:flex md:flex"
-                      aria-label={`Remove ${track.title} from playlist`}
-                      title="Remove from playlist"
-                    >
-                      <MinusCircle size={18} />
-                    </button>
+                  {shouldRenderSongListAdAfter(i, tracks.length) && (
+                    <SongListAdRow className={isOwner ? "mr-12" : undefined} />
                   )}
                 </div>
               ))
@@ -377,7 +384,7 @@ export default function PlaylistPage() {
           </div>
         </div>
 
-        {tracks.length > 3 && <ResponsiveAd variant="banner" className="px-0" />}
+        {tracks.length > 3 && tracks.length < 8 && <ResponsiveAd variant="banner" className="px-0" />}
 
       </div>
 

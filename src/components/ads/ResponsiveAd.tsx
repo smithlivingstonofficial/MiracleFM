@@ -3,15 +3,12 @@
 import { useEffect, useRef } from "react";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ADSENSE_CLIENT, HOME_FEED_AD_SLOT, RECTANGLE_AD_SLOT } from "@/lib/ads";
 
 type ResponsiveAdProps = {
   variant?: "banner" | "feed" | "compact" | "grid";
   className?: string;
 };
-
-const AD_CLIENT = "ca-pub-8115646001024972";
-const FEED_SLOT = "6397247029";
-const RECTANGLE_SLOT = "7678897893";
 
 export default function ResponsiveAd({ variant = "feed", className }: ResponsiveAdProps) {
   const adRef = useRef(false);
@@ -41,8 +38,8 @@ export default function ResponsiveAd({ variant = "feed", className }: Responsive
             <ins
               className="adsbygoogle"
               style={{ display: "block", width: "100%", height: "100%" }}
-              data-ad-client={AD_CLIENT}
-              data-ad-slot={RECTANGLE_SLOT}
+              data-ad-client={ADSENSE_CLIENT}
+              data-ad-slot={RECTANGLE_AD_SLOT}
               data-ad-format="rectangle, square"
               data-full-width-responsive="true"
               suppressHydrationWarning
@@ -96,8 +93,8 @@ export default function ResponsiveAd({ variant = "feed", className }: Responsive
           <ins
             className="adsbygoogle"
             style={{ display: "block", width: "100%", height: "100%" }}
-            data-ad-client={AD_CLIENT}
-            data-ad-slot={isRectangle ? RECTANGLE_SLOT : FEED_SLOT}
+            data-ad-client={ADSENSE_CLIENT}
+            data-ad-slot={isRectangle ? RECTANGLE_AD_SLOT : HOME_FEED_AD_SLOT}
             data-ad-format={isRectangle ? "rectangle, square" : "fluid"}
             data-ad-layout-key={isRectangle ? undefined : "+2a+rx+1+2-3"}
             data-full-width-responsive={isRectangle ? "false" : "true"}

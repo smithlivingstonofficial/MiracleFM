@@ -4,6 +4,8 @@ import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import PrayerRequestForm from "@/components/faith/PrayerRequestForm";
 import TrackRow from "@/components/user/TrackRow";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import SongListAdRow from "@/components/ads/SongListAdRow";
+import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Track } from "@/types/music";
 
 export const dynamic = "force-dynamic";
@@ -87,7 +89,10 @@ export default async function FaithPage() {
             {tracks.length > 0 ? (
               <div className="min-w-0 overflow-hidden rounded-[1.75rem] border border-white/5 bg-[#0A0A0A]/80 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.25)] sm:p-2 md:rounded-[2rem]">
                 {tracks.map((track, index) => (
-                  <TrackRow key={track.id} track={track} index={index} context="Faith" allTracks={tracks} />
+                  <div key={track.id}>
+                    <TrackRow track={track} index={index} context="Faith" allTracks={tracks} />
+                    {shouldRenderSongListAdAfter(index, tracks.length) && <SongListAdRow />}
+                  </div>
                 ))}
               </div>
             ) : (

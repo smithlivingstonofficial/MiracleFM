@@ -9,8 +9,10 @@ import TrackRow from "@/components/user/TrackRow";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import StartRadio from "@/components/user/StartRadio";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import SongListAdRow from "@/components/ads/SongListAdRow";
 import ShareButton from "@/components/user/ShareButton";
 import SaveAlbumButton from "@/components/user/SaveAlbumButton";
+import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
@@ -191,13 +193,16 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
           </div>
 
           {tracks?.map((track, i) => (
-            <div key={track.id} className="active:scale-[0.99] md:active:scale-100 transition-transform duration-200">
-               <TrackRow 
-                track={track} 
-                index={i} 
-                context="Album" 
-                allTracks={tracks ?? []}
-              />
+            <div key={track.id}>
+              <div className="active:scale-[0.99] md:active:scale-100 transition-transform duration-200">
+                 <TrackRow 
+                  track={track} 
+                  index={i} 
+                  context="Album" 
+                  allTracks={tracks ?? []}
+                />
+              </div>
+              {shouldRenderSongListAdAfter(i, tracks.length) && <SongListAdRow />}
             </div>
           ))}
         </div>
@@ -213,7 +218,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* --- ADD AD AT THE BOTTOM OF THE LIST --- */}
-        {tracks && tracks.length > 3 && (
+        {tracks && tracks.length > 3 && tracks.length < 8 && (
           <div className="pt-8 pb-4">
             <ResponsiveAd variant="banner" className="px-0 md:px-0" />
           </div>

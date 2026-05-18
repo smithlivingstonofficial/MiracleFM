@@ -7,8 +7,10 @@ import TrackRow from "@/components/user/TrackRow";
 import StartRadio from "@/components/user/StartRadio";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import SongListAdRow from "@/components/ads/SongListAdRow";
 import ShareButton from "@/components/user/ShareButton";
 import FollowArtistButton from "@/components/user/FollowArtistButton";
+import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
@@ -149,8 +151,11 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
             </h2>
             <div className="space-y-1">
               {topTracks.map((track, i) => (
-                <div key={track.id} className="active:scale-[0.99] md:active:scale-100 transition-transform duration-300">
+                <div key={track.id}>
+                  <div className="active:scale-[0.99] md:active:scale-100 transition-transform duration-300">
                     <TrackRow track={track} index={i} allTracks={topTracks} />
+                  </div>
+                  {shouldRenderSongListAdAfter(i, topTracks.length) && <SongListAdRow />}
                 </div>
               ))}
             </div>
@@ -159,7 +164,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
 
         {/* --- ADVERTISEMENT BANNER --- */}
         {/* Inserted cleanly between Tracks and Albums with animation */}
-        {topTracks.length > 3 && (
+        {topTracks.length > 3 && topTracks.length < 8 && (
           <section className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
             <ResponsiveAd variant="banner" className="px-0 md:px-0" />
           </section>

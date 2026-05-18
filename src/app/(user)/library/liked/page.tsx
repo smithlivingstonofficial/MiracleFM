@@ -5,6 +5,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import SongListAdRow from "@/components/ads/SongListAdRow";
+import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Track } from "@/types/music";
 
 export const revalidate = 0;
@@ -102,13 +104,15 @@ export default async function LibraryPage() {
           <div className="space-y-1">
             {tracks.length > 0 ? (
               tracks.map((track, i) => (
-                <TrackRow 
-                  key={track.id} 
-                  track={track} 
-                  index={i} 
-                  context="Library"
-                  allTracks={tracks} 
-                />
+                <div key={track.id}>
+                  <TrackRow 
+                    track={track} 
+                    index={i} 
+                    context="Library"
+                    allTracks={tracks} 
+                  />
+                  {shouldRenderSongListAdAfter(i, tracks.length) && <SongListAdRow />}
+                </div>
               ))
             ) : (
               <div className="py-20 flex flex-col items-center justify-center text-center space-y-6 bg-zinc-900/30 rounded-[2rem] border border-dashed border-white/10">
@@ -127,7 +131,7 @@ export default async function LibraryPage() {
             )}
           </div>
 
-          {tracks.length >= 8 && <ResponsiveAd variant="banner" className="px-0" />}
+          {tracks.length > 3 && tracks.length < 8 && <ResponsiveAd variant="banner" className="px-0" />}
         </div>
       </div>
     </div>

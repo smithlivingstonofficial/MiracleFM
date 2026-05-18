@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { Clock3, History } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import SongListAdRow from "@/components/ads/SongListAdRow";
 import TrackRow from "@/components/user/TrackRow";
 import { TrackListSkeleton } from "@/components/user/Skeletons";
+import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Track } from "@/types/music";
 
 type HistoryRow = {
@@ -83,10 +85,13 @@ export default function HistoryPage() {
           <>
             <div className="rounded-[2rem] border border-white/5 bg-white/[0.02] p-2">
               {tracks.map((track, index) => (
-                <TrackRow key={track.id} track={track} index={index} context="History" allTracks={tracks} />
+                <div key={track.id}>
+                  <TrackRow track={track} index={index} context="History" allTracks={tracks} />
+                  {shouldRenderSongListAdAfter(index, tracks.length) && <SongListAdRow />}
+                </div>
               ))}
             </div>
-            {tracks.length >= 8 && <ResponsiveAd variant="banner" className="px-0" />}
+            {tracks.length > 3 && tracks.length < 8 && <ResponsiveAd variant="banner" className="px-0" />}
           </>
         ) : (
           <div className="rounded-[2rem] border border-dashed border-white/10 bg-white/[0.03] px-6 py-16 text-center">

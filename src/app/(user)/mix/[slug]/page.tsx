@@ -5,7 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import RecommendationImpression from "@/components/user/RecommendationImpression";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import SongListAdRow from "@/components/ads/SongListAdRow";
 import TrackRow from "@/components/user/TrackRow";
+import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import {
   getFallbackSection,
   getRecommendationPlaylist,
@@ -100,12 +102,15 @@ export default async function GeneratedMixPage({ params }: MixPageProps) {
         <section className="rounded-[2rem] border border-white/[0.04] bg-[#080808]/80 p-2 md:p-4">
           <div className="space-y-1">
             {playlist.tracks.map((track, index) => (
-              <TrackRow key={track.id} track={track} index={index} context={section.title} allTracks={playlist.tracks} />
+              <div key={track.id}>
+                <TrackRow track={track} index={index} context={section.title} allTracks={playlist.tracks} />
+                {shouldRenderSongListAdAfter(index, playlist.tracks.length) && <SongListAdRow />}
+              </div>
             ))}
           </div>
         </section>
 
-        <ResponsiveAd variant="feed" />
+        {playlist.tracks.length < 8 && <ResponsiveAd variant="feed" />}
       </main>
     </div>
   );

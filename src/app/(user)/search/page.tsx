@@ -9,6 +9,8 @@ import Link from "next/link";
 import Image from "next/image";
 import TrackRow from "@/components/user/TrackRow";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import SongListAdRow from "@/components/ads/SongListAdRow";
+import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Album, Artist, Playlist, Track } from "@/types/music";
 
 type SearchResults = {
@@ -253,13 +255,16 @@ export default function SearchPage() {
                         <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Songs</h2>
                         <div className="space-y-1">
                             {results.tracks.map((track, i) => (
-                                <div key={track.id} className="active:scale-[0.99] md:active:scale-100 transition-transform">
-                                    <TrackRow 
-                                        track={track} 
-                                        index={i} 
-                                        context="Search" 
-                                        allTracks={results.tracks}
-                                    />
+                                <div key={track.id}>
+                                    <div className="active:scale-[0.99] md:active:scale-100 transition-transform">
+                                        <TrackRow 
+                                            track={track} 
+                                            index={i} 
+                                            context="Search" 
+                                            allTracks={results.tracks}
+                                        />
+                                    </div>
+                                    {shouldRenderSongListAdAfter(i, results.tracks.length) && <SongListAdRow />}
                                 </div>
                             ))}
                         </div>
@@ -291,7 +296,7 @@ export default function SearchPage() {
               </div>
             )}
 
-            {showSearchAd && (
+            {showSearchAd && results.tracks.length < 8 && (
               <ResponsiveAd variant="banner" className="px-0" />
             )}
 
