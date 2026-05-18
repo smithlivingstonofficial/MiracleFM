@@ -33,6 +33,9 @@ export const metadata: Metadata = {
   },
   description: "Tamil Christian Audio Streaming Platform",
   applicationName: "Miracle FM",
+  verification: {
+    google: "0v6Hmws4g7AsVjkst14NDV0ISXErjmmKjnsQu8LqWGk",
+  },
 
   // ── PWA / Home-screen ──────────────────────────────────────────────────────
   // manifest.json is what makes Chrome / Edge treat this as an installable PWA,
