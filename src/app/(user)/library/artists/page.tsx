@@ -8,6 +8,7 @@ import { Mic2, UserCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { CardGridSkeleton } from "@/components/user/Skeletons";
+import { readLocalCache, writeLocalCache } from "@/lib/local-cache";
 import type { Artist } from "@/types/music";
 
 type FollowedArtistRow = {
@@ -33,6 +34,14 @@ export default function FollowedArtistsPage() {
         return;
       }
 
+      const cacheKey = `followed-artists:${user.id}`;
+      const cached = readLocalCache<Artist[]>(cacheKey);
+      if (cached) {
+        setArtists(cached);
+        setLoading(false);
+        return;
+      }
+
       const { data } = await supabase
         .from("followed_artists")
         .select("artists(id, name, image_url, bio)")
@@ -41,11 +50,11 @@ export default function FollowedArtistsPage() {
 
       if (cancelled) return;
 
-      setArtists(
-        ((data || []) as FollowedArtistRow[])
-          .map((row) => (Array.isArray(row.artists) ? row.artists[0] : row.artists))
-          .filter((artist): artist is Artist => Boolean(artist))
-      );
+      const nextArtists = ((data || []) as FollowedArtistRow[])
+        .map((row) => (Array.isArray(row.artists) ? row.artists[0] : row.artists))
+        .filter((artist): artist is Artist => Boolean(artist));
+      writeLocalCache(cacheKey, nextArtists);
+      setArtists(nextArtists);
       setLoading(false);
     }
 

@@ -9,6 +9,7 @@ import SongListAdRow from "@/components/ads/SongListAdRow";
 import TrackRow from "@/components/user/TrackRow";
 import { TrackListSkeleton } from "@/components/user/Skeletons";
 import { shouldRenderSongListAdAfter } from "@/lib/ads";
+import { readLocalCache, writeLocalCache } from "@/lib/local-cache";
 import type { Track } from "@/types/music";
 
 type HistoryRow = {
@@ -36,6 +37,14 @@ export default function HistoryPage() {
         return;
       }
 
+      const cacheKey = `history:${user.id}`;
+      const cached = readLocalCache<Track[]>(cacheKey);
+      if (cached) {
+        setTracks(cached);
+        setLoading(false);
+        return;
+      }
+
       const { data } = await supabase
         .from("play_events")
         .select("track_id, created_at, tracks(*, artists(name, image_url), albums(title, cover_url))")
@@ -57,6 +66,7 @@ export default function HistoryPage() {
           }) || [];
 
       setTracks(uniqueTracks);
+      writeLocalCache(cacheKey, uniqueTracks);
       setLoading(false);
     }
 

@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import PlaylistCover from "./PlaylistCover";
+import { deleteLocalCacheByPrefix, readLocalCache, writeLocalCache } from "@/lib/local-cache";
 import type { Playlist } from "@/types/music";
 
 export default function UserSidebar() {
@@ -34,12 +35,22 @@ export default function UserSidebar() {
     async function fetchUserPlaylists() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        const cacheKey = `sidebar-playlists:${user.id}`;
+        const cached = readLocalCache<Playlist[]>(cacheKey);
+        if (cached) {
+          if (!cancelled) setUserPlaylists(cached);
+          return;
+        }
+
         const { data } = await supabase
           .from("playlists")
           .select("id, title, cover_url")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
-        if (data && !cancelled) setUserPlaylists(data);
+        if (data && !cancelled) {
+          writeLocalCache(cacheKey, data);
+          setUserPlaylists(data);
+        }
       }
     }
   }, [supabase]);
@@ -58,6 +69,8 @@ export default function UserSidebar() {
     if (response.ok && result.playlist) {
       toast.success("Playlist created");
       setUserPlaylists([result.playlist, ...userPlaylists]);
+      deleteLocalCacheByPrefix(`sidebar-playlists:${user.id}`);
+      deleteLocalCacheByPrefix(`library:${user.id}`);
       router.push(`/playlist/${result.playlist.id}`);
       router.refresh();
     } else {

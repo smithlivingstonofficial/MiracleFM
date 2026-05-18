@@ -14,10 +14,17 @@ import { PageHeaderSkeleton, TrackListSkeleton } from "@/components/user/Skeleto
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { shouldRenderSongListAdAfter } from "@/lib/ads";
+import { deleteLocalCacheByPrefix, readLocalCache, writeLocalCache } from "@/lib/local-cache";
 import type { Playlist, Track } from "@/types/music";
 
 type PlaylistTrackRow = {
   tracks: Track | null;
+};
+
+type PlaylistPageCache = {
+  playlist: Playlist;
+  tracks: Track[];
+  isOwner: boolean;
 };
 
 export default function PlaylistPage() {
@@ -53,6 +60,18 @@ export default function PlaylistPage() {
 
     async function fetchData() {
       const { data: { user } } = await supabase.auth.getUser();
+      const cacheKey = `playlist:${playlistId}:${user?.id || "guest"}`;
+      const cached = readLocalCache<PlaylistPageCache>(cacheKey);
+      if (cached) {
+        setPlaylist(cached.playlist);
+        setTempTitle(cached.playlist.title);
+        setTempDescription(cached.playlist.description || "");
+        setTempIsPublic(Boolean(cached.playlist.is_public));
+        setTracks(cached.tracks);
+        setIsOwner(cached.isOwner);
+        setLoading(false);
+        return;
+      }
       
       const { data: pl } = await supabase.from("playlists").select("*").eq("id", playlistId).single();
       if (!pl) return router.push("/");
@@ -72,16 +91,24 @@ export default function PlaylistPage() {
 
       if (cancelled) return;
 
+      const nextTracks =
+        items
+          ?.map((item: PlaylistTrackRow) => item.tracks)
+          .filter((track: Track | null): track is Track => track !== null && track.audio_status === "ready") || [];
+      const nextIsOwner = user?.id === pl.user_id;
+
+      writeLocalCache(cacheKey, {
+        playlist: pl,
+        tracks: nextTracks,
+        isOwner: nextIsOwner,
+      });
+
       setPlaylist(pl);
       setTempTitle(pl.title);
       setTempDescription(pl.description || "");
       setTempIsPublic(Boolean(pl.is_public));
-      setTracks(
-        items
-          ?.map((item: PlaylistTrackRow) => item.tracks)
-          .filter((track: Track | null): track is Track => track !== null && track.audio_status === "ready") || []
-      );
-      setIsOwner(user?.id === pl.user_id);
+      setTracks(nextTracks);
+      setIsOwner(nextIsOwner);
       setLoading(false);
     }
   }, [playlistId, router, supabase]);
@@ -98,6 +125,8 @@ export default function PlaylistPage() {
       const res = await fetch(`/api/playlists/${playlistId}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("Playlist deleted");
+        deleteLocalCacheByPrefix(`playlist:${playlistId}:`);
+        if (playlist?.user_id) deleteLocalCacheByPrefix(`library:${playlist.user_id}`);
         router.push("/");
         router.refresh();
       } else {
@@ -134,6 +163,8 @@ export default function PlaylistPage() {
       setTempTitle(result.playlist.title);
       setTempDescription(result.playlist.description || "");
       setTempIsPublic(Boolean(result.playlist.is_public));
+      deleteLocalCacheByPrefix(`playlist:${playlistId}:`);
+      deleteLocalCacheByPrefix(`library:${result.playlist.user_id}`);
       toast.success("Playlist updated");
       router.refresh();
     } else {
@@ -176,7 +207,11 @@ export default function PlaylistPage() {
       toast.error("Could not remove song");
       return;
     }
-    setTracks((current) => current.filter((track) => track.id !== trackId));
+    setTracks((current) => {
+      const nextTracks = current.filter((track) => track.id !== trackId);
+      deleteLocalCacheByPrefix(`playlist:${playlistId}:`);
+      return nextTracks;
+    });
     toast.success("Song removed");
     router.refresh();
   };

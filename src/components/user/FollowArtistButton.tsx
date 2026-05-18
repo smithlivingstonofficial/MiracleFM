@@ -6,6 +6,7 @@ import { Loader2, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { deleteLocalCacheByPrefix } from "@/lib/local-cache";
 
 type FollowArtistButtonProps = {
   artistId: string;
@@ -75,6 +76,8 @@ export default function FollowArtistButton({ artistId, className }: FollowArtist
 
       if (error) toast.error("Could not unfollow artist");
       else {
+        deleteLocalCacheByPrefix(`followed-artists:${user.id}`);
+        deleteLocalCacheByPrefix(`library:${user.id}`);
         setFollowing(false);
         toast.success("Artist removed from follows");
       }
@@ -83,6 +86,8 @@ export default function FollowArtistButton({ artistId, className }: FollowArtist
       if (error?.code === "23505") setFollowing(true);
       else if (error) toast.error("Could not follow artist");
       else {
+        deleteLocalCacheByPrefix(`followed-artists:${user.id}`);
+        deleteLocalCacheByPrefix(`library:${user.id}`);
         setFollowing(true);
         toast.success("Artist followed");
       }

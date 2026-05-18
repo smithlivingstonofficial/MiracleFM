@@ -8,6 +8,7 @@ import { Bookmark, Disc } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { CardGridSkeleton } from "@/components/user/Skeletons";
+import { readLocalCache, writeLocalCache } from "@/lib/local-cache";
 import type { Album } from "@/types/music";
 
 type SavedAlbumRow = {
@@ -33,6 +34,14 @@ export default function SavedAlbumsPage() {
         return;
       }
 
+      const cacheKey = `saved-albums:${user.id}`;
+      const cached = readLocalCache<Album[]>(cacheKey);
+      if (cached) {
+        setAlbums(cached);
+        setLoading(false);
+        return;
+      }
+
       const { data } = await supabase
         .from("saved_albums")
         .select("albums(id, title, cover_url, created_at, artists(id, name, image_url))")
@@ -41,11 +50,11 @@ export default function SavedAlbumsPage() {
 
       if (cancelled) return;
 
-      setAlbums(
-        ((data || []) as SavedAlbumRow[])
-          .map((row) => (Array.isArray(row.albums) ? row.albums[0] : row.albums))
-          .filter((album): album is Album => Boolean(album))
-      );
+      const nextAlbums = ((data || []) as SavedAlbumRow[])
+        .map((row) => (Array.isArray(row.albums) ? row.albums[0] : row.albums))
+        .filter((album): album is Album => Boolean(album));
+      writeLocalCache(cacheKey, nextAlbums);
+      setAlbums(nextAlbums);
       setLoading(false);
     }
 

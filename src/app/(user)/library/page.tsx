@@ -11,8 +11,16 @@ import PlaylistCover from "@/components/user/PlaylistCover";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { CardGridSkeleton, PageHeaderSkeleton } from "@/components/user/Skeletons";
 import { toast } from "sonner";
+import { deleteLocalCacheByPrefix, readLocalCache, writeLocalCache } from "@/lib/local-cache";
 import type { User } from "@supabase/supabase-js";
 import type { Playlist } from "@/types/music";
+
+type LibraryCache = {
+  playlists: Playlist[];
+  likedCount: number;
+  savedAlbumsCount: number;
+  followedArtistsCount: number;
+};
 
 export default function LibraryPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -37,6 +45,17 @@ export default function LibraryPage() {
       }
       setUser(user);
 
+      const cacheKey = `library:${user.id}`;
+      const cached = readLocalCache<LibraryCache>(cacheKey);
+      if (cached) {
+        setPlaylists(cached.playlists);
+        setLikedCount(cached.likedCount);
+        setSavedAlbumsCount(cached.savedAlbumsCount);
+        setFollowedArtistsCount(cached.followedArtistsCount);
+        setLoading(false);
+        return;
+      }
+
       const [playlistsRes, likesRes, savedAlbumsRes, followedArtistsRes] = await Promise.all([
         supabase.from("playlists").select("id, title, description, cover_url, is_public").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("user_likes").select("track_id", { count: 'exact', head: true }).eq("user_id", user.id),
@@ -45,10 +64,17 @@ export default function LibraryPage() {
       ]);
 
       if (cancelled) return;
-      if (playlistsRes.data) setPlaylists(playlistsRes.data);
-      setLikedCount(likesRes.count || 0);
-      setSavedAlbumsCount(savedAlbumsRes.count || 0);
-      setFollowedArtistsCount(followedArtistsRes.count || 0);
+      const nextCache = {
+        playlists: playlistsRes.data || [],
+        likedCount: likesRes.count || 0,
+        savedAlbumsCount: savedAlbumsRes.count || 0,
+        followedArtistsCount: followedArtistsRes.count || 0,
+      };
+      writeLocalCache(cacheKey, nextCache);
+      setPlaylists(nextCache.playlists);
+      setLikedCount(nextCache.likedCount);
+      setSavedAlbumsCount(nextCache.savedAlbumsCount);
+      setFollowedArtistsCount(nextCache.followedArtistsCount);
       setLoading(false);
     }
     fetchData();
@@ -74,6 +100,8 @@ export default function LibraryPage() {
       if (!response.ok || !result.playlist) throw new Error(result.error || "Failed to create playlist");
 
       toast.success("New playlist created!");
+      deleteLocalCacheByPrefix(`library:${user.id}`);
+      deleteLocalCacheByPrefix(`sidebar-playlists:${user.id}`);
       router.push(`/playlist/${result.playlist.id}`);
       router.refresh();
     } catch {

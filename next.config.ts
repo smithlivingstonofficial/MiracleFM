@@ -13,6 +13,12 @@ const mediaHostname = (() => {
 })();
 
 const nextConfig: NextConfig = {
+  experimental: {
+    staleTimes: {
+      dynamic: 300,
+      static: 300,
+    },
+  },
 
   // ── 1. Image domains ──────────────────────────────────────────────────────
   images: {

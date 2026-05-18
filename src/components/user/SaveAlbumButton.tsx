@@ -6,6 +6,7 @@ import { Bookmark, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { deleteLocalCacheByPrefix } from "@/lib/local-cache";
 
 type SaveAlbumButtonProps = {
   albumId: string;
@@ -75,6 +76,8 @@ export default function SaveAlbumButton({ albumId, className }: SaveAlbumButtonP
 
       if (error) toast.error("Could not remove album");
       else {
+        deleteLocalCacheByPrefix(`saved-albums:${user.id}`);
+        deleteLocalCacheByPrefix(`library:${user.id}`);
         setSaved(false);
         toast.success("Removed from saved albums");
       }
@@ -83,6 +86,8 @@ export default function SaveAlbumButton({ albumId, className }: SaveAlbumButtonP
       if (error?.code === "23505") setSaved(true);
       else if (error) toast.error("Could not save album");
       else {
+        deleteLocalCacheByPrefix(`saved-albums:${user.id}`);
+        deleteLocalCacheByPrefix(`library:${user.id}`);
         setSaved(true);
         toast.success("Album saved");
       }

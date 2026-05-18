@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { deleteLocalCacheByPrefix } from "@/lib/local-cache";
 import type { User } from "@supabase/supabase-js";
 
 export default function LikeButton({ trackId }: { trackId: string }) {
@@ -67,6 +68,7 @@ export default function LikeButton({ trackId }: { trackId: string }) {
         setIsLiked(previousState); // Revert
         toast.error("Failed to like song");
       } else {
+        deleteLocalCacheByPrefix(`library:${user.id}`);
         toast.success("Added to Library");
       }
     } else {
@@ -81,6 +83,7 @@ export default function LikeButton({ trackId }: { trackId: string }) {
         setIsLiked(previousState); // Revert
         toast.error("Failed to remove like");
       } else {
+        deleteLocalCacheByPrefix(`library:${user.id}`);
         toast.success("Removed from Library");
       }
     }
