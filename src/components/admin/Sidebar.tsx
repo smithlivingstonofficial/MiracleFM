@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -15,6 +15,19 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const supabase = createClient();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("miraclefm:admin-sidebar-collapsed");
+    if (stored === "true") setIsCollapsed(true);
+  }, []);
+
+  const toggleCollapsed = () => {
+    setIsCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem("miraclefm:admin-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -66,7 +79,7 @@ export default function AdminSidebar() {
 
         {/* Toggle Button - Now positioned at the top */}
         <button 
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={toggleCollapsed}
           className={cn(
             "text-zinc-500 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5",
             isCollapsed ? "absolute -bottom-4" : "" // Subtle adjustment
