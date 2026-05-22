@@ -50,6 +50,8 @@ export default async function AllAlbumsPage() {
           </Link>
         </div>
 
+        <ResponsiveAd variant="banner" className="px-0" />
+
         {/* Albums Grid with Embedded Ads */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-8 md:gap-x-8 md:gap-y-12">
           {albums.map((album, i) => (

@@ -49,6 +49,8 @@ export default async function AllArtistsPage() {
           </Link>
         </div>
 
+        <ResponsiveAd variant="banner" className="px-0" />
+
         {/* 3. Artists Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-10 md:gap-x-8 md:gap-y-16">
           {artists.map((artist, i) => (

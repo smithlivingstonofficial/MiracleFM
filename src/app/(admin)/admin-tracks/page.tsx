@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, type Dispatch, type SetStateAction } from "react";
 import Image from "next/image"; 
 import { createClient } from "@/lib/supabase/client";
 import { usePlayerStore } from "@/store/usePlayerStore";
@@ -40,6 +40,10 @@ export default function AdminTracksPage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [activeGenreFilter, setActiveGenreFilter] = useState("");
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false);
+  const [selectedArtistFilters, setSelectedArtistFilters] = useState<string[]>([]);
+  const [selectedAlbumFilters, setSelectedAlbumFilters] = useState<string[]>([]);
+  const [selectedPlaylistFilters, setSelectedPlaylistFilters] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ field: SortField; order: SortOrder }>({ field: "created_at", order: "desc" });
   
   // Inline Editing State
@@ -71,7 +75,7 @@ export default function AdminTracksPage() {
   async function fetchInitialData() {
     setLoading(true);
     const [tRes, aRes, pRes, albRes, genreRes] = await Promise.all([
-      supabase.from("tracks").select("*, artists(name, image_url), albums(title, cover_url), track_audio_variants(bitrate_kbps, size_bytes), encoding_jobs(source_key, source_size_bytes, source_deleted_at, created_at)"), 
+      supabase.from("tracks").select("*, artists(name, image_url), albums(title, cover_url), playlist_tracks(playlist_id), track_audio_variants(bitrate_kbps, size_bytes), encoding_jobs(source_key, source_size_bytes, source_deleted_at, created_at)"), 
       supabase.from("artists").select("id, name").order("name"),
       supabase.from("playlists").select("id, title").is("user_id", null),
       supabase.from("albums").select("id, title").order("title"),
@@ -94,6 +98,13 @@ export default function AdminTracksPage() {
         t.albums?.title?.toLowerCase().includes(search.toLowerCase());
 
       if (!matchesSearch) return false;
+
+      if (selectedArtistFilters.length > 0 && !selectedArtistFilters.includes(t.artist_id)) return false;
+      if (selectedAlbumFilters.length > 0 && !selectedAlbumFilters.includes(t.album_id)) return false;
+      if (selectedPlaylistFilters.length > 0) {
+        const trackPlaylistIds = Array.isArray(t.playlist_tracks) ? t.playlist_tracks.map((row: any) => row.playlist_id) : [];
+        if (!selectedPlaylistFilters.some((playlistId) => trackPlaylistIds.includes(playlistId))) return false;
+      }
 
       switch (activeFilter) {
         case "no_artist": return !t.artist_id;
@@ -124,6 +135,17 @@ export default function AdminTracksPage() {
   };
 
   const processedTracks = processTracks();
+  const advancedFilterCount = selectedArtistFilters.length + selectedAlbumFilters.length + selectedPlaylistFilters.length;
+
+  const toggleArrayValue = (value: string, setter: Dispatch<SetStateAction<string[]>>) => {
+    setter((current) => (current.includes(value) ? current.filter((item) => item !== value) : [...current, value]));
+  };
+
+  const clearAdvancedFilters = () => {
+    setSelectedArtistFilters([]);
+    setSelectedAlbumFilters([]);
+    setSelectedPlaylistFilters([]);
+  };
 
   const handleSort = (field: SortField) => {
     setSortConfig(prev => ({
@@ -440,6 +462,109 @@ export default function AdminTracksPage() {
               </option>
             ))}
           </select>
+
+          <div className="relative z-20">
+            <button
+              onClick={() => setIsAdvancedFilterOpen(!isAdvancedFilterOpen)}
+              className={cn(
+                "h-[54px] rounded-full border px-4 text-sm font-bold transition-all inline-flex items-center gap-2",
+                advancedFilterCount > 0 ? "border-brand bg-brand text-white" : "border-white/[0.05] bg-panel text-zinc-400 hover:text-white"
+              )}
+            >
+              <Album size={18} />
+              <span className="hidden lg:inline">Advanced</span>
+              {advancedFilterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-black text-brand">
+                  {advancedFilterCount}
+                </span>
+              )}
+              <ChevronDown size={14} className={cn("transition-transform", isAdvancedFilterOpen && "rotate-180")} />
+            </button>
+
+            {isAdvancedFilterOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsAdvancedFilterOpen(false)} />
+                <div className="absolute right-0 top-full z-20 mt-2 w-[min(92vw,760px)] overflow-hidden rounded-3xl border border-white/10 bg-[#121212] shadow-2xl animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-widest text-white">Advanced Filters</p>
+                      <p className="mt-1 text-[11px] font-medium text-zinc-500">Filter tracks by one or more artists, albums, and playlists.</p>
+                    </div>
+                    {advancedFilterCount > 0 && (
+                      <button onClick={clearAdvancedFilters} className="rounded-full border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-400 transition-colors hover:text-white">
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid max-h-[480px] grid-cols-1 gap-0 overflow-y-auto custom-scrollbar md:grid-cols-3">
+                    <div className="border-b border-white/5 p-4 md:border-b-0 md:border-r">
+                      <p className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                        <UserPlus size={13} /> Artists
+                      </p>
+                      <div className="space-y-1">
+                        {artists.map((artist) => {
+                          const checked = selectedArtistFilters.includes(artist.id);
+                          return (
+                            <button
+                              key={artist.id}
+                              onClick={() => toggleArrayValue(artist.id, setSelectedArtistFilters)}
+                              className={cn("flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-colors", checked ? "bg-brand/15 text-white" : "text-zinc-400 hover:bg-white/5 hover:text-white")}
+                            >
+                              <span className="truncate">{artist.name}</span>
+                              {checked ? <CheckSquare size={15} className="shrink-0 text-brand" /> : <Square size={15} className="shrink-0 text-zinc-700" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="border-b border-white/5 p-4 md:border-b-0 md:border-r">
+                      <p className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                        <Album size={13} /> Albums
+                      </p>
+                      <div className="space-y-1">
+                        {albums.map((albumItem) => {
+                          const checked = selectedAlbumFilters.includes(albumItem.id);
+                          return (
+                            <button
+                              key={albumItem.id}
+                              onClick={() => toggleArrayValue(albumItem.id, setSelectedAlbumFilters)}
+                              className={cn("flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-colors", checked ? "bg-brand/15 text-white" : "text-zinc-400 hover:bg-white/5 hover:text-white")}
+                            >
+                              <span className="truncate">{albumItem.title}</span>
+                              {checked ? <CheckSquare size={15} className="shrink-0 text-brand" /> : <Square size={15} className="shrink-0 text-zinc-700" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      <p className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                        <ListPlus size={13} /> Playlists
+                      </p>
+                      <div className="space-y-1">
+                        {playlists.map((playlist) => {
+                          const checked = selectedPlaylistFilters.includes(playlist.id);
+                          return (
+                            <button
+                              key={playlist.id}
+                              onClick={() => toggleArrayValue(playlist.id, setSelectedPlaylistFilters)}
+                              className={cn("flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-colors", checked ? "bg-brand/15 text-white" : "text-zinc-400 hover:bg-white/5 hover:text-white")}
+                            >
+                              <span className="truncate">{playlist.title}</span>
+                              {checked ? <CheckSquare size={15} className="shrink-0 text-brand" /> : <Square size={15} className="shrink-0 text-zinc-700" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="relative group flex-1 md:flex-none">
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-brand transition-colors" size={20} />

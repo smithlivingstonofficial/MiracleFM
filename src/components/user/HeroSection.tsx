@@ -5,7 +5,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowUpRight, Info, X, Sparkles } from "lucide-react";
+import { ArrowUpRight, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Banner = {

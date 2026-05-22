@@ -227,6 +227,8 @@ export default function LibraryPage() {
           })}
         </div>
 
+        <ResponsiveAd variant="banner" className="px-0" />
+
         {/* --- USER PLAYLISTS GRID --- */}
         <div>
           <div className="flex items-center gap-3 mb-5 md:mb-6 px-1">
