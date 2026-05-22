@@ -1,16 +1,47 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeDollarSign } from "lucide-react";
+import NativeBannerAd from "@/components/ads/NativeBannerAd";
+import { createClient } from "@/lib/supabase/client";
+import { fetchActiveCustomAds } from "@/lib/custom-ads";
 import { cn } from "@/lib/utils";
 import { ADSENSE_CLIENT, SONG_LIST_FEED_AD_SLOT } from "@/lib/ads";
+import type { CustomAd } from "@/types/custom-ad";
 
 type SongListAdRowProps = {
+  fallbackAds?: CustomAd[];
+  fallbackIndex?: number;
   className?: string;
 };
 
-export default function SongListAdRow({ className }: SongListAdRowProps) {
+const EMPTY_ADS: CustomAd[] = [];
+let cachedAdPromise: Promise<CustomAd[]> | null = null;
+let cachedAds: CustomAd[] | null = null;
+
+function loadFallbackAds() {
+  if (cachedAds) return Promise.resolve(cachedAds);
+  if (cachedAdPromise) return cachedAdPromise;
+
+  const supabase = createClient();
+  cachedAdPromise = fetchActiveCustomAds(supabase, "feed_fallback").then((ads) => {
+    cachedAds = ads;
+    return cachedAds;
+  });
+
+  return cachedAdPromise;
+}
+
+export default function SongListAdRow({ fallbackAds = EMPTY_ADS, fallbackIndex = 0, className }: SongListAdRowProps) {
   const pushedRef = useRef(false);
+  const adElementRef = useRef<HTMLModElement | null>(null);
+  const [fallbackData, setFallbackData] = useState<CustomAd[]>(fallbackAds);
+  const [mode, setMode] = useState<"adsense" | "fallback" | "hidden">("adsense");
+
+  const availableFallbacks = useMemo(
+    () => (fallbackAds.length > 0 ? fallbackAds : fallbackData).filter((ad) => Boolean(ad.image_url)),
+    [fallbackAds, fallbackData]
+  );
 
   useEffect(() => {
     if (pushedRef.current) return;
@@ -22,6 +53,61 @@ export default function SongListAdRow({ className }: SongListAdRowProps) {
       console.error("AdSense Error:", err);
     }
   }, []);
+
+  useEffect(() => {
+    const adElement = adElementRef.current;
+    if (!adElement) return;
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const showFallbackOrHide = async () => {
+      if (cancelled) return;
+
+      let ads = availableFallbacks;
+      if (ads.length === 0) {
+        try {
+          ads = await loadFallbackAds();
+          if (!cancelled) setFallbackData(ads);
+        } catch (err) {
+          console.error("Custom ad fallback load error:", err);
+        }
+      }
+
+      if (cancelled) return;
+      setMode(ads.length > 0 ? "fallback" : "hidden");
+    };
+
+    const evaluateAdStatus = () => {
+      const status = adElement.getAttribute("data-ad-status");
+      if (status === "filled") return;
+      if (status === "unfilled") {
+        void showFallbackOrHide();
+      }
+    };
+
+    const observer = new MutationObserver(evaluateAdStatus);
+    observer.observe(adElement, { attributes: true, attributeFilter: ["data-ad-status"] });
+
+    timeoutId = setTimeout(() => {
+      const status = adElement.getAttribute("data-ad-status");
+      const hasIframe = Boolean(adElement.querySelector("iframe"));
+      if (status !== "filled" && !hasIframe) {
+        void showFallbackOrHide();
+      }
+    }, 3200);
+
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [availableFallbacks]);
+
+  if (mode === "hidden") return null;
+  if (mode === "fallback") {
+    return <NativeBannerAd ads={availableFallbacks} index={fallbackIndex} variant="row" className={className} />;
+  }
 
   return (
     <aside
@@ -51,6 +137,7 @@ export default function SongListAdRow({ className }: SongListAdRowProps) {
         </div>
         <div className="relative min-h-[42px] w-full overflow-hidden rounded-lg bg-black/20">
           <ins
+            ref={adElementRef}
             className="adsbygoogle"
             style={{ display: "block", width: "100%", minHeight: 42 }}
             data-ad-client={ADSENSE_CLIENT}

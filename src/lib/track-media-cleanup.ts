@@ -23,15 +23,16 @@ async function countByUrl(supabase: SupabaseClient, table: string, column: strin
 }
 
 async function isTrackCoverExclusive(supabase: SupabaseClient, coverUrl: string) {
-  const [trackCount, albumCount, artistCount, playlistCount, bannerCount] = await Promise.all([
+  const [trackCount, albumCount, artistCount, playlistCount, bannerCount, customAdCount] = await Promise.all([
     countByUrl(supabase, "tracks", "cover_url", coverUrl),
     countByUrl(supabase, "albums", "cover_url", coverUrl),
     countByUrl(supabase, "artists", "image_url", coverUrl),
     countByUrl(supabase, "playlists", "cover_url", coverUrl),
     countByUrl(supabase, "banners", "image_url", coverUrl),
+    countByUrl(supabase, "custom_ads", "image_url", coverUrl),
   ]);
 
-  return trackCount <= 1 && albumCount === 0 && artistCount === 0 && playlistCount === 0 && bannerCount === 0;
+  return trackCount <= 1 && albumCount === 0 && artistCount === 0 && playlistCount === 0 && bannerCount === 0 && customAdCount === 0;
 }
 
 export async function deleteTrackMedia(
