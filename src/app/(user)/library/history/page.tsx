@@ -97,7 +97,7 @@ export default function HistoryPage() {
               {tracks.map((track, index) => (
                 <div key={track.id}>
                   <TrackRow track={track} index={index} context="History" allTracks={tracks} />
-                  {shouldRenderSongListAdAfter(index, tracks.length) && <SongListAdRow />}
+                  {shouldRenderSongListAdAfter(index, tracks.length) && <SongListAdRow fallbackIndex={index} />}
                 </div>
               ))}
             </div>

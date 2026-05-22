@@ -18,7 +18,7 @@ export default function ContinueListeningSection({ tracks }: ContinueListeningSe
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 md:gap-6">
         <div className="lg:col-span-1">
-          <MixCard tracks={tracks} title="Recently Played" description="Pick up where your worship time paused." />
+          <MixCard tracks={tracks} title="Recently Played" description="Pick up where your worship time paused." href="/library/history" />
         </div>
         <div className="rounded-[2rem] border border-white/5 bg-[#0A0A0A]/70 p-2 lg:col-span-2">
           {tracks.slice(0, 6).map((track, index) => (

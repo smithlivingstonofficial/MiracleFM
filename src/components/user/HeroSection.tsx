@@ -5,7 +5,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Info, X, Sparkles } from "lucide-react";
+import { ArrowUpRight, Info, X, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Banner = {
@@ -33,7 +33,7 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
 
   return (
     <div 
-      className="relative w-full aspect-video group overflow-hidden rounded-[1.5rem] md:rounded-[2.5rem] shadow-2xl shadow-black/50 mx-auto border border-white/5 bg-[#050505] select-none"
+      className="group relative mx-auto aspect-video w-full select-none overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#050505] shadow-[0_24px_80px_rgba(0,0,0,0.42)] md:rounded-[2rem] xl:rounded-[2.25rem]"
     >
       {/* -----------------------------------------------------------
           LAYER 1: BACKGROUND IMAGE (Animated State)
@@ -46,11 +46,13 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
           className={cn(
             "object-cover transition-all duration-700 ease-[cubic-bezier(0.25,0.1,0.25,1)]",
             // Zoom in and Blur when Details are open
-            isDetailsOpen ? "scale-110 blur-xl brightness-[0.25]" : "scale-100 blur-0 brightness-100 group-hover:scale-105"
+            isDetailsOpen ? "scale-110 blur-xl brightness-[0.25]" : "scale-100 blur-0 brightness-[0.94] group-hover:scale-[1.035] group-hover:brightness-100"
           )}
           priority
         />
       </div>
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12),transparent_34%,rgba(0,0,0,0.72)),linear-gradient(90deg,rgba(0,0,0,0.44),transparent_44%)]" />
+      <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-white/[0.08]" />
 
       {/* -----------------------------------------------------------
           LAYER 2: DEFAULT VIEW (Buttons Only)
@@ -65,27 +67,39 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
         {/* Clickable Area for the main banner (goes to link) */}
         <Link href={targetLink} className="absolute inset-0 z-0" aria-label={`Learn more about ${hero.title}`} />
 
-        {/* Gradient for text contrast */}
-        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
-
         {/* Floating Action Bar */}
-        <div className="relative z-10 flex items-center justify-between">
+        <div className="relative z-10 flex items-end justify-between gap-3">
+            <div className="min-w-0 pr-2">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2.5 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-white/75 backdrop-blur-md md:text-[9px]">
+                    <Sparkles size={10} className="text-[#FF0055]" />
+                    Featured
+                </div>
+                <h1 className="line-clamp-2 max-w-xl text-2xl font-black leading-none tracking-tight text-white drop-shadow-2xl md:text-5xl">
+                    {hero.title}
+                </h1>
+                {hero.description && (
+                    <p className="mt-2 hidden max-w-lg text-sm font-semibold leading-relaxed text-zinc-200/90 md:line-clamp-2">
+                        {hero.description}
+                    </p>
+                )}
+            </div>
+
             {/* Left: Play Button */}
             <Link 
                 href={targetLink}
-                className="flex items-center gap-3 bg-[#FF0055] hover:bg-[#ff1a66] text-white px-5 py-2.5 md:px-8 md:py-3.5 rounded-full font-black text-xs md:text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,85,0.4)] transition-transform active:scale-95 hover:scale-105"
+                className="hidden shrink-0 items-center gap-2 rounded-full bg-[#FF0055] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-[0_0_24px_rgba(255,0,85,0.34)] transition-transform hover:bg-[#ff1a66] hover:scale-105 active:scale-95 sm:flex md:px-7"
             >
-                {/* <Play fill="currentColor" className="w-4 h-4 md:w-5 md:h-5" /> */}
                 <span>Learn More</span>
+                <ArrowUpRight size={15} />
             </Link>
 
             {/* Right: Details Button */}
             <button 
                 onClick={toggleDetails}
-                className="flex items-center gap-2 bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 text-white px-4 py-2.5 md:px-6 md:py-3.5 rounded-full font-bold text-xs md:text-sm uppercase tracking-wider transition-all hover:border-white/30 active:scale-95"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white shadow-lg backdrop-blur-md transition-all hover:border-white/30 hover:bg-black/65 active:scale-95 md:h-12 md:w-12"
+                aria-label="Show banner details"
             >
                 <Info className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="hidden md:inline">Details</span>
             </button>
         </div>
       </div>
@@ -97,7 +111,7 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
       ------------------------------------------------------------ */}
       <div 
         className={cn(
-            "absolute inset-0 z-20 flex flex-col items-center justify-center text-center p-6 md:p-12 transition-all duration-500",
+            "absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center transition-all duration-500 md:p-12",
             isDetailsOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
         )}
       >
@@ -115,7 +129,7 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
             </div>
 
             {/* Title */}
-            <h1 className="text-3xl md:text-6xl font-black text-white tracking-tighter leading-tight drop-shadow-2xl">
+            <h1 className="text-3xl md:text-6xl font-black text-white tracking-tight leading-tight drop-shadow-2xl">
                 {hero.title}
             </h1>
 
@@ -128,10 +142,10 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
             <div className="flex items-center justify-center gap-3 pt-2">
                 <Link 
                     href={targetLink}
-                    className="h-10 px-6 md:h-12 md:px-8 bg-white text-black hover:bg-zinc-200 rounded-full font-black text-xs md:text-sm uppercase tracking-wide flex items-center gap-2 transition-transform active:scale-95"
+                    className="flex h-10 items-center gap-2 rounded-full bg-white px-6 text-xs font-black uppercase tracking-wide text-black transition-transform hover:bg-zinc-200 active:scale-95 md:h-12 md:px-8 md:text-sm"
                 >
-                    {/* <Play fill="black" size={16} />  */}
                     Learn More
+                    <ArrowUpRight size={15} />
                 </Link>
                 
                 <button 

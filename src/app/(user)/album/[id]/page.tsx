@@ -202,7 +202,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
                   allTracks={tracks ?? []}
                 />
               </div>
-              {shouldRenderSongListAdAfter(i, tracks.length) && <SongListAdRow />}
+              {shouldRenderSongListAdAfter(i, tracks.length) && <SongListAdRow fallbackIndex={i} />}
             </div>
           ))}
         </div>

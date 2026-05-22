@@ -12,10 +12,8 @@ import HomeTrackSection from "@/components/user/home/HomeTrackSection";
 import RecommendationMixSection from "@/components/user/home/RecommendationMixSection";
 import HomeSessionCache from "@/components/user/home/HomeSessionCache";
 import HomeFooter from "@/components/user/home/HomeFooter";
-import NativeBannerAd from "@/components/ads/NativeBannerAd";
-import { filterCustomAdsForPlacement } from "@/lib/custom-ads";
+import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { getRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
-import type { CustomAd } from "@/types/custom-ad";
 import type { Track } from "@/types/music";
 
 type TrackMap = Record<string, Track[]>;
@@ -42,15 +40,7 @@ const getCachedPublicData = unstable_cache(
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const [bannersRes, customAdsRes, playlistsRes, artistsRes, albumsRes, newTracksRes, engagementStatsRes] = await Promise.all([
-      supabaseAnon.from("banners").select("*").eq("is_active", true).order("created_at", { ascending: false }),
-      supabaseAnon
-        .from("custom_ads")
-        .select("id, title, description, image_url, target_link, cta_label, placement, weight, is_active, starts_at, ends_at")
-        .eq("is_active", true)
-        .in("placement", ["home_native", "all"])
-        .order("weight", { ascending: false })
-        .order("created_at", { ascending: false }),
+    const [playlistsRes, artistsRes, albumsRes, newTracksRes, engagementStatsRes] = await Promise.all([
       supabaseAnon.from("playlists").select("*").is("user_id", null).limit(6),
       supabaseAnon.from("artists").select("*").limit(12),
       supabaseAnon.from("albums").select("*, artists(id, name, image_url)").order("created_at", { ascending: false }).limit(10),
@@ -144,8 +134,6 @@ const getCachedPublicData = unstable_cache(
     }, {});
 
     return {
-      banners: bannersRes.data || [],
-      customAds: customAdsRes.data || [],
       playlists: playlistsRes.data ||[],
       artists: artistsRes.data || [],
       albums: albumsRes.data ||[],
@@ -167,8 +155,12 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   // 2. Get Cached Public Data (Instant load, 0 DB cost)
-  const { banners, customAds, playlists, artists, albums, newTracks, popularTracks, trendingTracks, playlistTracks, albumTracks, artistTracks } = await getCachedPublicData();
-  const homeNativeAds = filterCustomAdsForPlacement((customAds || []) as CustomAd[], "home_native");
+  const { playlists, artists, albums, newTracks, popularTracks, trendingTracks, playlistTracks, albumTracks, artistTracks } = await getCachedPublicData();
+  const { data: banners } = await supabase
+    .from("banners")
+    .select("*")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false });
   const recommendationSections = await getRecommendationSections(supabase, user);
 
   // 3. Daily Mix Logic (Dynamic per request, only if logged in)
@@ -290,7 +282,7 @@ export default async function HomePage() {
       {/* 2. Hero & Always-Filled Feature Rail */}
       <div className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-700 md:mt-6">
         <HomeHeroMosaic
-          banners={banners}
+          banners={banners || []}
           dailyMix={dailyMix}
           recommendationPlaylists={recommendationPlaylists}
           playlists={playlists}
@@ -330,11 +322,7 @@ export default async function HomePage() {
           context="Recommended"
         />
 
-        {homeNativeAds.length > 0 && (
-          <section className="px-4 md:px-8">
-            <NativeBannerAd ads={homeNativeAds} index={1} />
-          </section>
-        )}
+        <ResponsiveAd variant="feed" className="px-4 md:px-8" />
 
         {user && (
           <HomeTrackSection
@@ -373,11 +361,7 @@ export default async function HomePage() {
         
         <NewReleasesSection albums={rankedAlbums} albumTracks={albumTracks} personalized={Boolean(user && userSignalTracks.length > 0)} />
 
-        {homeNativeAds.length > 0 && (
-          <section className="px-4 md:px-8">
-            <NativeBannerAd ads={homeNativeAds} index={2} />
-          </section>
-        )}
+        <ResponsiveAd variant="banner" className="px-4 md:px-8" />
           
         <PopularArtistsSection artists={rankedArtists} artistTracks={artistTracks} personalized={Boolean(user && userSignalTracks.length > 0)} />
 

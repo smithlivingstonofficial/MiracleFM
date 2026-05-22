@@ -401,7 +401,7 @@ export default function PlaylistPage() {
                     )}
                   </div>
                   {shouldRenderSongListAdAfter(i, tracks.length) && (
-                    <SongListAdRow className={isOwner ? "mr-12" : undefined} />
+                    <SongListAdRow fallbackIndex={i} className={isOwner ? "mr-12" : undefined} />
                   )}
                 </div>
               ))

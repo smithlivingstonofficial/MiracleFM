@@ -155,7 +155,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                   <div className="active:scale-[0.99] md:active:scale-100 transition-transform duration-300">
                     <TrackRow track={track} index={i} allTracks={topTracks} />
                   </div>
-                  {shouldRenderSongListAdAfter(i, topTracks.length) && <SongListAdRow />}
+                  {shouldRenderSongListAdAfter(i, topTracks.length) && <SongListAdRow fallbackIndex={i} />}
                 </div>
               ))}
             </div>

@@ -264,7 +264,7 @@ export default function SearchPage() {
                                             allTracks={results.tracks}
                                         />
                                     </div>
-                                    {shouldRenderSongListAdAfter(i, results.tracks.length) && <SongListAdRow />}
+                                    {shouldRenderSongListAdAfter(i, results.tracks.length) && <SongListAdRow fallbackIndex={i} />}
                                 </div>
                             ))}
                         </div>

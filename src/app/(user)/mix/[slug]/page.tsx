@@ -104,7 +104,7 @@ export default async function GeneratedMixPage({ params }: MixPageProps) {
             {playlist.tracks.map((track, index) => (
               <div key={track.id}>
                 <TrackRow track={track} index={index} context={section.title} allTracks={playlist.tracks} />
-                {shouldRenderSongListAdAfter(index, playlist.tracks.length) && <SongListAdRow />}
+                {shouldRenderSongListAdAfter(index, playlist.tracks.length) && <SongListAdRow fallbackIndex={index} />}
               </div>
             ))}
           </div>

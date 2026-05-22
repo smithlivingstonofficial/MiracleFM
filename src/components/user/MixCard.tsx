@@ -88,8 +88,12 @@ export default function MixCard({ tracks, title, description, badgeText = "Daily
       tabIndex={href ? 0 : undefined}
       onKeyDown={(event) => {
         if (!href) return;
-        if (event.key === "Enter" || event.key === " ") router.push(href);
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          router.push(href);
+        }
       }}
+      aria-label={href ? `Open ${title}` : undefined}
     >
       
       {/* --- BACKGROUND EFFECTS --- */}

@@ -13,14 +13,16 @@ import {
   Link as LinkIcon,
   Loader2,
   Megaphone,
+  Pencil,
   Plus,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { buildMediaUrl } from "@/lib/media";
-import type { CustomAd, CustomAdPlacement } from "@/types/custom-ad";
+import type { CustomAd, CustomAdImageRatio, CustomAdPlacement } from "@/types/custom-ad";
 
 type Banner = {
   id: string;
@@ -34,9 +36,21 @@ type Banner = {
 type Tab = "hero" | "custom";
 
 const placementLabels: Record<CustomAdPlacement, string> = {
-  home_native: "Home Native",
   feed_fallback: "Feed Fallback",
-  all: "All Placements",
+};
+
+const adImageRatios: { value: CustomAdImageRatio; label: string }[] = [
+  { value: "16:9", label: "16:9" },
+  { value: "1:1", label: "1:1" },
+  { value: "3:4", label: "3:4" },
+  { value: "4:3", label: "4:3" },
+];
+
+const ratioPreviewClass: Record<CustomAdImageRatio, string> = {
+  "16:9": "aspect-video",
+  "1:1": "aspect-square",
+  "3:4": "aspect-[3/4]",
+  "4:3": "aspect-[4/3]",
 };
 
 function normalizeDateTime(value: string) {
@@ -62,12 +76,13 @@ export default function BannersPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
 
   const [adTitle, setAdTitle] = useState("");
   const [adDesc, setAdDesc] = useState("");
   const [adLink, setAdLink] = useState("");
   const [adCta, setAdCta] = useState("Learn More");
-  const [adPlacement, setAdPlacement] = useState<CustomAdPlacement>("feed_fallback");
+  const [adImageRatio, setAdImageRatio] = useState<CustomAdImageRatio>("16:9");
   const [adWeight, setAdWeight] = useState(1);
   const [adIsActive, setAdIsActive] = useState(true);
   const [adStartsAt, setAdStartsAt] = useState("");
@@ -75,6 +90,7 @@ export default function BannersPage() {
   const [adImageFile, setAdImageFile] = useState<File | null>(null);
   const [adPreviewUrl, setAdPreviewUrl] = useState<string | null>(null);
   const [isAdSubmitting, setIsAdSubmitting] = useState(false);
+  const [editingAdId, setEditingAdId] = useState<string | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -124,74 +140,159 @@ export default function BannersPage() {
     return buildMediaUrl(fileName);
   }
 
-  async function addBanner() {
-    if (!title.trim() || !imageFile) return toast.error("Title and image are required");
+  async function revalidateHomeData() {
+    await fetch("/api/admin/revalidate-home", { method: "POST" });
+  }
+
+  function resetBannerForm() {
+    setEditingBannerId(null);
+    setTitle("");
+    setDesc("");
+    setLink("");
+    setImageFile(null);
+    setPreviewUrl(null);
+  }
+
+  function editBanner(banner: Banner) {
+    setActiveTab("hero");
+    setEditingBannerId(banner.id);
+    setTitle(banner.title);
+    setDesc(banner.description || "");
+    setLink(banner.target_link || "");
+    setImageFile(null);
+    setPreviewUrl(banner.image_url);
+  }
+
+  function resetCustomAdForm() {
+    setEditingAdId(null);
+    setAdTitle("");
+    setAdDesc("");
+    setAdLink("");
+    setAdCta("Learn More");
+    setAdImageRatio("16:9");
+    setAdWeight(1);
+    setAdIsActive(true);
+    setAdStartsAt("");
+    setAdEndsAt("");
+    setAdImageFile(null);
+    setAdPreviewUrl(null);
+  }
+
+  function editCustomAd(ad: CustomAd) {
+    if (!ad.id) return;
+    setActiveTab("custom");
+    setEditingAdId(ad.id);
+    setAdTitle(ad.title);
+    setAdDesc(ad.description || "");
+    setAdLink(ad.target_link || "");
+    setAdCta(ad.cta_label || "Learn More");
+    setAdImageRatio(ad.image_ratio || "16:9");
+    setAdWeight(ad.weight || 1);
+    setAdIsActive(ad.is_active !== false);
+    setAdStartsAt(localDateValue(ad.starts_at));
+    setAdEndsAt(localDateValue(ad.ends_at));
+    setAdImageFile(null);
+    setAdPreviewUrl(ad.image_url || null);
+  }
+
+  async function saveBanner() {
+    if (!title.trim()) return toast.error("Title is required");
+    if (!editingBannerId && !imageFile) return toast.error("Title and image are required");
     setIsSubmitting(true);
 
     try {
-      const publicUrl = await uploadImage(imageFile, "banners");
-      const { error } = await supabase.from("banners").insert({
-        title,
-        description: desc,
-        target_link: link,
-        image_url: publicUrl,
-        is_active: true,
-      });
+      const publicUrl = imageFile ? await uploadImage(imageFile, "banners") : null;
+      let errorMessage: string | null = null;
 
-      if (error) throw error;
+      if (editingBannerId) {
+        const res = await fetch(`/api/banners/${editingBannerId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            description: desc,
+            target_link: link,
+            ...(publicUrl ? { image_url: publicUrl } : {}),
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          errorMessage = data?.error || "Update failed";
+        }
+      } else {
+        const { error } = await supabase.from("banners").insert({
+          title,
+          description: desc,
+          target_link: link,
+          image_url: publicUrl!,
+          is_active: true,
+        });
+        if (error) errorMessage = error.message;
+      }
 
-      toast.success("Hero banner published");
-      setTitle("");
-      setDesc("");
-      setLink("");
-      setImageFile(null);
-      setPreviewUrl(null);
+      if (errorMessage) throw new Error(errorMessage);
+
+      toast.success(editingBannerId ? "Hero banner updated" : "Hero banner published");
+      if (!editingBannerId) await revalidateHomeData();
+      resetBannerForm();
       void fetchData();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown banner publishing error";
-      toast.error("Failed to publish banner", { description: message });
+      const message = error instanceof Error ? error.message : "Unknown banner save error";
+      toast.error("Failed to save banner", { description: message });
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  async function addCustomAd() {
-    if (!adTitle.trim() || !adImageFile) return toast.error("Ad title and image are required");
+  async function saveCustomAd() {
+    if (!adTitle.trim()) return toast.error("Ad title is required");
+    if (!editingAdId && !adImageFile) return toast.error("Ad title and image are required");
     setIsAdSubmitting(true);
 
     try {
-      const publicUrl = await uploadImage(adImageFile, "custom-ads");
-      const { error } = await supabase.from("custom_ads").insert({
+      const publicUrl = adImageFile ? await uploadImage(adImageFile, "custom-ads") : null;
+      const payload = {
         title: adTitle,
         description: adDesc,
         target_link: adLink,
         cta_label: adCta || "Learn More",
-        image_url: publicUrl,
-        placement: adPlacement,
+        placement: "feed_fallback" as CustomAdPlacement,
+        image_ratio: adImageRatio,
         weight: Math.min(100, Math.max(1, Number(adWeight) || 1)),
         is_active: adIsActive,
         starts_at: normalizeDateTime(adStartsAt),
         ends_at: normalizeDateTime(adEndsAt),
-      });
+        ...(publicUrl ? { image_url: publicUrl } : {}),
+      };
+      let errorMessage: string | null = null;
 
-      if (error) throw error;
+      if (editingAdId) {
+        const res = await fetch(`/api/admin/custom-ads/${editingAdId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          errorMessage = data?.error || "Update failed";
+        }
+      } else {
+        const { error } = await supabase.from("custom_ads").insert({
+          ...payload,
+          image_url: publicUrl!,
+        });
+        if (error) errorMessage = error.message;
+      }
 
-      toast.success("Custom ad created");
-      setAdTitle("");
-      setAdDesc("");
-      setAdLink("");
-      setAdCta("Learn More");
-      setAdPlacement("feed_fallback");
-      setAdWeight(1);
-      setAdIsActive(true);
-      setAdStartsAt("");
-      setAdEndsAt("");
-      setAdImageFile(null);
-      setAdPreviewUrl(null);
+      if (errorMessage) throw new Error(errorMessage);
+
+      toast.success(editingAdId ? "Custom ad updated" : "Custom ad created");
+      if (!editingAdId) await revalidateHomeData();
+      resetCustomAdForm();
       void fetchData();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown custom ad error";
-      toast.error("Failed to create custom ad", { description: message });
+      toast.error("Failed to save custom ad", { description: message });
     } finally {
       setIsAdSubmitting(false);
     }
@@ -202,6 +303,7 @@ export default function BannersPage() {
     const res = await fetch(`/api/banners/${id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Hero banner removed");
+      if (editingBannerId === id) resetBannerForm();
       void fetchData();
     } else {
       toast.error("Delete failed");
@@ -213,6 +315,7 @@ export default function BannersPage() {
     const res = await fetch(`/api/admin/custom-ads/${id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Custom ad removed");
+      if (editingAdId === id) resetCustomAdForm();
       void fetchData();
     } else {
       toast.error("Delete failed");
@@ -220,16 +323,40 @@ export default function BannersPage() {
   };
 
   const toggleBannerStatus = async (id: string, currentStatus: boolean) => {
-    const { error } = await supabase.from("banners").update({ is_active: !currentStatus }).eq("id", id);
-    if (error) toast.error("Could not update banner visibility", { description: error.message });
-    else void fetchData();
+    const nextStatus = !currentStatus;
+    const res = await fetch(`/api/banners/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: nextStatus }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      toast.error("Could not update banner visibility", { description: data?.error || "Update failed" });
+      return;
+    }
+
+    setBanners((items) => items.map((banner) => (banner.id === id ? { ...banner, is_active: nextStatus } : banner)));
+    toast.success(nextStatus ? "Hero banner is visible" : "Hero banner is hidden");
   };
 
   const toggleCustomAdStatus = async (id: string | undefined, currentStatus?: boolean | null) => {
     if (!id) return;
-    const { error } = await supabase.from("custom_ads").update({ is_active: !currentStatus }).eq("id", id);
-    if (error) toast.error("Could not update custom ad", { description: error.message });
-    else void fetchData();
+    const nextStatus = !currentStatus;
+    const res = await fetch(`/api/admin/custom-ads/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: nextStatus }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      toast.error("Could not update custom ad", { description: data?.error || "Update failed" });
+      return;
+    }
+
+    setCustomAds((items) => items.map((ad) => (ad.id === id ? { ...ad, is_active: nextStatus } : ad)));
+    toast.success(nextStatus ? "Custom ad is active" : "Custom ad is hidden");
   };
 
   return (
@@ -242,7 +369,7 @@ export default function BannersPage() {
           <div>
             <h1 className="text-4xl font-black tracking-tighter text-white md:text-5xl">Ads & Banners</h1>
             <p className="mt-2 max-w-2xl text-base font-medium text-zinc-500 md:text-lg">
-              Manage hero banners separately from AdSense-first custom native ads.
+              Manage hero banners separately from feed fallback ads.
             </p>
           </div>
         </div>
@@ -284,7 +411,7 @@ export default function BannersPage() {
 
                   <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center bg-brand/90 opacity-0 backdrop-blur-[2px] transition-all group-hover:opacity-100">
                     <Upload size={32} className="mb-2 text-white" />
-                    <span className="text-xs font-black uppercase tracking-widest text-white">Upload Banner</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-white">{editingBannerId ? "Replace Banner" : "Upload Banner"}</span>
                     <input type="file" hidden accept="image/*" onChange={handleImageSelect} />
                   </label>
                 </div>
@@ -310,10 +437,16 @@ export default function BannersPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-4">
-                  <Button onClick={addBanner} disabled={isSubmitting} className="h-14 rounded-full bg-brand px-10 text-sm font-black text-white shadow-lg shadow-brand/20 transition-all hover:bg-brand-hover active:scale-95 disabled:opacity-50">
+                <div className="flex flex-wrap justify-end gap-3 pt-4">
+                  {editingBannerId && (
+                    <Button onClick={resetBannerForm} disabled={isSubmitting} variant="outline" className="h-14 rounded-full border-white/10 bg-black px-8 text-sm font-black text-white hover:bg-white/5">
+                      <X className="mr-2" size={18} />
+                      Cancel
+                    </Button>
+                  )}
+                  <Button onClick={saveBanner} disabled={isSubmitting} className="h-14 rounded-full bg-brand px-10 text-sm font-black text-white shadow-lg shadow-brand/20 transition-all hover:bg-brand-hover active:scale-95 disabled:opacity-50">
                     {isSubmitting ? <Loader2 className="mr-2 animate-spin" /> : <Plus className="mr-2" size={18} />}
-                    Publish Banner
+                    {editingBannerId ? "Update Banner" : "Publish Banner"}
                   </Button>
                 </div>
               </div>
@@ -333,9 +466,9 @@ export default function BannersPage() {
           ) : (
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               {banners.map((banner) => (
-                <div key={banner.id} className="group overflow-hidden rounded-[2rem] border border-white/[0.05] bg-panel transition-all hover:border-white/10">
+                <div key={banner.id} className={cn("group overflow-hidden rounded-[2rem] border border-white/[0.05] bg-panel transition-all hover:border-white/10", !banner.is_active && "opacity-75")}>
                   <div className="relative aspect-video">
-                    <Image src={banner.image_url} alt={banner.title} fill className="object-cover" />
+                    <Image src={banner.image_url} alt={banner.title} fill className={cn("object-cover transition-all", !banner.is_active && "grayscale brightness-50")} />
                     <div className={cn("absolute left-4 top-4 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest backdrop-blur-md", banner.is_active ? "border border-green-500/30 bg-green-500/20 text-green-400" : "border border-white/10 bg-zinc-800/80 text-zinc-500")}>
                       {banner.is_active ? "Active" : "Hidden"}
                     </div>
@@ -347,6 +480,9 @@ export default function BannersPage() {
                       {banner.target_link && <div className="mt-3 flex items-center gap-2 truncate text-xs font-mono text-brand"><LinkIcon size={12} />{banner.target_link}</div>}
                     </div>
                     <div className="flex items-center gap-2">
+                      <button onClick={() => editBanner(banner)} className="rounded-xl bg-zinc-900 p-3 text-zinc-500 transition-colors hover:text-white" title="Edit">
+                        <Pencil size={18} />
+                      </button>
                       <button onClick={() => toggleBannerStatus(banner.id, banner.is_active)} className="rounded-xl bg-zinc-900 p-3 text-zinc-500 transition-colors hover:text-white" title="Toggle Visibility">
                         {banner.is_active ? <Eye size={18} /> : <EyeOff size={18} />}
                       </button>
@@ -365,7 +501,7 @@ export default function BannersPage() {
           <div className="rounded-[2.5rem] border border-white/[0.05] bg-panel p-8 shadow-2xl lg:p-10">
             <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
               <div className="lg:col-span-4">
-                <div className="group relative flex aspect-[16/10] items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-white/10 bg-black shadow-lg transition-all hover:border-brand/50">
+                <div className={cn("group relative flex items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-white/10 bg-black shadow-lg transition-all hover:border-brand/50", ratioPreviewClass[adImageRatio])}>
                   {adPreviewUrl ? (
                     <img src={adPreviewUrl} alt="Custom ad preview" className="h-full w-full object-cover" />
                   ) : (
@@ -376,7 +512,7 @@ export default function BannersPage() {
                   )}
                   <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center bg-brand/90 opacity-0 backdrop-blur-[2px] transition-all group-hover:opacity-100">
                     <Upload size={32} className="mb-2 text-white" />
-                    <span className="text-xs font-black uppercase tracking-widest text-white">Upload Ad Image</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-white">{editingAdId ? "Replace Ad Image" : "Upload Ad Image"}</span>
                     <input type="file" hidden accept="image/*" onChange={handleAdImageSelect} />
                   </label>
                 </div>
@@ -399,12 +535,31 @@ export default function BannersPage() {
                   <input value={adDesc} onChange={(event) => setAdDesc(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-black p-5 font-medium text-white outline-none transition-all focus:border-brand" placeholder="Short ad copy shown in native fallback placements." />
                 </div>
 
+                <div className="space-y-3">
+                  <label className="ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Image Ratio</label>
+                  <div className="grid grid-cols-4 gap-2 rounded-2xl border border-white/10 bg-black p-1.5">
+                    {adImageRatios.map((ratio) => (
+                      <button
+                        key={ratio.value}
+                        type="button"
+                        onClick={() => setAdImageRatio(ratio.value)}
+                        className={cn(
+                          "h-11 rounded-xl text-xs font-black uppercase tracking-widest transition-colors",
+                          adImageRatio === ratio.value ? "bg-brand text-white shadow-lg shadow-brand/20" : "text-zinc-500 hover:bg-white/5 hover:text-white"
+                        )}
+                      >
+                        {ratio.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                   <div className="space-y-3">
                     <label className="ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Placement</label>
-                    <select value={adPlacement} onChange={(event) => setAdPlacement(event.target.value as CustomAdPlacement)} className="h-[58px] w-full rounded-2xl border border-white/10 bg-black px-5 text-sm font-bold text-white outline-none transition-all focus:border-brand">
-                      {Object.entries(placementLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    <div className="flex h-[58px] w-full items-center rounded-2xl border border-white/10 bg-black px-5 text-sm font-bold text-white">
+                      Feed Fallback
+                    </div>
                   </div>
                   <div className="space-y-3">
                     <label className="ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Weight</label>
@@ -442,10 +597,16 @@ export default function BannersPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-4">
-                  <Button onClick={addCustomAd} disabled={isAdSubmitting} className="h-14 rounded-full bg-brand px-10 text-sm font-black text-white shadow-lg shadow-brand/20 transition-all hover:bg-brand-hover active:scale-95 disabled:opacity-50">
+                <div className="flex flex-wrap justify-end gap-3 pt-4">
+                  {editingAdId && (
+                    <Button onClick={resetCustomAdForm} disabled={isAdSubmitting} variant="outline" className="h-14 rounded-full border-white/10 bg-black px-8 text-sm font-black text-white hover:bg-white/5">
+                      <X className="mr-2" size={18} />
+                      Cancel
+                    </Button>
+                  )}
+                  <Button onClick={saveCustomAd} disabled={isAdSubmitting} className="h-14 rounded-full bg-brand px-10 text-sm font-black text-white shadow-lg shadow-brand/20 transition-all hover:bg-brand-hover active:scale-95 disabled:opacity-50">
                     {isAdSubmitting ? <Loader2 className="mr-2 animate-spin" /> : <Plus className="mr-2" size={18} />}
-                    Create Custom Ad
+                    {editingAdId ? "Update Custom Ad" : "Create Custom Ad"}
                   </Button>
                 </div>
               </div>
@@ -460,15 +621,16 @@ export default function BannersPage() {
             <div className="rounded-3xl border border-white/[0.05] bg-panel p-12 text-center">
               <Megaphone className="mx-auto mb-3 text-zinc-700" size={36} />
               <h2 className="text-lg font-bold text-white">No custom ads yet</h2>
-              <p className="mt-2 text-sm text-zinc-500">Create native fallback ads for AdSense-unfilled slots and home placements.</p>
+              <p className="mt-2 text-sm text-zinc-500">Create native fallback ads for AdSense-unfilled feed slots.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2 xl:grid-cols-3">
               {customAds.map((ad) => {
-                const placement = (ad.placement || "all") as CustomAdPlacement;
+                const placement = (ad.placement || "feed_fallback") as CustomAdPlacement;
+                const imageRatio = ad.image_ratio || "16:9";
                 return (
                   <div key={ad.id} className="group overflow-hidden rounded-[2rem] border border-white/[0.05] bg-panel transition-all hover:border-white/10">
-                    <div className="relative aspect-[16/9] bg-black">
+                    <div className={cn("relative bg-black", ratioPreviewClass[imageRatio])}>
                       {ad.image_url && <Image src={ad.image_url} alt={ad.title} fill className="object-cover" />}
                       <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                         <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest backdrop-blur-md", ad.is_active ? "border border-green-500/30 bg-green-500/20 text-green-400" : "border border-white/10 bg-zinc-800/80 text-zinc-500")}>
@@ -476,6 +638,9 @@ export default function BannersPage() {
                         </span>
                         <span className="rounded-full border border-white/10 bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-300 backdrop-blur-md">
                           {placementLabels[placement]}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-300 backdrop-blur-md">
+                          {imageRatio}
                         </span>
                       </div>
                     </div>
@@ -492,6 +657,9 @@ export default function BannersPage() {
                       </div>
                       {ad.target_link && <div className="flex items-center gap-2 truncate text-xs font-mono text-brand"><LinkIcon size={12} />{ad.target_link}</div>}
                       <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => editCustomAd(ad)} className="rounded-xl bg-zinc-900 p-3 text-zinc-500 transition-colors hover:text-white" title="Edit">
+                          <Pencil size={18} />
+                        </button>
                         <button onClick={() => toggleCustomAdStatus(ad.id, ad.is_active)} className="rounded-xl bg-zinc-900 p-3 text-zinc-500 transition-colors hover:text-white" title="Toggle Visibility">
                           {ad.is_active ? <Eye size={18} /> : <EyeOff size={18} />}
                         </button>

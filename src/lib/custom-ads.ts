@@ -9,7 +9,7 @@ export function isCustomAdLive(ad: CustomAd, now = new Date()) {
 }
 
 export function filterCustomAdsForPlacement(ads: CustomAd[], placement: CustomAdPlacement) {
-  return ads.filter((ad) => isCustomAdLive(ad) && (ad.placement === placement || ad.placement === "all"));
+  return ads.filter((ad) => isCustomAdLive(ad) && ad.placement === placement);
 }
 
 export function pickWeightedCustomAd(ads: CustomAd[], seed = 0) {
@@ -31,9 +31,9 @@ export function pickWeightedCustomAd(ads: CustomAd[], seed = 0) {
 export async function fetchActiveCustomAds(supabase: SupabaseClient, placement: CustomAdPlacement) {
   const { data, error } = await supabase
     .from("custom_ads")
-    .select("id, title, description, image_url, target_link, cta_label, placement, weight, is_active, starts_at, ends_at")
+    .select("id, title, description, image_url, target_link, cta_label, placement, image_ratio, weight, is_active, starts_at, ends_at")
     .eq("is_active", true)
-    .or(`placement.eq.${placement},placement.eq.all`)
+    .eq("placement", placement)
     .order("weight", { ascending: false })
     .order("created_at", { ascending: false });
 

@@ -111,7 +111,7 @@ export default async function LibraryPage() {
                     context="Library"
                     allTracks={tracks} 
                   />
-                  {shouldRenderSongListAdAfter(i, tracks.length) && <SongListAdRow />}
+                  {shouldRenderSongListAdAfter(i, tracks.length) && <SongListAdRow fallbackIndex={i} />}
                 </div>
               ))
             ) : (
