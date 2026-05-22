@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Radio,
   HardDrive,
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,8 @@ interface UploadQueueItem {
   trackId?: string;
   hlsUrl?: string;
   fallbackAudioUrl?: string;
+  targetBitrates?: number[];
+  includeFallback?: boolean;
 }
 
 type InitUploadResponse = {
@@ -86,6 +89,8 @@ const STATUS_LABEL: Record<ItemStatus, string> = {
 
 const POLL_INTERVAL_MS = 3000;
 const BROWSER_UPLOAD_CONCURRENCY = 2;
+const QUALITY_OPTIONS = [64, 128, 256];
+const DEFAULT_TARGET_BITRATES = [64, 128];
 
 async function runLimited<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>) {
   let cursor = 0;
@@ -141,6 +146,8 @@ export default function BulkUploader() {
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [targetBitrates, setTargetBitrates] = useState<number[]>(DEFAULT_TARGET_BITRATES);
+  const [includeFallback, setIncludeFallback] = useState(true);
   const queueRef = useRef(queue);
   const statusPollInFlightRef = useRef(false);
 
@@ -151,7 +158,13 @@ export default function BulkUploader() {
   const addFiles = useCallback((files: FileList | File[]) => {
     const incoming = Array.from(files)
       .filter((file) => file.type.startsWith("audio/") && file.size <= MAX_AUDIO_UPLOAD_BYTES)
-      .map((file) => ({ file, status: "idle" as const, progress: 0 }));
+      .map((file) => ({
+        file,
+        status: "idle" as const,
+        progress: 0,
+        targetBitrates: [...targetBitrates],
+        includeFallback,
+      }));
 
     const rejectedCount = Array.from(files).length - incoming.length;
     if (rejectedCount > 0) {
@@ -166,7 +179,18 @@ export default function BulkUploader() {
     }
 
     setQueue((prev) => [...prev, ...incoming]);
-  }, []);
+  }, [includeFallback, targetBitrates]);
+
+  const toggleQuality = (bitrate: number) => {
+    if (isProcessing) return;
+
+    setTargetBitrates((current) => {
+      if (!current.includes(bitrate)) return [...current, bitrate].sort((a, b) => a - b);
+
+      const next = current.filter((value) => value !== bitrate);
+      return next.length > 0 ? next : current;
+    });
+  };
 
   const removeItem = (idx: number) => {
     if (isProcessing) return;
@@ -184,6 +208,8 @@ export default function BulkUploader() {
         trackId: undefined,
         hlsUrl: undefined,
         fallbackAudioUrl: undefined,
+        targetBitrates: [...targetBitrates],
+        includeFallback,
       };
       return next;
     });
@@ -238,7 +264,7 @@ export default function BulkUploader() {
     return res.json();
   };
 
-  const completeUpload = async (file: File, upload: InitUploadResponse) => {
+  const completeUpload = async (file: File, upload: InitUploadResponse, item: UploadQueueItem) => {
     const res = await fetch("/api/audio/uploads/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -248,6 +274,8 @@ export default function BulkUploader() {
         title: titleFromFileName(file.name),
         contentType: file.type || "audio/mpeg",
         size: file.size,
+        targetBitrates: item.targetBitrates || targetBitrates,
+        includeFallback: item.includeFallback ?? includeFallback,
       }),
     });
 
@@ -393,7 +421,7 @@ export default function BulkUploader() {
         });
 
         updateItem(idx, { status: "stored", progress: 75, errorMessage: "Original uploaded to Cloudflare R2." });
-        await completeUpload(item.file, upload);
+        await completeUpload(item.file, upload, item);
 
         queued += 1;
         updateItem(idx, {
@@ -491,6 +519,57 @@ export default function BulkUploader() {
             Select Files
           </div>
         </label>
+      </div>
+
+      <div className="grid gap-4 rounded-3xl border border-white/5 bg-black/35 p-5 md:grid-cols-[1fr_auto] md:items-center">
+        <div>
+          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500">
+            <SlidersHorizontal size={15} className="text-brand" />
+            Encoding output
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {QUALITY_OPTIONS.map((bitrate) => {
+              const active = targetBitrates.includes(bitrate);
+
+              return (
+                <button
+                  key={bitrate}
+                  type="button"
+                  onClick={() => toggleQuality(bitrate)}
+                  disabled={isProcessing}
+                  className={cn(
+                    "rounded-full border px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors disabled:opacity-50",
+                    active
+                      ? "border-brand bg-brand text-white"
+                      : "border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                  )}
+                >
+                  {bitrate}k
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => !isProcessing && setIncludeFallback((value) => !value)}
+          disabled={isProcessing}
+          className={cn(
+            "flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition-colors disabled:opacity-50 md:min-w-64",
+            includeFallback ? "border-green-500/20 bg-green-500/10" : "border-white/10 bg-white/5"
+          )}
+        >
+          <span>
+            <span className="block text-xs font-black uppercase tracking-widest text-white">Fallback M4A</span>
+            <span className="mt-1 block text-[10px] font-bold text-zinc-500">
+              {includeFallback ? "Create 160k backup file" : "Skip fallback file"}
+            </span>
+          </span>
+          <span className={cn("h-6 w-11 rounded-full p-1 transition-colors", includeFallback ? "bg-green-500" : "bg-zinc-700")}>
+            <span className={cn("block h-4 w-4 rounded-full bg-white transition-transform", includeFallback && "translate-x-5")} />
+          </span>
+        </button>
       </div>
 
       {queue.length > 0 && (
@@ -648,6 +727,20 @@ function QueueItem({
           {item.trackId && (
             <p className="text-[10px] text-zinc-600 font-mono truncate">track: {item.trackId}</p>
           )}
+
+          <div className="flex flex-wrap gap-1">
+            {(item.targetBitrates || DEFAULT_TARGET_BITRATES).map((bitrate) => (
+              <span key={bitrate} className="rounded-full bg-white/5 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-zinc-500">
+                {bitrate}k
+              </span>
+            ))}
+            <span className={cn(
+              "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
+              item.includeFallback === false ? "bg-zinc-800 text-zinc-600" : "bg-green-500/10 text-green-500"
+            )}>
+              {item.includeFallback === false ? "No fallback" : "Fallback"}
+            </span>
+          </div>
 
           {item.hlsUrl && (
             <p className="text-[10px] text-green-500/70 font-mono truncate">{item.hlsUrl}</p>

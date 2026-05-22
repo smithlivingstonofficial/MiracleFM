@@ -37,8 +37,8 @@ export default function UploadPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <TipCard
           icon={Zap}
-          title="Adaptive AAC ladder"
-          desc="Each upload is prepared as 64k, 128k and 256k HLS so weak networks can start quickly and upgrade cleanly."
+          title="Selectable AAC ladder"
+          desc="Default uploads create 64k and 128k HLS, with 256k available when a track needs higher quality."
           color="brand"
         />
         <TipCard
@@ -50,7 +50,7 @@ export default function UploadPage() {
         <TipCard
           icon={ShieldCheck}
           title="Originals preserved"
-          desc="Master files are stored separately so future quality ladders or lossless options can be generated later."
+          desc="Master files stay in R2 so missing qualities can be generated later from a copied encode command."
           color="green"
         />
       </div>

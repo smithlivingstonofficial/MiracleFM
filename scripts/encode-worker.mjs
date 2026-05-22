@@ -79,8 +79,19 @@ const fallbackFileName = "fallback.m4a";
 const pollOnce = process.argv.includes("--once");
 const drainQueue = process.argv.includes("--drain");
 const forceReencode = process.argv.includes("--force");
+const includeFallbackArg = process.argv.includes("--fallback");
+const skipFallbackArg = process.argv.includes("--no-fallback");
 const trackArgIndex = process.argv.indexOf("--track");
 const forcedTrackId = trackArgIndex === -1 ? null : process.argv[trackArgIndex + 1];
+const tracksArgIndex = process.argv.indexOf("--tracks");
+const forcedTrackIds =
+  tracksArgIndex === -1
+    ? []
+    : String(process.argv[tracksArgIndex + 1] || "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+const qualitiesArgIndex = process.argv.indexOf("--qualities");
 const pollIntervalMs = Number(process.env.ENCODER_POLL_INTERVAL_MS || 15_000);
 const maxAttempts = Number(process.env.ENCODER_MAX_ATTEMPTS || 3);
 const hlsTimeSeconds = Number(process.env.ENCODER_HLS_TIME || 6);
@@ -95,8 +106,18 @@ if (trackArgIndex !== -1 && (!forcedTrackId || forcedTrackId.startsWith("--"))) 
   process.exit(1);
 }
 
-if (forcedTrackId && !forceReencode) {
-  console.error("[encode-worker] Use --force with --track to intentionally overwrite existing HLS output.");
+if (tracksArgIndex !== -1 && (forcedTrackIds.length === 0 || String(process.argv[tracksArgIndex + 1] || "").startsWith("--"))) {
+  console.error("[encode-worker] --tracks requires a comma-separated track id list.");
+  process.exit(1);
+}
+
+if ((forcedTrackId || forcedTrackIds.length > 0) && !forceReencode) {
+  console.error("[encode-worker] Use --force with --track/--tracks to intentionally overwrite existing HLS output.");
+  process.exit(1);
+}
+
+if (includeFallbackArg && skipFallbackArg) {
+  console.error("[encode-worker] Use either --fallback or --no-fallback, not both.");
   process.exit(1);
 }
 
@@ -115,14 +136,58 @@ const r2 = new S3Client({
   },
 });
 
-const variants = [
+const allVariants = [
   { name: "64k", bitrate: 64, bandwidth: 76000 },
   { name: "128k", bitrate: 128, bandwidth: 152000 },
   { name: "256k", bitrate: 256, bandwidth: 304000 },
 ];
+const defaultVariants = allVariants.filter((variant) => variant.bitrate === 64 || variant.bitrate === 128);
+const cliTargetVariants =
+  qualitiesArgIndex === -1
+    ? null
+    : parseTargetVariants(process.argv[qualitiesArgIndex + 1]);
 
 const outputPrefixFor = (trackId) => `tracks/${trackId}/audio/${audioVersion}`;
 const publicUrlFor = (key) => `${mediaBaseUrl}/${key}`;
+
+function parseTargetVariants(value) {
+  if (!value || String(value).startsWith("--")) {
+    console.error("[encode-worker] --qualities requires a comma-separated list like 64,128,256.");
+    process.exit(1);
+  }
+
+  const bitrates = Array.from(
+    new Set(
+      String(value)
+        .split(",")
+        .map((item) => Number(item.trim()))
+        .filter((bitrate) => allVariants.some((variant) => variant.bitrate === bitrate))
+    )
+  );
+
+  if (bitrates.length === 0) {
+    console.error("[encode-worker] --qualities must include at least one supported value: 64, 128, or 256.");
+    process.exit(1);
+  }
+
+  return allVariants.filter((variant) => bitrates.includes(variant.bitrate));
+}
+
+function variantsForJob(job) {
+  if (cliTargetVariants) return cliTargetVariants;
+  if (Array.isArray(job.target_bitrates) && job.target_bitrates.length > 0) {
+    const bitrates = job.target_bitrates.map(Number);
+    const variants = allVariants.filter((variant) => bitrates.includes(variant.bitrate));
+    if (variants.length > 0) return variants;
+  }
+  return defaultVariants;
+}
+
+function includeFallbackForJob(job) {
+  if (includeFallbackArg) return true;
+  if (skipFallbackArg) return false;
+  return job.include_fallback !== false;
+}
 
 function formatMs(ms) {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -270,6 +335,9 @@ async function getJobForTrack(trackId) {
   if (!data) {
     throw new Error(`No encoding job with an original source was found for track ${trackId}.`);
   }
+  if (data.source_deleted_at) {
+    throw new Error(`The original source for track ${trackId} was deleted from R2.`);
+  }
   return data;
 }
 
@@ -309,12 +377,12 @@ async function getDurationSeconds(inputPath) {
   }
 }
 
-async function encodeAudio(inputPath, outputRoot, hlsRoot) {
+async function encodeAudio(inputPath, outputRoot, hlsRoot, targetVariants, includeFallback) {
   await mkdir(outputRoot, { recursive: true });
-  await Promise.all(variants.map((variant) => mkdir(path.join(hlsRoot, variant.name), { recursive: true })));
+  await Promise.all(targetVariants.map((variant) => mkdir(path.join(hlsRoot, variant.name), { recursive: true })));
 
-  const hlsMaps = variants.flatMap(() => ["-map", "0:a:0"]);
-  const hlsCodecOptions = variants.flatMap((variant, index) => [
+  const hlsMaps = targetVariants.flatMap(() => ["-map", "0:a:0"]);
+  const hlsCodecOptions = targetVariants.flatMap((variant, index) => [
     `-c:a:${index}`,
     "aac",
     `-b:a:${index}`,
@@ -347,34 +415,38 @@ async function encodeAudio(inputPath, outputRoot, hlsRoot) {
     "-master_pl_name",
     "master.m3u8",
     "-var_stream_map",
-    variants.map((variant, index) => `a:${index},name:${variant.name}`).join(" "),
+    targetVariants.map((variant, index) => `a:${index},name:${variant.name}`).join(" "),
     path.join(hlsRoot, "%v", "index.m3u8"),
-    "-map",
-    "0:a:0",
-    "-c:a",
-    "aac",
-    "-profile:a",
-    "aac_low",
-    "-b:a",
-    "160k",
-    "-ar",
-    "44100",
-    "-ac",
-    "2",
-    "-movflags",
-    "+faststart",
-    path.join(outputRoot, fallbackFileName),
+    ...(includeFallback
+      ? [
+          "-map",
+          "0:a:0",
+          "-c:a",
+          "aac",
+          "-profile:a",
+          "aac_low",
+          "-b:a",
+          "160k",
+          "-ar",
+          "44100",
+          "-ac",
+          "2",
+          "-movflags",
+          "+faststart",
+          path.join(outputRoot, fallbackFileName),
+        ]
+      : []),
   ]);
 
-  await writeMasterPlaylist(hlsRoot);
+  await writeMasterPlaylist(hlsRoot, targetVariants);
 }
 
-async function writeMasterPlaylist(outputRoot) {
+async function writeMasterPlaylist(outputRoot, playlistVariants) {
   const lines = [
     "#EXTM3U",
     "#EXT-X-VERSION:7",
     "#EXT-X-INDEPENDENT-SEGMENTS",
-    ...variants.flatMap((variant) => [
+    ...playlistVariants.flatMap((variant) => [
       `#EXT-X-STREAM-INF:BANDWIDTH=${variant.bandwidth},AVERAGE-BANDWIDTH=${
         variant.bitrate * 1000
       },CODECS="mp4a.40.2"`,
@@ -449,7 +521,9 @@ async function uploadOutput(trackId, outputRoot) {
         Body: createReadStream(filePath),
         ContentType: contentTypeFor(filePath),
         ContentDisposition: "inline",
-        CacheControl: "public, max-age=31536000, immutable",
+        CacheControl: filePath.endsWith(".m3u8")
+          ? "public, max-age=60, must-revalidate"
+          : "public, max-age=31536000, immutable",
       })
     );
 
@@ -460,6 +534,22 @@ async function uploadOutput(trackId, outputRoot) {
   await runPool(playlistFiles, uploadConcurrency, uploadFile);
 
   return uploaded;
+}
+
+async function getAvailableVariants(trackId, targetVariants) {
+  const { data, error } = await supabase
+    .from("track_audio_variants")
+    .select("bitrate_kbps")
+    .eq("track_id", trackId);
+
+  if (error) throw error;
+
+  const bitrates = new Set([
+    ...targetVariants.map((variant) => variant.bitrate),
+    ...((data || []).map((row) => Number(row.bitrate_kbps))),
+  ]);
+
+  return allVariants.filter((variant) => bitrates.has(variant.bitrate));
 }
 
 async function checkPublicObject(key, expectedTypes) {
@@ -496,7 +586,7 @@ async function checkPublicObject(key, expectedTypes) {
   return result;
 }
 
-async function validatePlaybackOutput(trackId) {
+async function validatePlaybackOutput(trackId, playlistVariants, includeFallback) {
   const prefix = outputPrefixFor(trackId);
   const checks = [
     checkPublicObject(`${prefix}/hls/master.m3u8`, [
@@ -505,8 +595,10 @@ async function validatePlaybackOutput(trackId) {
       "audio/mpegurl",
       "audio/x-mpegurl",
     ]),
-    checkPublicObject(`${prefix}/${fallbackFileName}`, ["audio/mp4", "application/octet-stream"]),
-    ...variants.flatMap((variant) => [
+    ...(includeFallback
+      ? [checkPublicObject(`${prefix}/${fallbackFileName}`, ["audio/mp4", "application/octet-stream"])]
+      : []),
+    ...playlistVariants.flatMap((variant) => [
       checkPublicObject(`${prefix}/hls/${variant.name}/index.m3u8`, [
         "application/vnd.apple.mpegurl",
         "application/x-mpegurl",
@@ -563,6 +655,8 @@ async function processJob(job) {
   const outputRoot = path.join(workDir, "audio-v2");
   const hlsRoot = path.join(outputRoot, "hls");
   const jobStartedAt = performance.now();
+  const targetVariants = variantsForJob(job);
+  const includeFallback = includeFallbackForJob(job);
 
   await mkdir(hlsRoot, { recursive: true });
   const nextAttempts = (job.attempts || 0) + 1;
@@ -585,9 +679,15 @@ async function processJob(job) {
     await downloadSource(job.source_key, sourcePath);
     console.log(`[encode-worker] Downloaded ${job.track_id} in ${formatMs(performance.now() - downloadStartedAt)}`);
 
-    console.log(`[encode-worker] Encoding ${job.track_id} in one ffmpeg pass`);
+    console.log(
+      `[encode-worker] Encoding ${job.track_id} as ${targetVariants
+        .map((variant) => variant.name)
+        .join(", ")}${includeFallback ? " with fallback" : ""}`
+    );
     const encodeStartedAt = performance.now();
-    await encodeAudio(sourcePath, outputRoot, hlsRoot);
+    await encodeAudio(sourcePath, outputRoot, hlsRoot, targetVariants, includeFallback);
+    const playlistVariants = await getAvailableVariants(job.track_id, targetVariants);
+    await writeMasterPlaylist(hlsRoot, playlistVariants);
     console.log(`[encode-worker] Encoded ${job.track_id} in ${formatMs(performance.now() - encodeStartedAt)}`);
 
     const durationSeconds = await getDurationSeconds(sourcePath);
@@ -600,7 +700,7 @@ async function processJob(job) {
     );
 
     const validationStartedAt = performance.now();
-    const validation = await validatePlaybackOutput(job.track_id);
+    const validation = await validatePlaybackOutput(job.track_id, playlistVariants, includeFallback);
     console.log(
       `[encode-worker] Validated ${job.track_id} in ${formatMs(performance.now() - validationStartedAt)}`
     );
@@ -613,7 +713,7 @@ async function processJob(job) {
     }
 
     const variantRows = await Promise.all(
-      variants.map(async (variant) => ({
+      targetVariants.map(async (variant) => ({
         track_id: job.track_id,
         bitrate_kbps: variant.bitrate,
         codec: "aac",
@@ -631,7 +731,9 @@ async function processJob(job) {
       .from("tracks")
       .update({
         hls_url: publicUrlFor(`${outputPrefixFor(job.track_id)}/hls/master.m3u8`),
-        fallback_audio_url: publicUrlFor(`${outputPrefixFor(job.track_id)}/${fallbackFileName}`),
+        ...(includeFallback
+          ? { fallback_audio_url: publicUrlFor(`${outputPrefixFor(job.track_id)}/${fallbackFileName}`) }
+          : {}),
         audio_status: "ready",
         audio_version: audioVersion,
         audio_error: null,
@@ -687,8 +789,11 @@ async function tick() {
 
 console.log("[encode-worker] Listening for queued Miracle FM encoding jobs");
 
-if (forcedTrackId) {
-  await forceProcessTrack(forcedTrackId);
+if (forcedTrackId || forcedTrackIds.length > 0) {
+  const targetTrackIds = forcedTrackId ? [forcedTrackId] : forcedTrackIds;
+  for (const trackId of targetTrackIds) {
+    await forceProcessTrack(trackId);
+  }
   process.exit(0);
 }
 

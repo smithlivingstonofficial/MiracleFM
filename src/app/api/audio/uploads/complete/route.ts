@@ -4,6 +4,9 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { buildMediaUrl } from "@/lib/media";
 import { r2 } from "@/lib/r2";
 
+const ALLOWED_BITRATES = [64, 128, 256] as const;
+const DEFAULT_TARGET_BITRATES = [64, 128];
+
 type UploadCompleteError = {
   code?: string;
   details?: string;
@@ -68,6 +71,20 @@ function dbErrorResponse(stage: string, err: unknown) {
   );
 }
 
+function parseTargetBitrates(value: unknown) {
+  if (!Array.isArray(value)) return DEFAULT_TARGET_BITRATES;
+
+  const targetBitrates = Array.from(
+    new Set(
+      value
+        .map((bitrate) => Number(bitrate))
+        .filter((bitrate) => ALLOWED_BITRATES.includes(bitrate as (typeof ALLOWED_BITRATES)[number]))
+    )
+  ).sort((a, b) => a - b);
+
+  return targetBitrates.length > 0 ? targetBitrates : DEFAULT_TARGET_BITRATES;
+}
+
 async function verifyOriginalInR2(sourceKey: string) {
   try {
     await r2.send(
@@ -108,6 +125,8 @@ export async function POST(request: Request) {
     const title = String(body.title || "Untitled Track").trim();
     const contentType = String(body.contentType || "");
     const sourceSize = Number(body.size || 0);
+    const targetBitrates = parseTargetBitrates(body.targetBitrates);
+    const includeFallback = body.includeFallback !== false;
 
     if (!trackId || !sourceKey.startsWith(`originals/${trackId}/`)) {
       return NextResponse.json({ error: "Invalid upload session" }, { status: 400 });
@@ -117,7 +136,7 @@ export async function POST(request: Request) {
     if (sourceMissingResponse) return sourceMissingResponse;
 
     const hlsUrl = buildMediaUrl(`tracks/${trackId}/audio/v2/hls/master.m3u8`);
-    const fallbackAudioUrl = buildMediaUrl(`tracks/${trackId}/audio/v2/fallback.m4a`);
+    const fallbackAudioUrl = includeFallback ? buildMediaUrl(`tracks/${trackId}/audio/v2/fallback.m4a`) : null;
 
     const { data: track, error: trackError } = await supabase
       .from("tracks")
@@ -143,6 +162,8 @@ export async function POST(request: Request) {
       source_key: sourceKey,
       source_content_type: contentType || null,
       source_size_bytes: Number.isFinite(sourceSize) ? sourceSize : null,
+      target_bitrates: targetBitrates,
+      include_fallback: includeFallback,
       status: "queued",
     });
 

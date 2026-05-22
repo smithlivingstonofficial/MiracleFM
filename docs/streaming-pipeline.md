@@ -6,8 +6,8 @@ New uploads follow this path:
 
 1. Admin uploads the original file through `/upload`.
 2. `POST /api/audio/uploads/init` creates a signed R2 PUT URL for `originals/{trackId}/source.ext`.
-3. `POST /api/audio/uploads/complete` creates the `tracks` row and queues `encoding_jobs`.
-4. A local encoder command pulls queued jobs, encodes AAC HLS variants plus a progressive AAC fallback, uploads `tracks/{trackId}/audio/v2/*`, validates the public objects, and marks the track ready.
+3. `POST /api/audio/uploads/complete` creates the `tracks` row and queues `encoding_jobs` with selected target bitrates and fallback settings.
+4. A local encoder command pulls queued jobs, encodes the requested AAC HLS variants plus an optional progressive AAC fallback, uploads `tracks/{trackId}/audio/v2/*`, validates the public objects, and marks the track ready.
 5. The player reads `tracks.hls_url` first and immediately falls back to `tracks.fallback_audio_url` if HLS preparation or playback fails.
 
 Tracks stay hidden from user-facing queues until `audio_status = 'ready'`. Browser autoplay policies still apply: playback starts from the user's play gesture, then the app preserves that intent across HLS preparation and fallback loading.
@@ -21,9 +21,9 @@ tracks/{trackId}/audio/v2/hls/master.m3u8
 tracks/{trackId}/audio/v2/hls/64k/index.m3u8
 tracks/{trackId}/audio/v2/hls/64k/init.mp4
 tracks/{trackId}/audio/v2/hls/64k/seg_00000.m4s
-tracks/{trackId}/audio/v2/hls/128k/...
-tracks/{trackId}/audio/v2/hls/256k/...
-tracks/{trackId}/audio/v2/fallback.m4a
+tracks/{trackId}/audio/v2/hls/128k/...      # default
+tracks/{trackId}/audio/v2/hls/256k/...      # optional
+tracks/{trackId}/audio/v2/fallback.m4a      # optional
 ```
 
 ## Required Environment
@@ -95,7 +95,7 @@ supabase/migrations/202605130001_audio_streaming_pipeline.sql
 supabase/migrations/202605140002_audio_v2_fallback_validation.sql
 ```
 
-The v2 fields are `hls_url`, `fallback_audio_url`, `audio_status`, `audio_version`, `duration_seconds`, `audio_error`, `audio_validation`, and `encoded_at`. New uploaded tracks move through `queued`, `encoding`, `ready`, or `failed`.
+The v2 fields are `hls_url`, `fallback_audio_url`, `audio_status`, `audio_version`, `duration_seconds`, `audio_error`, `audio_validation`, and `encoded_at`. Encoding jobs also store `target_bitrates`, `include_fallback`, and `source_deleted_at`. New uploaded tracks move through `queued`, `encoding`, `ready`, or `failed`.
 
 ## Worker
 
@@ -131,6 +131,13 @@ npm run worker:encode -- --track TRACK_ID --force
 
 The package script `npm run worker:encode:track -- TRACK_ID --force` is also available if you prefer the named helper.
 
-The worker produces `64k`, `128k`, and `256k` AAC fMP4 HLS variants, plus `fallback.m4a` AAC-LC at 160k. It sets immutable cache headers on versioned audio objects and only marks tracks ready after validation. If a local encoder process stops while a job is marked `encoding`, the next worker run resets jobs older than `ENCODER_STUCK_JOB_TIMEOUT_MS` back to `queued`; the default timeout is 30 minutes.
+Encode selected qualities for one or many existing tracks:
+
+```bash
+npm run worker:encode -- --track TRACK_ID --qualities 256 --force --no-fallback
+npm run worker:encode -- --tracks "TRACK_ID_1,TRACK_ID_2" --qualities "64,128,256" --force --no-fallback
+```
+
+The upload UI defaults to `64k` and `128k` AAC fMP4 HLS variants. `256k` and `fallback.m4a` AAC-LC at 160k are optional to control R2 storage use. The worker keeps media objects immutable, keeps playlists short-cached so quality deletes propagate, and only marks tracks ready after validation. If a local encoder process stops while a job is marked `encoding`, the next worker run resets jobs older than `ENCODER_STUCK_JOB_TIMEOUT_MS` back to `queued`; the default timeout is 30 minutes.
 
 Keep local encoding sequential unless the job claim flow is upgraded to use an atomic database lock. Running multiple workers today can make two processes pick the same queued job.

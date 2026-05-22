@@ -8,7 +8,7 @@ import {
   Search, Music, Edit2, Trash2, Play, Pause, Plus, 
   Calendar, Disc, CheckSquare, Square, X, Filter, 
   UserPlus, ListPlus, Loader2, Album, ChevronDown, 
-  ArrowUpDown, Copy, Check, Tags
+  ArrowUpDown, Copy, Check, Tags, Terminal, HardDrive
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -22,7 +22,9 @@ type FilterType = "all" | "no_artist" | "no_album" | "no_cover" | "no_genre" | "
 type SortField = "created_at" | "title" | "artist" | "album";
 type SortOrder = "asc" | "desc";
 type BulkGenreMode = "replace" | "add" | "remove";
+type AudioDeleteMode = "track" | "audio" | "qualities" | "fallback" | "original";
 const FILTER_OPTIONS: FilterType[] = ["all", "no_artist", "no_album", "no_cover", "no_genre", "has_genre"];
+const AUDIO_QUALITIES = [64, 128, 256];
 
 export default function AdminTracksPage() {
   // --- STATE ---
@@ -47,9 +49,11 @@ export default function AdminTracksPage() {
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const lastSelectedIndex = useRef<number>(-1); 
-  const [bulkActionType, setBulkActionType] = useState<"artist" | "playlist" | "album" | "genre" | null>(null);
+  const [bulkActionType, setBulkActionType] = useState<"artist" | "playlist" | "album" | "genre" | "encode" | "delete" | null>(null);
   const [bulkGenres, setBulkGenres] = useState<string[]>([]);
   const [bulkGenreMode, setBulkGenreMode] = useState<BulkGenreMode>("add");
+  const [bulkEncodeQualities, setBulkEncodeQualities] = useState<number[]>([256]);
+  const [audioDeleteMode, setAudioDeleteMode] = useState<AudioDeleteMode>("track");
   
   // Modals
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -67,7 +71,7 @@ export default function AdminTracksPage() {
   async function fetchInitialData() {
     setLoading(true);
     const [tRes, aRes, pRes, albRes, genreRes] = await Promise.all([
-      supabase.from("tracks").select("*, artists(name, image_url), albums(title, cover_url)"), 
+      supabase.from("tracks").select("*, artists(name, image_url), albums(title, cover_url), track_audio_variants(bitrate_kbps, size_bytes), encoding_jobs(source_key, source_size_bytes, source_deleted_at, created_at)"), 
       supabase.from("artists").select("id, name").order("name"),
       supabase.from("playlists").select("id, title").is("user_id", null),
       supabase.from("albums").select("id, title").order("title"),
@@ -194,6 +198,68 @@ export default function AdminTracksPage() {
     toast.success("ID Copied");
   };
 
+  const formatBytes = (bytes?: number | null) => {
+    if (!bytes || bytes <= 0) return "0 MB";
+    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+  };
+
+  const latestEncodingJob = (track: any) => {
+    const jobs = Array.isArray(track.encoding_jobs) ? [...track.encoding_jobs] : [];
+    return jobs.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+  };
+
+  const availableBitrates = (track: any) =>
+    (Array.isArray(track.track_audio_variants) ? track.track_audio_variants : [])
+      .map((variant: any) => Number(variant.bitrate_kbps))
+      .filter((bitrate: number) => AUDIO_QUALITIES.includes(bitrate))
+      .sort((a: number, b: number) => a - b);
+
+  const encodedSize = (track: any) =>
+    (Array.isArray(track.track_audio_variants) ? track.track_audio_variants : []).reduce(
+      (total: number, variant: any) => total + Number(variant.size_bytes || 0),
+      0
+    );
+
+  const hasOriginalSource = (track: any) => {
+    const job = latestEncodingJob(track);
+    return Boolean(job?.source_key && !job.source_deleted_at);
+  };
+
+  const toggleBulkEncodeQuality = (bitrate: number) => {
+    setBulkEncodeQualities((current) => {
+      if (!current.includes(bitrate)) return [...current, bitrate].sort((a, b) => a - b);
+      const next = current.filter((value) => value !== bitrate);
+      return next.length > 0 ? next : current;
+    });
+  };
+
+  const encodeCommandFor = (trackIds: string[], bitrates = bulkEncodeQualities) =>
+    `npm run worker:encode -- --tracks "${trackIds.join(",")}" --qualities "${bitrates.join(",")}" --force --no-fallback`;
+
+  const copyEncodeCommand = (trackIds: string[], bitrates = bulkEncodeQualities, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    const eligibleIds = trackIds.filter((id) => {
+      const track = tracks.find((item) => item.id === id);
+      return track && hasOriginalSource(track);
+    });
+
+    if (eligibleIds.length === 0) {
+      toast.error("No selected tracks have an original source available.");
+      return;
+    }
+
+    navigator.clipboard.writeText(encodeCommandFor(eligibleIds, bitrates));
+    toast.success(`Encode command copied for ${eligibleIds.length} track${eligibleIds.length === 1 ? "" : "s"}`);
+  };
+
+  const missingBitratesFor = (track: any) => {
+    const available = new Set(availableBitrates(track));
+    const missing = AUDIO_QUALITIES.filter((bitrate) => !available.has(bitrate));
+    return missing.length > 0 ? missing : [256];
+  };
+
   const applyBulkUpdate = async (field: "artist_id" | "album_id", value: string) => {
     const { error } = await supabase.from("tracks").update({ [field]: value }).in("id", selectedIds);
     if (!error) {
@@ -258,14 +324,22 @@ export default function AdminTracksPage() {
   const handleBulkDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      for (const id of selectedIds) {
-        const response = await fetch(`/api/tracks/${id}`, { method: 'DELETE' });
-        if (!response.ok) {
-          const result = await response.json().catch(() => ({}));
-          throw new Error(result.error || `Could not delete track ${id}`);
-        }
+      const response = await fetch("/api/admin/tracks/audio/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackIds: selectedIds,
+          mode: audioDeleteMode,
+          bitrates: audioDeleteMode === "qualities" ? bulkEncodeQualities : undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "Audio deletion failed");
       }
-      toast.success(`Deleted ${selectedIds.length} tracks`);
+
+      toast.success(deleteSuccessMessage());
       resetBulkState();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Batch deletion failed";
@@ -274,6 +348,22 @@ export default function AdminTracksPage() {
       setIsDeleting(false);
       setIsDeleteModalOpen(false);
     }
+  };
+
+  const deleteSuccessMessage = () => {
+    if (audioDeleteMode === "track") return `Deleted ${selectedIds.length} tracks`;
+    if (audioDeleteMode === "audio") return `Deleted encoded audio for ${selectedIds.length} tracks`;
+    if (audioDeleteMode === "qualities") return `Deleted selected qualities for ${selectedIds.length} tracks`;
+    if (audioDeleteMode === "fallback") return `Deleted fallback audio for ${selectedIds.length} tracks`;
+    return `Deleted originals for ${selectedIds.length} tracks`;
+  };
+
+  const deleteDescription = () => {
+    if (audioDeleteMode === "track") return "This permanently deletes the selected tracks and all associated audio files from Cloudflare R2.";
+    if (audioDeleteMode === "audio") return "This deletes encoded HLS and fallback audio, but keeps track metadata and original masters.";
+    if (audioDeleteMode === "qualities") return `This deletes only the selected HLS qualities: ${bulkEncodeQualities.join(", ")}k.`;
+    if (audioDeleteMode === "fallback") return "This deletes only the 160k fallback M4A files.";
+    return "This deletes original master files. Future re-encoding will be disabled unless you upload sources again.";
   };
 
   const resetBulkState = () => {
@@ -395,6 +485,9 @@ export default function AdminTracksPage() {
             const displayImage = track.cover_url || track.albums?.cover_url || track.artists?.image_url;
             const healthIssues = getHealthStatus(track);
             const isEditing = editingId === track.id;
+            const bitrates = availableBitrates(track);
+            const sourceJob = latestEncodingJob(track);
+            const sourceAvailable = hasOriginalSource(track);
 
             return (
               <div 
@@ -457,6 +550,36 @@ export default function AdminTracksPage() {
                           "Legacy HLS"}
                        </span>
                        <button onClick={(e) => handleCopyId(track.id, e)} className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-400 transition-opacity" title="Copy ID"><Copy size={10} /></button>
+                       <button
+                         onClick={(e) => copyEncodeCommand([track.id], missingBitratesFor(track), e)}
+                         disabled={!sourceAvailable}
+                         className="opacity-0 group-hover:opacity-100 text-zinc-600 transition-opacity hover:text-brand disabled:cursor-not-allowed disabled:opacity-20"
+                         title={sourceAvailable ? "Copy encode command" : "Original source deleted"}
+                       >
+                         <Terminal size={10} />
+                       </button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {bitrates.length > 0 ? bitrates.map((bitrate: number) => (
+                        <span key={bitrate} className="rounded-full bg-green-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-green-400">
+                          {bitrate}k
+                        </span>
+                      )) : (
+                        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-zinc-600">
+                          No HLS
+                        </span>
+                      )}
+                      {track.fallback_audio_url && (
+                        <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-blue-400">
+                          Fallback
+                        </span>
+                      )}
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
+                        sourceAvailable ? "bg-white/5 text-zinc-500" : "bg-red-500/10 text-red-400"
+                      )}>
+                        {sourceAvailable ? "Original" : "No original"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -482,6 +605,11 @@ export default function AdminTracksPage() {
 
                 <div className="col-span-2 hidden md:block">
                    <div className="flex items-center gap-2 text-zinc-600 font-mono text-[10px] font-bold"><Calendar size={12} /> {new Date(track.created_at).toLocaleDateString()}</div>
+                   <div className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-zinc-600">
+                     <HardDrive size={12} />
+                     <span>{formatBytes(encodedSize(track))}</span>
+                     {sourceJob?.source_size_bytes && <span className="text-zinc-700">+ {formatBytes(sourceJob.source_size_bytes)} src</span>}
+                   </div>
                 </div>
 
                 <div className="col-span-1 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -547,8 +675,57 @@ export default function AdminTracksPage() {
                   </div>
                 )}
               </div>
+              <div className="relative">
+                <button onClick={() => setBulkActionType(bulkActionType === 'encode' ? null : 'encode')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 rounded-full transition-colors font-bold text-xs uppercase"><Terminal size={16} /> Encode</button>
+                {bulkActionType === 'encode' && (
+                  <div className="absolute bottom-full mb-4 left-0 w-72 bg-[#121212] text-white rounded-2xl shadow-2xl p-4 border border-white/10">
+                    <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-zinc-500">Qualities</p>
+                    <div className="mb-4 flex gap-2">
+                      {AUDIO_QUALITIES.map((bitrate) => (
+                        <button
+                          key={bitrate}
+                          onClick={() => toggleBulkEncodeQuality(bitrate)}
+                          className={cn(
+                            "rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest",
+                            bulkEncodeQualities.includes(bitrate) ? "border-brand bg-brand text-white" : "border-white/10 bg-white/5 text-zinc-400"
+                          )}
+                        >
+                          {bitrate}k
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => copyEncodeCommand(selectedIds)} className="w-full rounded-full bg-brand px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                      Copy batch command
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="h-6 w-[1px] bg-black/10 mx-2" />
-              <button onClick={() => setIsDeleteModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 hover:bg-red-50 text-red-600 rounded-full transition-colors font-bold text-xs uppercase"><Trash2 size={16} /> Delete</button>
+              <div className="relative">
+                <button onClick={() => setBulkActionType(bulkActionType === 'delete' ? null : 'delete')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-red-50 text-red-600 rounded-full transition-colors font-bold text-xs uppercase"><Trash2 size={16} /> Delete</button>
+                {bulkActionType === 'delete' && (
+                  <div className="absolute bottom-full mb-4 right-0 w-72 bg-[#121212] text-white rounded-2xl shadow-2xl p-2 border border-white/10">
+                    {([
+                      ["track", "Whole track"],
+                      ["audio", "Encoded audio only"],
+                      ["qualities", `Selected qualities (${bulkEncodeQualities.join(", ")}k)`],
+                      ["fallback", "Fallback only"],
+                      ["original", "Original source only"],
+                    ] as [AudioDeleteMode, string][]).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        onClick={() => {
+                          setAudioDeleteMode(mode);
+                          setIsDeleteModalOpen(true);
+                        }}
+                        className="w-full rounded-xl px-4 py-3 text-left text-xs font-bold text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <button onClick={() => setSelectedIds([])} className="p-2 hover:bg-black/5 rounded-full transition-colors ml-2"><X size={18} /></button>
           </div>
@@ -560,8 +737,8 @@ export default function AdminTracksPage() {
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleBulkDeleteConfirm}
-        title={`Delete ${selectedIds.length} Tracks?`}
-        description="This will permanently delete the selected tracks and all associated HLS audio files from Cloudflare R2. This action cannot be undone."
+        title={audioDeleteMode === "track" ? `Delete ${selectedIds.length} Tracks?` : `Delete ${audioDeleteMode} for ${selectedIds.length} Tracks?`}
+        description={`${deleteDescription()} This action cannot be undone.`}
         confirmationText={`DELETE ${selectedIds.length} ITEMS`}
       />
     </div>

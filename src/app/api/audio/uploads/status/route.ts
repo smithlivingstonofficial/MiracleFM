@@ -69,7 +69,7 @@ export async function GET(request: Request) {
 
   const { data: job, error: jobError } = await supabase
     .from("encoding_jobs")
-    .select("id, source_key, status, attempts, error, started_at, completed_at, updated_at")
+    .select("id, source_key, status, attempts, error, started_at, completed_at, updated_at, target_bitrates, include_fallback")
     .eq("track_id", trackId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -88,16 +88,22 @@ export async function GET(request: Request) {
   const masterKey = getMediaKeyFromUrl(track.hls_url) || `tracks/${trackId}/audio/v2/hls/master.m3u8`;
   const fallbackKey =
     getMediaKeyFromUrl(track.fallback_audio_url) || `tracks/${trackId}/audio/v2/fallback.m4a`;
-  const variantChecks = ["64k", "128k", "256k"].flatMap((variant) => [
+  const targetBitrates = Array.isArray(job?.target_bitrates) && job.target_bitrates.length > 0
+    ? job.target_bitrates
+    : [64, 128];
+  const variantChecks = targetBitrates.flatMap((bitrate) => {
+    const variant = `${bitrate}k`;
+    return [
     [`${variant}Playlist`, `tracks/${trackId}/audio/v2/hls/${variant}/index.m3u8`] as const,
     [`${variant}Init`, `tracks/${trackId}/audio/v2/hls/${variant}/init.mp4`] as const,
     [`${variant}FirstSegment`, `tracks/${trackId}/audio/v2/hls/${variant}/seg_00000.m4s`] as const,
-  ]);
+    ];
+  });
 
   const [original, masterPlaylist, fallbackAudio, ...variantObjects] = await Promise.all([
     headR2Object(job?.source_key || null),
     headR2Object(masterKey),
-    headR2Object(fallbackKey),
+    job?.include_fallback === false ? Promise.resolve({ key: fallbackKey, exists: true }) : headR2Object(fallbackKey),
     ...variantChecks.map(([, key]) => headR2Object(key)),
   ]);
 
