@@ -7,6 +7,7 @@ import { Heart } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { deleteLocalCacheByPrefix } from "@/lib/local-cache";
+import { clearHomeSessionCache } from "@/lib/home-session-cache";
 import type { User } from "@supabase/supabase-js";
 
 export default function LikeButton({ trackId }: { trackId: string }) {
@@ -69,6 +70,7 @@ export default function LikeButton({ trackId }: { trackId: string }) {
         toast.error("Failed to like song");
       } else {
         deleteLocalCacheByPrefix(`library:${user.id}`);
+        clearHomeSessionCache();
         toast.success("Added to Library");
       }
     } else {
@@ -84,6 +86,7 @@ export default function LikeButton({ trackId }: { trackId: string }) {
         toast.error("Failed to remove like");
       } else {
         deleteLocalCacheByPrefix(`library:${user.id}`);
+        clearHomeSessionCache();
         toast.success("Removed from Library");
       }
     }

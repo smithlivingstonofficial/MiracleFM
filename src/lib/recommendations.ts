@@ -176,14 +176,30 @@ export async function getRecommendationPlaylist(
   }
 
   if (tracks.length === 0) {
-    const { data } = await supabase
+    let fallbackIds: string[] = [];
+    if (section.algorithm_type !== "new_for_you") {
+      const { data: stats } = await supabase
+        .from("track_engagement_stats")
+        .select("track_id")
+        .order("engagement_score", { ascending: false })
+        .limit(limit);
+      fallbackIds = (stats || []).map((row) => row.track_id).filter(Boolean);
+    }
+
+    const query = supabase
       .from("tracks")
       .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-      .eq("audio_status", "ready")
-      .order(section.algorithm_type === "new_for_you" ? "created_at" : "play_count", { ascending: false })
-      .limit(limit);
+      .eq("audio_status", "ready");
 
-    tracks = ((data || []) as Track[])
+    const { data } =
+      fallbackIds.length > 0
+        ? await query.in("id", fallbackIds)
+        : await query.order("created_at", { ascending: false }).limit(limit);
+
+    const byId = new Map((data || []).map((track) => [track.id, track as Track]));
+    const ordered = fallbackIds.length > 0 ? fallbackIds.map((id) => byId.get(id)).filter(Boolean) : data || [];
+
+    tracks = (ordered as Track[])
       .filter((track) => Boolean(track.hls_url || track.fallback_audio_url))
       .map((track) => ({
         ...track,

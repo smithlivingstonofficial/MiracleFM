@@ -6,6 +6,7 @@ import { ListMusic, Loader2, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { clearHomeSessionCache } from "@/lib/home-session-cache";
 import type { Playlist } from "@/types/music";
 
 type AddToPlaylistButtonProps = {
@@ -54,7 +55,10 @@ export default function AddToPlaylistButton({ trackId, className }: AddToPlaylis
     const { error } = await supabase.from("playlist_tracks").insert({ playlist_id: playlistId, track_id: trackId });
     if (error?.code === "23505") toast.error("Already in this playlist");
     else if (error) toast.error("Could not add song");
-    else toast.success("Added to playlist");
+    else {
+      clearHomeSessionCache();
+      toast.success("Added to playlist");
+    }
     setOpen(false);
   };
 

@@ -3,6 +3,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Sparkles, Music } from "lucide-react";
 import CollectionPlayButton from "./CollectionPlayButton";
 import type { Track } from "@/types/music";
@@ -12,9 +13,11 @@ interface MixCardProps {
   title: string;
   description: string;
   badgeText?: string;
+  href?: string;
 }
 
-export default function MixCard({ tracks, title, description, badgeText = "Daily" }: MixCardProps) {
+export default function MixCard({ tracks, title, description, badgeText = "Daily", href }: MixCardProps) {
+  const router = useRouter();
   // 1. EXTRACT UNIQUE IMAGES
   // We use a Set to ensure we don't have duplicates
   const uniqueImages = Array.from(new Set(
@@ -78,7 +81,16 @@ export default function MixCard({ tracks, title, description, badgeText = "Daily
   };
 
   return (
-    <div className="group relative w-full bg-[#0A0A0A] border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl flex flex-col">
+    <div
+      onClick={() => href && router.push(href)}
+      className={`group relative w-full bg-[#0A0A0A] border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl flex flex-col ${href ? "cursor-pointer" : ""}`}
+      role={href ? "link" : undefined}
+      tabIndex={href ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!href) return;
+        if (event.key === "Enter" || event.key === " ") router.push(href);
+      }}
+    >
       
       {/* --- BACKGROUND EFFECTS --- */}
       <div className="absolute top-0 right-0 w-40 h-40 bg-[#FF0055]/20 blur-[60px] rounded-full pointer-events-none -z-10" />
@@ -101,7 +113,7 @@ export default function MixCard({ tracks, title, description, badgeText = "Daily
          <div className="flex flex-col items-end gap-3">
              
              {/* Play Button */}
-             <div className="relative group/play">
+             <div className="relative group/play" onClick={(event) => event.stopPropagation()}>
                 <div className="absolute inset-0 bg-[#FF0055] rounded-full blur opacity-40 group-hover/play:opacity-80 animate-pulse" />
                 <div className="relative z-10 bg-[#FF0055] hover:bg-[#ff1a66] rounded-full p-0.5 shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer">
                     <CollectionPlayButton tracks={tracks} size="default" />

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Sparkles, X } from "lucide-react";
 import GenrePicker from "@/components/admin/GenrePicker";
 import { fallbackGenreRows } from "@/lib/genres";
+import { clearHomeSessionCache } from "@/lib/home-session-cache";
 import type { Genre } from "@/types/music";
 
 interface Props {
@@ -52,6 +53,7 @@ export default function TasteProfileModal({ isOpen, onClose, initialGenres = [] 
         .upsert({ user_id: user.id, genres: selected });
       
       if (!error) {
+        clearHomeSessionCache();
         toast.success("Profile updated! Curating your feed...");
       } else {
         toast.error("Failed to save profile.");

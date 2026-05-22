@@ -168,7 +168,7 @@ function HeroFallback({ playlist, album, mix, tracks }: { playlist?: Playlist; a
   if (mix) {
     return (
       <div className="h-full min-h-[360px]">
-        <MixCard tracks={mix.tracks} title={mix.section.title} description={mix.section.description} badgeText="Made For You" />
+        <MixCard tracks={mix.tracks} title={mix.section.title} description={mix.section.description} badgeText="Made For You" href={`/mix/${mix.section.slug}`} />
       </div>
     );
   }
@@ -215,7 +215,7 @@ export default function HomeHeroMosaic({
   const hasDailyMix = isSignedIn && dailyMix.length > 0;
 
   const sideFeature = hasDailyMix ? (
-    <MixCard tracks={dailyMix} title="Daily Mix" description="Fresh tunes for your spirit." badgeText="Daily" />
+    <MixCard tracks={dailyMix} title="Daily Mix" description="Fresh tunes for your spirit." badgeText="Daily" href="/mix/daily-mix" />
   ) : firstGenerated ? (
     <GeneratedFeature playlist={firstGenerated} />
   ) : firstPlaylist ? (

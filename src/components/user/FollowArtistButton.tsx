@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { deleteLocalCacheByPrefix } from "@/lib/local-cache";
+import { clearHomeSessionCache } from "@/lib/home-session-cache";
 
 type FollowArtistButtonProps = {
   artistId: string;
@@ -78,6 +79,7 @@ export default function FollowArtistButton({ artistId, className }: FollowArtist
       else {
         deleteLocalCacheByPrefix(`followed-artists:${user.id}`);
         deleteLocalCacheByPrefix(`library:${user.id}`);
+        clearHomeSessionCache();
         setFollowing(false);
         toast.success("Artist removed from follows");
       }
@@ -88,6 +90,7 @@ export default function FollowArtistButton({ artistId, className }: FollowArtist
       else {
         deleteLocalCacheByPrefix(`followed-artists:${user.id}`);
         deleteLocalCacheByPrefix(`library:${user.id}`);
+        clearHomeSessionCache();
         setFollowing(true);
         toast.success("Artist followed");
       }

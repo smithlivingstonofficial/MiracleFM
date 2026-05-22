@@ -10,6 +10,7 @@ import ContinueListeningSection from "@/components/user/home/ContinueListeningSe
 import GuestRecentlyPlayedSection from "@/components/user/home/GuestRecentlyPlayedSection";
 import HomeTrackSection from "@/components/user/home/HomeTrackSection";
 import RecommendationMixSection from "@/components/user/home/RecommendationMixSection";
+import HomeSessionCache from "@/components/user/home/HomeSessionCache";
 import HomeFooter from "@/components/user/home/HomeFooter";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { getRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
@@ -39,7 +40,7 @@ const getCachedPublicData = unstable_cache(
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const [bannersRes, playlistsRes, artistsRes, albumsRes, newTracksRes, popularTracksRes] = await Promise.all([
+    const [bannersRes, playlistsRes, artistsRes, albumsRes, newTracksRes, engagementStatsRes] = await Promise.all([
       supabaseAnon.from("banners").select("*").eq("is_active", true).order("created_at", { ascending: false }),
       supabaseAnon.from("playlists").select("*").is("user_id", null).limit(6),
       supabaseAnon.from("artists").select("*").limit(12),
@@ -51,33 +52,39 @@ const getCachedPublicData = unstable_cache(
         .order("created_at", { ascending: false })
         .limit(12),
       supabaseAnon
-        .from("tracks")
-        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-        .eq("audio_status", "ready")
-        .order("play_count", { ascending: false })
-        .limit(12),
+        .from("track_engagement_stats")
+        .select("track_id, engagement_score, recent_7d_listens, qualified_listens")
+        .order("engagement_score", { ascending: false })
+        .limit(24),
     ]);
 
-    let trendingTracks = popularTracksRes.data || [];
-    const { data: trendingStats } = await supabaseAnon
-      .from("track_listen_stats")
-      .select("track_id, qualified_listens")
-      .order("qualified_listens", { ascending: false })
-      .limit(12);
+    let popularTracks: Track[] = [];
+    let trendingTracks: Track[] = [];
+    const engagementRows = engagementStatsRes.data || [];
+    const popularIds = engagementRows.map((stat) => stat.track_id).filter(Boolean).slice(0, 12);
+    const trendingIds = [...engagementRows]
+      .sort((a, b) => Number(b.recent_7d_listens || 0) - Number(a.recent_7d_listens || 0) || Number(b.engagement_score || 0) - Number(a.engagement_score || 0))
+      .map((stat) => stat.track_id)
+      .filter(Boolean)
+      .slice(0, 12);
+    const engagementIds = Array.from(new Set([...popularIds, ...trendingIds]));
 
-    const trendingIds = trendingStats?.map((stat) => stat.track_id).filter(Boolean) || [];
-    if (trendingIds.length > 0) {
-      const { data: statTracks } = await supabaseAnon
+    if (engagementIds.length > 0) {
+      const { data: engagementTracks } = await supabaseAnon
         .from("tracks")
         .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
         .eq("audio_status", "ready")
-        .in("id", trendingIds);
+        .in("id", engagementIds);
 
-      if (statTracks?.length) {
-        const byId = new Map(statTracks.map((track) => [track.id, track]));
-        trendingTracks = trendingIds.map((id) => byId.get(id)).filter(Boolean);
+      if (engagementTracks?.length) {
+        const byId = new Map(engagementTracks.map((track) => [track.id, track as Track]));
+        popularTracks = popularIds.map((id) => byId.get(id)).filter((track): track is Track => Boolean(track));
+        trendingTracks = trendingIds.map((id) => byId.get(id)).filter((track): track is Track => Boolean(track));
       }
     }
+
+    if (popularTracks.length === 0) popularTracks = newTracksRes.data || [];
+    if (trendingTracks.length === 0) trendingTracks = popularTracks;
 
     const playlistIds = (playlistsRes.data || []).map((playlist) => playlist.id).filter(Boolean);
     const albumIds = (albumsRes.data || []).map((album) => album.id).filter(Boolean);
@@ -116,7 +123,7 @@ const getCachedPublicData = unstable_cache(
 
     const artistTracks = [
       ...((trendingTracks || []) as TrackWithRelations[]),
-      ...((popularTracksRes.data || []) as TrackWithRelations[]),
+      ...((popularTracks || []) as TrackWithRelations[]),
       ...((newTracksRes.data || []) as TrackWithRelations[]),
       ...(Object.values(albumTracks).flat() as TrackWithRelations[]),
     ].reduce<TrackMap>((acc, track) => {
@@ -133,7 +140,7 @@ const getCachedPublicData = unstable_cache(
       artists: artistsRes.data || [],
       albums: albumsRes.data ||[],
       newTracks: newTracksRes.data || [],
-      popularTracks: popularTracksRes.data || [],
+      popularTracks,
       trendingTracks,
       playlistTracks,
       albumTracks,
@@ -263,6 +270,7 @@ export default async function HomePage() {
 
   return (
     <div className="relative min-h-screen w-full bg-[#050505] text-zinc-100 pb-32 overflow-x-hidden selection:bg-[#FF0055] selection:text-white">
+      <HomeSessionCache userId={user?.id} sections={recommendationSections} playlists={recommendationPlaylists} />
       
       {/* Background Atmosphere */}
       <div className="absolute top-0 inset-x-0 h-[500px] md:h-[600px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
@@ -287,19 +295,22 @@ export default async function HomePage() {
       {/* 3. Sections Stack */}
       <div className="mt-10 space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200 fill-mode-forwards md:mt-12 md:space-y-12">
         
-        <FeaturedCollectionShelf
-          playlists={playlists}
-          albums={albums}
-          recommendationPlaylists={recommendationPlaylists}
-          playlistTracks={playlistTracks}
-          albumTracks={albumTracks}
-        />
-
-        <RecommendationMixSection playlists={recommendationPlaylists} />
-
-        <ContinueListeningSection tracks={recentTracks} />
-
-        <GuestRecentlyPlayedSection enabled={!user} />
+        {user ? (
+          <>
+            <ContinueListeningSection tracks={recentTracks} />
+            <RecommendationMixSection playlists={recommendationPlaylists} />
+          </>
+        ) : (
+          <>
+            <GuestRecentlyPlayedSection enabled />
+            <HomeTrackSection
+              title="Trending Songs"
+              description="Songs with real qualified listens from Miracle FM playback."
+              tracks={trendingTracks.length > 0 ? trendingTracks : popularTracks}
+              context="Trending"
+            />
+          </>
+        )}
 
         <HomeTrackSection
           title={user ? "Recommended For You" : "Recommended Worship"}
@@ -308,12 +319,14 @@ export default async function HomePage() {
           context="Recommended"
         />
 
-        <HomeTrackSection
-          title="Trending Songs"
-          description="Songs with real qualified listens from Miracle FM playback."
-          tracks={trendingTracks.length > 0 ? trendingTracks : popularTracks}
-          context="Trending"
-        />
+        {user && (
+          <HomeTrackSection
+            title="Trending Songs"
+            description="Songs with real qualified listens from Miracle FM playback."
+            tracks={trendingTracks.length > 0 ? trendingTracks : popularTracks}
+            context="Trending"
+          />
+        )}
 
         <HomeTrackSection
           title="New Tamil Christian Songs"
@@ -330,6 +343,16 @@ export default async function HomePage() {
             context="Related"
           />
         )}
+
+        {!user && <RecommendationMixSection playlists={recommendationPlaylists} />}
+
+        <FeaturedCollectionShelf
+          playlists={playlists}
+          albums={albums}
+          recommendationPlaylists={recommendationPlaylists}
+          playlistTracks={playlistTracks}
+          albumTracks={albumTracks}
+        />
         
         <NewReleasesSection albums={rankedAlbums} albumTracks={albumTracks} personalized={Boolean(user && userSignalTracks.length > 0)} />
 

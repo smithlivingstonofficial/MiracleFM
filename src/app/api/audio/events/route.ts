@@ -55,7 +55,13 @@ export async function POST(request: Request) {
       metadata: body.metadata ?? {},
     });
 
-    if (error) throw error;
+    if (error) {
+      const code = typeof error === "object" && "code" in error ? String(error.code) : "";
+      if (code === "23505" && eventType === "listen_qualified") {
+        return NextResponse.json({ ok: true, duplicate: true });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

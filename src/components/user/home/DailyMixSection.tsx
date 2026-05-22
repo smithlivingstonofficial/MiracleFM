@@ -16,6 +16,7 @@ export default function DailyMixSection({ user, dailyMix }: DailyMixSectionProps
         tracks={dailyMix}
         title="Daily Mix"
         description="Fresh tunes for your spirit."
+        href="/mix/daily-mix"
       />
     </div>
   );

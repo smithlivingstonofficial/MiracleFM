@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { deleteLocalCacheByPrefix } from "@/lib/local-cache";
+import { clearHomeSessionCache } from "@/lib/home-session-cache";
 
 type SaveAlbumButtonProps = {
   albumId: string;
@@ -78,6 +79,7 @@ export default function SaveAlbumButton({ albumId, className }: SaveAlbumButtonP
       else {
         deleteLocalCacheByPrefix(`saved-albums:${user.id}`);
         deleteLocalCacheByPrefix(`library:${user.id}`);
+        clearHomeSessionCache();
         setSaved(false);
         toast.success("Removed from saved albums");
       }
@@ -88,6 +90,7 @@ export default function SaveAlbumButton({ albumId, className }: SaveAlbumButtonP
       else {
         deleteLocalCacheByPrefix(`saved-albums:${user.id}`);
         deleteLocalCacheByPrefix(`library:${user.id}`);
+        clearHomeSessionCache();
         setSaved(true);
         toast.success("Album saved");
       }
