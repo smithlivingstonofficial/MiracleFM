@@ -70,10 +70,10 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
         {/* Floating Action Bar */}
         <div className="relative z-10 flex items-end justify-between gap-3">
             <div className="min-w-0 pr-2">
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2.5 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-white/75 backdrop-blur-md md:text-[9px]">
+                {/* <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2.5 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-white/75 backdrop-blur-md md:text-[9px]">
                     <Sparkles size={10} className="text-[#FF0055]" />
                     Featured
-                </div>
+                </div> */}
                 <h1 className="line-clamp-2 max-w-xl text-2xl font-black leading-none tracking-tight text-white drop-shadow-2xl md:text-5xl">
                     {hero.title}
                 </h1>
@@ -122,11 +122,11 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
         <div className="relative max-w-2xl w-full space-y-4 md:space-y-6 animate-in slide-in-from-bottom-4 fade-in duration-700 delay-100">
             
             {/* Featured Badge */}
-            <div className="flex justify-center">
+            {/* <div className="flex justify-center">
                 <span className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-[#FF0055] flex items-center gap-2 shadow-lg">
                     <Sparkles size={10} /> Premium Selection
                 </span>
-            </div>
+            </div> */}
 
             {/* Title */}
             <h1 className="text-3xl md:text-6xl font-black text-white tracking-tight leading-tight drop-shadow-2xl">
