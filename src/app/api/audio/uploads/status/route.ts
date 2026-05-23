@@ -52,7 +52,7 @@ export async function GET(request: Request) {
   const { data: track, error: trackError } = await supabase
     .from("tracks")
     .select(
-      "id, title, hls_url, fallback_audio_url, audio_status, audio_version, audio_error, audio_validation, duration_seconds, encoded_at"
+      "id, title, hls_url, fallback_audio_url, audio_status, audio_version, audio_error, audio_validation, duration_seconds, encoded_at, embedded_cover_url, embedded_cover_square_url, embedded_cover_fit_url, embedded_cover_crop_url, embedded_cover_aspect_ratio, embedded_cover_style, embedded_cover_extracted_at, embedded_cover_error"
     )
     .eq("id", trackId)
     .single();
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
 
   const { data: job, error: jobError } = await supabase
     .from("encoding_jobs")
-    .select("id, source_key, status, attempts, error, started_at, completed_at, updated_at, target_bitrates, include_fallback")
+    .select("id, source_key, status, attempts, error, started_at, completed_at, updated_at, target_bitrates, include_fallback, extract_embedded_cover")
     .eq("track_id", trackId)
     .order("created_at", { ascending: false })
     .limit(1)

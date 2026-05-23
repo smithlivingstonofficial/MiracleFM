@@ -16,6 +16,7 @@ import {
   Radio,
   HardDrive,
   SlidersHorizontal,
+  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ interface UploadQueueItem {
   fallbackAudioUrl?: string;
   targetBitrates?: number[];
   includeFallback?: boolean;
+  extractEmbeddedCover?: boolean;
 }
 
 type InitUploadResponse = {
@@ -51,6 +53,13 @@ type UploadStatusResponse = {
     audio_status: "legacy" | "queued" | "encoding" | "ready" | "failed";
     audio_version: string | null;
     audio_error: string | null;
+    embedded_cover_url?: string | null;
+    embedded_cover_square_url?: string | null;
+    embedded_cover_fit_url?: string | null;
+    embedded_cover_crop_url?: string | null;
+    embedded_cover_aspect_ratio?: number | null;
+    embedded_cover_style?: "auto" | "fit" | "crop" | null;
+    embedded_cover_error?: string | null;
   };
   encodingJob?: {
     status: "queued" | "encoding" | "ready" | "failed";
@@ -148,6 +157,7 @@ export default function BulkUploader() {
   const [isDragging, setIsDragging] = useState(false);
   const [targetBitrates, setTargetBitrates] = useState<number[]>(DEFAULT_TARGET_BITRATES);
   const [includeFallback, setIncludeFallback] = useState(true);
+  const [extractEmbeddedCover, setExtractEmbeddedCover] = useState(true);
   const queueRef = useRef(queue);
   const statusPollInFlightRef = useRef(false);
 
@@ -164,6 +174,7 @@ export default function BulkUploader() {
         progress: 0,
         targetBitrates: [...targetBitrates],
         includeFallback,
+        extractEmbeddedCover,
       }));
 
     const rejectedCount = Array.from(files).length - incoming.length;
@@ -179,7 +190,7 @@ export default function BulkUploader() {
     }
 
     setQueue((prev) => [...prev, ...incoming]);
-  }, [includeFallback, targetBitrates]);
+  }, [extractEmbeddedCover, includeFallback, targetBitrates]);
 
   const toggleQuality = (bitrate: number) => {
     if (isProcessing) return;
@@ -210,6 +221,7 @@ export default function BulkUploader() {
         fallbackAudioUrl: undefined,
         targetBitrates: [...targetBitrates],
         includeFallback,
+        extractEmbeddedCover,
       };
       return next;
     });
@@ -276,6 +288,7 @@ export default function BulkUploader() {
         size: file.size,
         targetBitrates: item.targetBitrates || targetBitrates,
         includeFallback: item.includeFallback ?? includeFallback,
+        extractEmbeddedCover: item.extractEmbeddedCover ?? extractEmbeddedCover,
       }),
     });
 
@@ -311,7 +324,9 @@ export default function BulkUploader() {
         progress: 100,
         hlsUrl: status.track?.hls_url || undefined,
         fallbackAudioUrl: status.track?.fallback_audio_url || undefined,
-        errorMessage: undefined,
+      errorMessage: status.track?.embedded_cover_url
+        ? "Stream ready. Embedded cover candidate found."
+        : status.track?.embedded_cover_error || undefined,
       });
       return;
     }
@@ -332,7 +347,7 @@ export default function BulkUploader() {
       updateItem(idx, {
         status: "encoding",
         progress: 94,
-        errorMessage: "Local encoder worker is processing this track.",
+      errorMessage: "Local encoder worker is processing this track.",
       });
       return;
     }
@@ -521,7 +536,7 @@ export default function BulkUploader() {
         </label>
       </div>
 
-      <div className="grid gap-4 rounded-3xl border border-white/5 bg-black/35 p-5 md:grid-cols-[1fr_auto] md:items-center">
+      <div className="grid gap-4 rounded-3xl border border-white/5 bg-black/35 p-5 md:grid-cols-[1fr_auto_auto] md:items-center">
         <div>
           <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500">
             <SlidersHorizontal size={15} className="text-brand" />
@@ -568,6 +583,26 @@ export default function BulkUploader() {
           </span>
           <span className={cn("h-6 w-11 rounded-full p-1 transition-colors", includeFallback ? "bg-green-500" : "bg-zinc-700")}>
             <span className={cn("block h-4 w-4 rounded-full bg-white transition-transform", includeFallback && "translate-x-5")} />
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => !isProcessing && setExtractEmbeddedCover((value) => !value)}
+          disabled={isProcessing}
+          className={cn(
+            "flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition-colors disabled:opacity-50 md:min-w-64",
+            extractEmbeddedCover ? "border-brand/25 bg-brand/10" : "border-white/10 bg-white/5"
+          )}
+        >
+          <span>
+            <span className="block text-xs font-black uppercase tracking-widest text-white">Embedded Cover</span>
+            <span className="mt-1 block text-[10px] font-bold text-zinc-500">
+              {extractEmbeddedCover ? "Extract as preview candidate" : "Skip cover extraction"}
+            </span>
+          </span>
+          <span className={cn("h-6 w-11 rounded-full p-1 transition-colors", extractEmbeddedCover ? "bg-brand" : "bg-zinc-700")}>
+            <span className={cn("block h-4 w-4 rounded-full bg-white transition-transform", extractEmbeddedCover && "translate-x-5")} />
           </span>
         </button>
       </div>
@@ -739,6 +774,13 @@ function QueueItem({
               item.includeFallback === false ? "bg-zinc-800 text-zinc-600" : "bg-green-500/10 text-green-500"
             )}>
               {item.includeFallback === false ? "No fallback" : "Fallback"}
+            </span>
+            <span className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
+              item.extractEmbeddedCover === false ? "bg-zinc-800 text-zinc-600" : "bg-brand/10 text-brand"
+            )}>
+              <ImageIcon size={10} />
+              {item.extractEmbeddedCover === false ? "No cover scan" : "Cover scan"}
             </span>
           </div>
 

@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { usePlayerStore } from "@/store/usePlayerStore";
 import { 
   Search, Music, Edit2, Trash2, Play, Pause, Plus, 
-  Calendar, Disc, CheckSquare, Square, X, Filter, 
+  Calendar, CheckSquare, Square, X, Filter, 
   UserPlus, ListPlus, Loader2, Album, ChevronDown, 
-  ArrowUpDown, Copy, Check, Tags, Terminal, HardDrive
+  ArrowUpDown, Copy, Check, Tags, Terminal, HardDrive, RefreshCw,
+  Image as ImageIcon, Eraser, FileText
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ type SortField = "created_at" | "title" | "artist" | "album";
 type SortOrder = "asc" | "desc";
 type BulkGenreMode = "replace" | "add" | "remove";
 type AudioDeleteMode = "track" | "audio" | "qualities" | "fallback" | "original";
+type CoverVariant = "auto" | "fit" | "crop";
 const FILTER_OPTIONS: FilterType[] = ["all", "no_artist", "no_album", "no_cover", "no_genre", "has_genre"];
 const AUDIO_QUALITIES = [64, 128, 256];
 
@@ -53,7 +55,7 @@ export default function AdminTracksPage() {
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const lastSelectedIndex = useRef<number>(-1); 
-  const [bulkActionType, setBulkActionType] = useState<"artist" | "playlist" | "album" | "genre" | "encode" | "delete" | null>(null);
+  const [bulkActionType, setBulkActionType] = useState<"artist" | "playlist" | "album" | "genre" | "encode" | "cover" | "delete" | null>(null);
   const [bulkGenres, setBulkGenres] = useState<string[]>([]);
   const [bulkGenreMode, setBulkGenreMode] = useState<BulkGenreMode>("add");
   const [bulkEncodeQualities, setBulkEncodeQualities] = useState<number[]>([256]);
@@ -61,7 +63,9 @@ export default function AdminTracksPage() {
   
   // Modals
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [lyricsEditingTrack, setLyricsEditingTrack] = useState<any | null>(null);
+  const [lyricsDraft, setLyricsDraft] = useState("");
+  const [isLyricsSaving, setIsLyricsSaving] = useState(false);
 
   // External
   const { setTrack, currentTrack, isPlaying, setIsPlaying } = usePlayerStore();
@@ -91,7 +95,7 @@ export default function AdminTracksPage() {
 
   // --- LOGIC: FILTER & SORT ---
   const processTracks = () => {
-    let result = tracks.filter(t => {
+    const result = tracks.filter(t => {
       const matchesSearch = 
         t.title.toLowerCase().includes(search.toLowerCase()) || 
         t.artists?.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -220,6 +224,48 @@ export default function AdminTracksPage() {
     toast.success("ID Copied");
   };
 
+  const hasLyrics = (track: any) => Boolean(String(track.lyrics || "").trim());
+
+  const openLyricsEditor = (track: any, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    setLyricsEditingTrack(track);
+    setLyricsDraft(track.lyrics || "");
+  };
+
+  const closeLyricsEditor = () => {
+    if (isLyricsSaving) return;
+    setLyricsEditingTrack(null);
+    setLyricsDraft("");
+  };
+
+  const clearLyricsDraft = () => {
+    setLyricsDraft("");
+  };
+
+  const saveLyricsEdit = async () => {
+    if (!lyricsEditingTrack) return;
+
+    const nextLyrics = lyricsDraft.trim() || null;
+    const oldTracks = [...tracks];
+    setIsLyricsSaving(true);
+    setTracks((current) =>
+      current.map((track) => (track.id === lyricsEditingTrack.id ? { ...track, lyrics: nextLyrics } : track))
+    );
+
+    const { error } = await supabase.from("tracks").update({ lyrics: nextLyrics }).eq("id", lyricsEditingTrack.id);
+
+    setIsLyricsSaving(false);
+    if (error) {
+      setTracks(oldTracks);
+      toast.error("Could not save lyrics");
+      return;
+    }
+
+    toast.success(nextLyrics ? "Lyrics saved" : "Lyrics cleared");
+    setLyricsEditingTrack(null);
+    setLyricsDraft("");
+  };
+
   const formatBytes = (bytes?: number | null) => {
     if (!bytes || bytes <= 0) return "0 MB";
     if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -274,6 +320,222 @@ export default function AdminTracksPage() {
 
     navigator.clipboard.writeText(encodeCommandFor(eligibleIds, bitrates));
     toast.success(`Encode command copied for ${eligibleIds.length} track${eligibleIds.length === 1 ? "" : "s"}`);
+  };
+
+  const artworkCommandFor = (trackIds: string[], force = false) =>
+    `npm run worker:encode -- --tracks "${trackIds.join(",")}" --artwork-only${force ? " --force-artwork" : ""}`;
+
+  const copyArtworkCommand = (trackIds: string[], force = false, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    const eligibleIds = trackIds.filter((id) => {
+      const track = tracks.find((item) => item.id === id);
+      return track && hasOriginalSource(track);
+    });
+
+    if (eligibleIds.length === 0) {
+      toast.error("No selected tracks have an original source available.");
+      return;
+    }
+
+    navigator.clipboard.writeText(artworkCommandFor(eligibleIds, force));
+    toast.success(`Artwork command copied for ${eligibleIds.length} track${eligibleIds.length === 1 ? "" : "s"}`);
+  };
+
+  const coverVariantUrl = (track: any, variant: CoverVariant) => {
+    if (variant === "fit") return track.embedded_cover_fit_url || track.embedded_cover_square_url || track.embedded_cover_url;
+    if (variant === "crop") return track.embedded_cover_crop_url || track.embedded_cover_square_url || track.embedded_cover_url;
+    return track.embedded_cover_square_url || track.embedded_cover_fit_url || track.embedded_cover_url;
+  };
+
+  const preferredCoverVariant = (track: any): CoverVariant => {
+    if (track.embedded_cover_style === "auto" || track.embedded_cover_style === "fit" || track.embedded_cover_style === "crop") {
+      return track.embedded_cover_style;
+    }
+    const ratio = Number(track.embedded_cover_aspect_ratio || 0);
+    return ratio > 0 && (ratio < 0.9 || ratio > 1.1) ? "fit" : "auto";
+  };
+
+  const coverCandidateUrl = (track: any) => coverVariantUrl(track, preferredCoverVariant(track));
+
+  const applyEmbeddedCover = async (track: any, event?: React.MouseEvent, variant = preferredCoverVariant(track)) => {
+    event?.stopPropagation();
+    const candidateUrl = coverVariantUrl(track, variant);
+    if (!candidateUrl) {
+      toast.error("This track has no embedded cover candidate yet.");
+      return;
+    }
+
+    const oldTracks = [...tracks];
+    setTracks((current) =>
+      current.map((item) => (item.id === track.id ? { ...item, cover_url: candidateUrl, embedded_cover_style: variant } : item))
+    );
+
+    const { error } = await supabase
+      .from("tracks")
+      .update({ cover_url: candidateUrl, embedded_cover_style: variant })
+      .eq("id", track.id);
+
+    if (error) {
+      setTracks(oldTracks);
+      toast.error("Could not apply embedded cover.");
+      return;
+    }
+
+    toast.success("Embedded cover applied.");
+  };
+
+  const clearTrackCover = async (track: any, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    if (!track.cover_url) {
+      toast.error("This track does not have a track cover enabled.");
+      return;
+    }
+
+    const oldTracks = [...tracks];
+    setTracks((current) =>
+      current.map((item) => (item.id === track.id ? { ...item, cover_url: null } : item))
+    );
+
+    const { error } = await supabase.from("tracks").update({ cover_url: null }).eq("id", track.id);
+
+    if (error) {
+      setTracks(oldTracks);
+      toast.error("Could not turn off the track cover.");
+      return;
+    }
+
+    toast.success("Track cover turned off.");
+  };
+
+  const applyBulkEmbeddedCovers = async (variant?: CoverVariant) => {
+    const selectedSet = new Set(selectedIds);
+    const targets = tracks.filter((track) => selectedSet.has(track.id) && coverVariantUrl(track, variant || preferredCoverVariant(track)));
+
+    if (targets.length === 0) {
+      toast.error("No selected tracks have embedded cover candidates.");
+      return;
+    }
+
+    const oldTracks = [...tracks];
+    setTracks((current) =>
+      current.map((track) =>
+        selectedSet.has(track.id) && coverVariantUrl(track, variant || preferredCoverVariant(track))
+          ? {
+              ...track,
+              cover_url: coverVariantUrl(track, variant || preferredCoverVariant(track)),
+              embedded_cover_style: variant || preferredCoverVariant(track),
+            }
+          : track
+      )
+    );
+
+    const results = await Promise.all(
+      targets.map((track) => {
+        const nextVariant = variant || preferredCoverVariant(track);
+        return supabase
+          .from("tracks")
+          .update({ cover_url: coverVariantUrl(track, nextVariant), embedded_cover_style: nextVariant })
+          .eq("id", track.id);
+      })
+    );
+
+    if (results.some((result) => result.error)) {
+      setTracks(oldTracks);
+      toast.error("Some covers could not be applied.");
+      return;
+    }
+
+    toast.success(`Applied ${variant || "preferred"} covers to ${targets.length} track${targets.length === 1 ? "" : "s"}`);
+    resetBulkState();
+  };
+
+  const clearBulkTrackCovers = async () => {
+    const selectedSet = new Set(selectedIds);
+    const targets = tracks.filter((track) => selectedSet.has(track.id) && track.cover_url);
+
+    if (targets.length === 0) {
+      toast.error("No selected tracks have active track covers to turn off.");
+      return;
+    }
+
+    const oldTracks = [...tracks];
+    setTracks((current) =>
+      current.map((track) => (selectedSet.has(track.id) ? { ...track, cover_url: null } : track))
+    );
+
+    const { error } = await supabase
+      .from("tracks")
+      .update({ cover_url: null })
+      .in("id", targets.map((track) => track.id));
+
+    if (error) {
+      setTracks(oldTracks);
+      toast.error("Could not turn off selected track covers.");
+      return;
+    }
+
+    toast.success(`Turned off track covers for ${targets.length} track${targets.length === 1 ? "" : "s"}`);
+    resetBulkState();
+  };
+
+  const clearBulkEmbeddedCovers = async () => {
+    const selectedSet = new Set(selectedIds);
+    const targets = tracks.filter(
+      (track) =>
+        selectedSet.has(track.id) &&
+        (track.embedded_cover_url ||
+          track.embedded_cover_square_url ||
+          track.embedded_cover_fit_url ||
+          track.embedded_cover_crop_url ||
+          track.embedded_cover_error)
+    );
+
+    if (targets.length === 0) {
+      toast.error("No selected tracks have cover candidates to clear.");
+      return;
+    }
+
+    const oldTracks = [...tracks];
+    setTracks((current) =>
+      current.map((track) =>
+        selectedSet.has(track.id)
+          ? {
+              ...track,
+              embedded_cover_url: null,
+              embedded_cover_square_url: null,
+              embedded_cover_fit_url: null,
+              embedded_cover_crop_url: null,
+              embedded_cover_aspect_ratio: null,
+              embedded_cover_style: "auto",
+              embedded_cover_error: null,
+              embedded_cover_extracted_at: null,
+            }
+          : track
+      )
+    );
+
+    const { error } = await supabase
+      .from("tracks")
+      .update({
+        embedded_cover_url: null,
+        embedded_cover_square_url: null,
+        embedded_cover_fit_url: null,
+        embedded_cover_crop_url: null,
+        embedded_cover_aspect_ratio: null,
+        embedded_cover_style: "auto",
+        embedded_cover_error: null,
+        embedded_cover_extracted_at: null,
+      })
+      .in("id", targets.map((track) => track.id));
+
+    if (error) {
+      setTracks(oldTracks);
+      toast.error("Could not clear embedded cover candidates.");
+      return;
+    }
+
+    toast.success(`Cleared embedded cover candidates for ${targets.length} track${targets.length === 1 ? "" : "s"}`);
+    resetBulkState();
   };
 
   const missingBitratesFor = (track: any) => {
@@ -344,7 +606,6 @@ export default function AdminTracksPage() {
   };
 
   const handleBulkDeleteConfirm = async () => {
-    setIsDeleting(true);
     try {
       const response = await fetch("/api/admin/tracks/audio/delete", {
         method: "POST",
@@ -367,7 +628,6 @@ export default function AdminTracksPage() {
       const message = e instanceof Error ? e.message : "Batch deletion failed";
       toast.error(message);
     } finally {
-      setIsDeleting(false);
       setIsDeleteModalOpen(false);
     }
   };
@@ -396,6 +656,11 @@ export default function AdminTracksPage() {
   };
 
   const activeGenreNames = new Set(genreOptions.filter((genre) => genre.is_active).map((genre) => genre.name));
+  const selectedTracks = tracks.filter((track) => selectedIds.includes(track.id));
+  const selectedOriginalCount = selectedTracks.filter(hasOriginalSource).length;
+  const selectedCandidateCount = selectedTracks.filter((track) => Boolean(coverCandidateUrl(track))).length;
+  const selectedExistingCoverCount = selectedTracks.filter((track) => Boolean(track.cover_url)).length;
+  const selectedPreviewTrack = selectedTracks.find((track) => coverCandidateUrl(track));
 
   const getHealthStatus = (track: any) => {
     const missing = [];
@@ -403,6 +668,30 @@ export default function AdminTracksPage() {
     if (!track.album_id) missing.push("Album");
     if (!track.cover_url) missing.push("Cover");
     return missing.length > 0 ? missing.join(", ") : null;
+  };
+
+  const getCoverStatus = (track: any) => {
+    const candidateUrl = coverCandidateUrl(track);
+    if (candidateUrl && track.cover_url === candidateUrl) return "Applied";
+    if (candidateUrl) return "Candidate";
+    if (track.cover_url) return "Cover";
+    if (!hasOriginalSource(track)) return "Original missing";
+    if (track.embedded_cover_error) return "No embedded cover";
+    return "No cover";
+  };
+
+  const getCoverShape = (track: any) => {
+    const ratio = Number(track.embedded_cover_aspect_ratio || 0);
+    if (!Number.isFinite(ratio) || ratio <= 0) return null;
+    if (ratio >= 0.9 && ratio <= 1.1) return "Square";
+    if (ratio > 1.1) return "Wide";
+    return "Portrait";
+  };
+
+  const coverVariantLabel = (variant: CoverVariant) => {
+    if (variant === "fit") return "Fit";
+    if (variant === "crop") return "Crop";
+    return "Auto";
   };
 
   return (
@@ -613,6 +902,10 @@ export default function AdminTracksPage() {
             const bitrates = availableBitrates(track);
             const sourceJob = latestEncodingJob(track);
             const sourceAvailable = hasOriginalSource(track);
+            const coverStatus = getCoverStatus(track);
+            const candidateImage = coverCandidateUrl(track);
+            const coverShape = getCoverShape(track);
+            const activeCoverVariant = preferredCoverVariant(track);
 
             return (
               <div 
@@ -627,11 +920,22 @@ export default function AdminTracksPage() {
                 </div>
 
                 <div className="col-span-5 flex items-center gap-5">
-                  <div className="relative w-14 h-14 shrink-0 rounded-xl overflow-hidden bg-zinc-950 border border-white/5 shadow-md group/cover cursor-pointer" onClick={(e) => handlePlayTrack(track, e)}>
-                    {displayImage ? <Image src={displayImage} alt="" fill className="object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-800"><Music size={20} /></div>}
-                    <div className={cn("absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity backdrop-blur-[1px]", isCurrent ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100")}>
-                      {isCurrent && isPlaying ? <Pause size={18} fill="white" className="text-white" /> : <Play size={18} fill="white" className="text-white ml-1" />}
+                  <div className="relative shrink-0">
+                    <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-white/5 shadow-md group/cover cursor-pointer" onClick={(e) => handlePlayTrack(track, e)}>
+                      {displayImage ? <Image src={displayImage} alt="" fill className="object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-800"><Music size={20} /></div>}
+                      <div className={cn("absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity backdrop-blur-[1px]", isCurrent ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100")}>
+                        {isCurrent && isPlaying ? <Pause size={18} fill="white" className="text-white" /> : <Play size={18} fill="white" className="text-white ml-1" />}
+                      </div>
                     </div>
+                    {candidateImage && (
+                      <button
+                        onClick={(e) => applyEmbeddedCover(track, e)}
+                        title="Use embedded cover"
+                        className="absolute -bottom-1.5 -right-1.5 h-7 w-7 overflow-hidden rounded-lg border border-brand/50 bg-black shadow-lg ring-2 ring-panel"
+                      >
+                        <Image src={candidateImage} alt="" fill className="object-cover" />
+                      </button>
+                    )}
                   </div>
                   
                   <div className="min-w-0 pr-4 flex-1">
@@ -705,6 +1009,37 @@ export default function AdminTracksPage() {
                       )}>
                         {sourceAvailable ? "Original" : "No original"}
                       </span>
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
+                        coverStatus === "Applied" ? "bg-green-500/10 text-green-400" :
+                        coverStatus === "Candidate" ? "bg-brand/10 text-brand" :
+                        coverStatus === "Cover" ? "bg-white/5 text-zinc-500" :
+                        coverStatus === "Original missing" ? "bg-red-500/10 text-red-400" :
+                        "bg-yellow-500/10 text-yellow-300"
+                      )}>
+                        {coverStatus}
+                      </span>
+                      {coverShape && (
+                        <span className={cn(
+                          "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
+                          coverShape === "Square" ? "bg-green-500/10 text-green-400" :
+                          coverShape === "Wide" ? "bg-blue-500/10 text-blue-300" :
+                          "bg-purple-500/10 text-purple-300"
+                        )}>
+                          {coverShape}
+                        </span>
+                      )}
+                      {candidateImage && (
+                        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-zinc-400">
+                          {coverVariantLabel(activeCoverVariant)}
+                        </span>
+                      )}
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
+                        hasLyrics(track) ? "bg-green-500/10 text-green-400" : "bg-zinc-800 text-zinc-600"
+                      )}>
+                        {hasLyrics(track) ? "Lyrics" : "No lyrics"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -738,6 +1073,13 @@ export default function AdminTracksPage() {
                 </div>
 
                 <div className="col-span-1 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {candidateImage && track.cover_url !== candidateImage && (
+                    <button onClick={(e) => applyEmbeddedCover(track, e)} className="p-2 rounded-lg text-zinc-500 hover:text-brand hover:bg-brand/10" title="Use embedded cover"><ImageIcon size={16} /></button>
+                  )}
+                  {track.cover_url && (
+                    <button onClick={(e) => clearTrackCover(track, e)} className="p-2 rounded-lg text-zinc-500 hover:text-yellow-300 hover:bg-yellow-500/10" title="Turn off track cover"><Eraser size={16} /></button>
+                  )}
+                  <button onClick={(e) => openLyricsEditor(track, e)} className="p-2 rounded-lg text-zinc-500 hover:text-green-400 hover:bg-green-500/10" title="Edit lyrics"><FileText size={16} /></button>
                   <button onClick={(e) => { e.stopPropagation(); router.push(`/tracks/${track.id}`) }} className="p-2 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10"><Edit2 size={16} /></button>
                 </div>
               </div>
@@ -748,27 +1090,27 @@ export default function AdminTracksPage() {
 
       {/* Floating Toolbar */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-30 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-10 duration-500">
-          <div className="bg-white text-black px-6 py-3 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] flex items-center gap-6 border border-white/20">
-            <div className="flex items-center gap-3 pr-6 border-r border-black/10">
+        <div className="fixed inset-x-3 bottom-[104px] z-[60] animate-in slide-in-from-bottom-10 duration-500 md:left-[300px] md:right-6 md:bottom-[112px]">
+          <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-3 overflow-visible rounded-2xl border border-white/10 bg-[#101010]/95 px-3 py-3 text-white shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl md:flex-nowrap md:gap-4 md:px-4">
+            <div className="flex shrink-0 items-center gap-3 pr-3 border-r border-white/10">
               <div className="bg-brand text-white w-7 h-7 rounded-full flex items-center justify-center font-black text-xs">{selectedIds.length}</div>
-              <span className="font-bold text-xs uppercase tracking-widest">Selected</span>
+              <span className="font-bold text-xs uppercase tracking-widest text-zinc-300">Selected</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:flex-nowrap">
               <div className="relative">
-                <button onClick={() => setBulkActionType(bulkActionType === 'artist' ? null : 'artist')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 rounded-full transition-colors font-bold text-xs uppercase"><UserPlus size={16} /> Artist</button>
+                <button onClick={() => setBulkActionType(bulkActionType === 'artist' ? null : 'artist')} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-colors font-bold text-xs uppercase text-zinc-200"><UserPlus size={16} /> Artist</button>
                 {bulkActionType === 'artist' && <div className="absolute bottom-full mb-4 left-0 w-64 bg-[#121212] text-white rounded-2xl shadow-2xl p-2 border border-white/10 max-h-60 overflow-y-auto custom-scrollbar">{artists.map(a => <button key={a.id} onClick={() => applyBulkUpdate('artist_id', a.id)} className="w-full text-left px-4 py-3 hover:bg-white/5 rounded-xl text-xs font-bold transition-colors">{a.name}</button>)}</div>}
               </div>
               <div className="relative">
-                <button onClick={() => setBulkActionType(bulkActionType === 'album' ? null : 'album')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 rounded-full transition-colors font-bold text-xs uppercase"><Album size={16} /> Album</button>
+                <button onClick={() => setBulkActionType(bulkActionType === 'album' ? null : 'album')} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-colors font-bold text-xs uppercase text-zinc-200"><Album size={16} /> Album</button>
                 {bulkActionType === 'album' && <div className="absolute bottom-full mb-4 left-0 w-64 bg-[#121212] text-white rounded-2xl shadow-2xl p-2 border border-white/10 max-h-60 overflow-y-auto custom-scrollbar">{albums.map(a => <button key={a.id} onClick={() => applyBulkUpdate('album_id', a.id)} className="w-full text-left px-4 py-3 hover:bg-white/5 rounded-xl text-xs font-bold transition-colors">{a.title}</button>)}</div>}
               </div>
               <div className="relative">
-                <button onClick={() => setBulkActionType(bulkActionType === 'playlist' ? null : 'playlist')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 rounded-full transition-colors font-bold text-xs uppercase"><ListPlus size={16} /> Playlist</button>
+                <button onClick={() => setBulkActionType(bulkActionType === 'playlist' ? null : 'playlist')} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-colors font-bold text-xs uppercase text-zinc-200"><ListPlus size={16} /> Playlist</button>
                 {bulkActionType === 'playlist' && <div className="absolute bottom-full mb-4 left-0 w-64 bg-[#121212] text-white rounded-2xl shadow-2xl p-2 border border-white/10 max-h-60 overflow-y-auto custom-scrollbar">{playlists.map(p => <button key={p.id} onClick={() => applyBulkPlaylist(p.id)} className="w-full text-left px-4 py-3 hover:bg-white/5 rounded-xl text-xs font-bold transition-colors">{p.title}</button>)}</div>}
               </div>
               <div className="relative">
-                <button onClick={() => setBulkActionType(bulkActionType === 'genre' ? null : 'genre')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 rounded-full transition-colors font-bold text-xs uppercase"><Tags size={16} /> Genre</button>
+                <button onClick={() => setBulkActionType(bulkActionType === 'genre' ? null : 'genre')} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-colors font-bold text-xs uppercase text-zinc-200"><Tags size={16} /> Genre</button>
                 {bulkActionType === 'genre' && (
                   <div className="absolute bottom-full mb-4 left-0 w-[360px] bg-[#121212] text-white rounded-2xl shadow-2xl p-4 border border-white/10 max-h-[520px] overflow-y-auto custom-scrollbar">
                     <div className="mb-4 grid grid-cols-3 gap-2">
@@ -801,7 +1143,7 @@ export default function AdminTracksPage() {
                 )}
               </div>
               <div className="relative">
-                <button onClick={() => setBulkActionType(bulkActionType === 'encode' ? null : 'encode')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 rounded-full transition-colors font-bold text-xs uppercase"><Terminal size={16} /> Encode</button>
+                <button onClick={() => setBulkActionType(bulkActionType === 'encode' ? null : 'encode')} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-colors font-bold text-xs uppercase text-zinc-200"><Terminal size={16} /> Encode</button>
                 {bulkActionType === 'encode' && (
                   <div className="absolute bottom-full mb-4 left-0 w-72 bg-[#121212] text-white rounded-2xl shadow-2xl p-4 border border-white/10">
                     <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-zinc-500">Qualities</p>
@@ -825,9 +1167,90 @@ export default function AdminTracksPage() {
                   </div>
                 )}
               </div>
-              <div className="h-6 w-[1px] bg-black/10 mx-2" />
+              {selectedTracks.length === 1 && (
+                <button
+                  onClick={(event) => openLyricsEditor(selectedTracks[0], event)}
+                  className="flex items-center gap-2 px-3 py-2.5 hover:bg-green-500/10 rounded-xl transition-colors font-bold text-xs uppercase text-zinc-200"
+                >
+                  <FileText size={16} /> Lyrics
+                </button>
+              )}
               <div className="relative">
-                <button onClick={() => setBulkActionType(bulkActionType === 'delete' ? null : 'delete')} className="flex items-center gap-2 px-4 py-2.5 hover:bg-red-50 text-red-600 rounded-full transition-colors font-bold text-xs uppercase"><Trash2 size={16} /> Delete</button>
+                <button onClick={() => setBulkActionType(bulkActionType === 'cover' ? null : 'cover')} className="flex items-center gap-2 px-3 py-2.5 hover:bg-brand/10 rounded-xl transition-colors font-bold text-xs uppercase text-zinc-200"><ImageIcon size={16} /> Cover</button>
+                {bulkActionType === 'cover' && (
+                  <div className="absolute bottom-full mb-4 left-0 w-[min(88vw,380px)] bg-[#121212] text-white rounded-2xl shadow-2xl p-4 border border-white/10">
+                    <div className="mb-4 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-xl bg-white/5 p-3">
+                        <p className="text-lg font-black text-white">{selectedOriginalCount}</p>
+                        <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-zinc-500">Originals</p>
+                      </div>
+                      <div className="rounded-xl bg-brand/10 p-3">
+                        <p className="text-lg font-black text-brand">{selectedCandidateCount}</p>
+                        <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-zinc-500">Candidates</p>
+                      </div>
+                      <div className="rounded-xl bg-white/5 p-3">
+                        <p className="text-lg font-black text-white">{selectedExistingCoverCount}</p>
+                        <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-zinc-500">Covers</p>
+                      </div>
+                    </div>
+                    {selectedPreviewTrack && (
+                      <div className="mb-4 grid grid-cols-3 gap-2">
+                        {(["auto", "fit", "crop"] as CoverVariant[]).map((variant) => {
+                          const previewUrl = coverVariantUrl(selectedPreviewTrack, variant);
+                          const isActive = preferredCoverVariant(selectedPreviewTrack) === variant;
+
+                          return (
+                            <button
+                              key={variant}
+                              onClick={() => applyEmbeddedCover(selectedPreviewTrack, undefined, variant)}
+                              disabled={!previewUrl}
+                              className={cn(
+                                "space-y-2 rounded-xl border p-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                                isActive ? "border-brand bg-brand/10" : "border-white/10 bg-white/5 hover:bg-white/10"
+                              )}
+                            >
+                              <div className="relative aspect-square overflow-hidden rounded-lg bg-black">
+                                {previewUrl ? <Image src={previewUrl} alt="" fill className="object-cover" /> : <div className="h-full w-full" />}
+                              </div>
+                              <span className={cn("block text-center text-[9px] font-black uppercase tracking-widest", isActive ? "text-brand" : "text-zinc-400")}>
+                                {coverVariantLabel(variant)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <button onClick={() => copyArtworkCommand(selectedIds)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                        <Terminal size={14} /> Extract missing variants
+                      </button>
+                      <button onClick={() => copyArtworkCommand(selectedIds, true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-zinc-300 hover:bg-white/5">
+                        <RefreshCw size={14} /> Regenerate variants
+                      </button>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["auto", "fit", "crop"] as CoverVariant[]).map((variant) => (
+                          <button
+                            key={variant}
+                            onClick={() => applyBulkEmbeddedCovers(variant)}
+                            className="flex items-center justify-center gap-1 rounded-xl border border-green-500/20 bg-green-500/10 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-green-400"
+                          >
+                            <Check size={13} /> {coverVariantLabel(variant)}
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={clearBulkTrackCovers} className="flex w-full items-center justify-center gap-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-xs font-black uppercase tracking-widest text-yellow-300">
+                        <Eraser size={14} /> Turn off covers
+                      </button>
+                      <button onClick={clearBulkEmbeddedCovers} className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10">
+                        <Eraser size={14} /> Clear candidates
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="h-6 w-[1px] bg-white/10 mx-1" />
+              <div className="relative">
+                <button onClick={() => setBulkActionType(bulkActionType === 'delete' ? null : 'delete')} className="flex items-center gap-2 px-3 py-2.5 hover:bg-red-500/10 text-red-400 rounded-xl transition-colors font-bold text-xs uppercase"><Trash2 size={16} /> Delete</button>
                 {bulkActionType === 'delete' && (
                   <div className="absolute bottom-full mb-4 right-0 w-72 bg-[#121212] text-white rounded-2xl shadow-2xl p-2 border border-white/10">
                     {([
@@ -852,7 +1275,74 @@ export default function AdminTracksPage() {
                 )}
               </div>
             </div>
-            <button onClick={() => setSelectedIds([])} className="p-2 hover:bg-black/5 rounded-full transition-colors ml-2"><X size={18} /></button>
+            <button onClick={() => setSelectedIds([])} className="ml-auto shrink-0 p-2 hover:bg-white/10 rounded-xl text-zinc-400 transition-colors"><X size={18} /></button>
+          </div>
+        </div>
+      )}
+
+      {/* Lyrics Editor Modal */}
+      {lyricsEditingTrack && (
+        <div className="fixed inset-0 z-[140] flex items-end justify-center bg-black/80 p-0 backdrop-blur-md md:items-center md:p-6">
+          <div className="w-full max-w-3xl overflow-hidden rounded-t-[2rem] border border-white/10 bg-[#101010] shadow-2xl md:rounded-[2rem]">
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5 md:p-6">
+              <div className="min-w-0">
+                <p className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-green-400">
+                  <FileText size={13} /> Lyrics Editor
+                </p>
+                <h2 className="truncate text-xl font-black text-white md:text-2xl">{lyricsEditingTrack.title}</h2>
+                <p className="mt-1 truncate text-sm font-bold text-zinc-500">
+                  {lyricsEditingTrack.artists?.name || "Unknown Artist"}
+                </p>
+              </div>
+              <button
+                onClick={closeLyricsEditor}
+                disabled={isLyricsSaving}
+                className="rounded-xl p-2 text-zinc-500 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 md:p-6">
+              <textarea
+                autoFocus
+                value={lyricsDraft}
+                onChange={(event) => setLyricsDraft(event.target.value)}
+                placeholder="Paste plain lyrics or synced lyrics like [01:24] line text..."
+                className="h-[52vh] max-h-[520px] min-h-[300px] w-full resize-none rounded-2xl border border-white/10 bg-black p-5 text-sm font-medium leading-7 text-zinc-200 outline-none transition focus:border-green-500/40 focus:ring-4 focus:ring-green-500/10"
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[10px] font-black uppercase tracking-widest text-zinc-600">
+                <span>{lyricsDraft.length} characters</span>
+                <span>{lyricsDraft.trim() ? lyricsDraft.trim().split(/\r?\n/).length : 0} lines</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-white/10 p-5 md:flex-row md:items-center md:justify-between md:p-6">
+              <button
+                onClick={clearLyricsDraft}
+                disabled={isLyricsSaving || lyricsDraft.length === 0}
+                className="rounded-xl border border-red-500/20 px-5 py-3 text-xs font-black uppercase tracking-widest text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Clear
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={closeLyricsEditor}
+                  disabled={isLyricsSaving}
+                  className="rounded-xl border border-white/10 px-5 py-3 text-xs font-black uppercase tracking-widest text-zinc-400 transition hover:bg-white/5 hover:text-white disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveLyricsEdit}
+                  disabled={isLyricsSaving}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-500 px-6 py-3 text-xs font-black uppercase tracking-widest text-black transition hover:bg-green-400 disabled:opacity-50"
+                >
+                  {isLyricsSaving && <Loader2 size={14} className="animate-spin" />}
+                  Save
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

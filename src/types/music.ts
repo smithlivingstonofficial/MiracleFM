@@ -24,6 +24,12 @@ export type Track = {
   audio_status?: "legacy" | "queued" | "encoding" | "ready" | "failed";
   audio_version?: string | null;
   cover_url?: string | null;
+  embedded_cover_url?: string | null;
+  embedded_cover_square_url?: string | null;
+  embedded_cover_fit_url?: string | null;
+  embedded_cover_crop_url?: string | null;
+  embedded_cover_aspect_ratio?: number | null;
+  embedded_cover_style?: "auto" | "fit" | "crop" | null;
   duration?: number | null;
   duration_seconds?: number | null;
   genre?: string[] | null;

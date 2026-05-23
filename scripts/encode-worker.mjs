@@ -79,6 +79,8 @@ const fallbackFileName = "fallback.m4a";
 const pollOnce = process.argv.includes("--once");
 const drainQueue = process.argv.includes("--drain");
 const forceReencode = process.argv.includes("--force");
+const artworkOnly = process.argv.includes("--artwork-only");
+const forceArtwork = process.argv.includes("--force-artwork");
 const includeFallbackArg = process.argv.includes("--fallback");
 const skipFallbackArg = process.argv.includes("--no-fallback");
 const trackArgIndex = process.argv.indexOf("--track");
@@ -111,13 +113,18 @@ if (tracksArgIndex !== -1 && (forcedTrackIds.length === 0 || String(process.argv
   process.exit(1);
 }
 
-if ((forcedTrackId || forcedTrackIds.length > 0) && !forceReencode) {
+if ((forcedTrackId || forcedTrackIds.length > 0) && !forceReencode && !artworkOnly) {
   console.error("[encode-worker] Use --force with --track/--tracks to intentionally overwrite existing HLS output.");
   process.exit(1);
 }
 
 if (includeFallbackArg && skipFallbackArg) {
   console.error("[encode-worker] Use either --fallback or --no-fallback, not both.");
+  process.exit(1);
+}
+
+if (artworkOnly && !forcedTrackId && forcedTrackIds.length === 0) {
+  console.error("[encode-worker] --artwork-only requires --track or --tracks.");
   process.exit(1);
 }
 
@@ -148,6 +155,7 @@ const cliTargetVariants =
     : parseTargetVariants(process.argv[qualitiesArgIndex + 1]);
 
 const outputPrefixFor = (trackId) => `tracks/${trackId}/audio/${audioVersion}`;
+const coverPrefixFor = (trackId) => `tracks/${trackId}/cover`;
 const publicUrlFor = (key) => `${mediaBaseUrl}/${key}`;
 
 function parseTargetVariants(value) {
@@ -471,12 +479,187 @@ async function walkFiles(dir) {
 }
 
 function contentTypeFor(filePath) {
+  if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) return "image/jpeg";
+  if (filePath.endsWith(".png")) return "image/png";
+  if (filePath.endsWith(".webp")) return "image/webp";
   if (filePath.endsWith(".m3u8")) return "application/vnd.apple.mpegurl";
   if (filePath.endsWith(".m4s")) return "video/iso.segment";
   if (filePath.endsWith(".mp4")) return "video/mp4";
   if (filePath.endsWith(".m4a")) return "audio/mp4";
   if (filePath.endsWith(".mp3")) return "audio/mpeg";
   return "application/octet-stream";
+}
+
+async function markEmbeddedCover(trackId, patch) {
+  const { error } = await supabase
+    .from("tracks")
+    .update({
+      ...patch,
+      embedded_cover_extracted_at: new Date().toISOString(),
+    })
+    .eq("id", trackId);
+
+  if (error) throw error;
+}
+
+async function getImageDimensions(imagePath) {
+  const { stdout } = await run(ffprobePath, [
+    "-v",
+    "error",
+    "-select_streams",
+    "v:0",
+    "-show_entries",
+    "stream=width,height",
+    "-of",
+    "json",
+    imagePath,
+  ]);
+
+  const parsed = JSON.parse(stdout || "{}");
+  const stream = parsed.streams?.[0] || {};
+  const width = Number(stream.width);
+  const height = Number(stream.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error("Embedded cover dimensions could not be detected.");
+  }
+
+  return { width, height, aspectRatio: width / height };
+}
+
+async function createCropCover(inputPath, outputPath) {
+  await run(ffmpegPath, [
+    "-y",
+    "-i",
+    inputPath,
+    "-vf",
+    "scale=1024:1024:force_original_aspect_ratio=increase,crop=1024:1024,format=yuvj420p",
+    "-frames:v",
+    "1",
+    "-q:v",
+    "2",
+    outputPath,
+  ]);
+}
+
+async function createFitCover(inputPath, outputPath) {
+  await run(ffmpegPath, [
+    "-y",
+    "-i",
+    inputPath,
+    "-filter_complex",
+    "[0:v]scale=1024:1024:force_original_aspect_ratio=increase,crop=1024:1024,boxblur=44:1,eq=brightness=-0.18:saturation=0.78[bg];[0:v]scale=940:940:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuvj420p",
+    "-frames:v",
+    "1",
+    "-q:v",
+    "2",
+    outputPath,
+  ]);
+}
+
+async function createAutoCover(inputPath, outputPath, aspectRatio) {
+  const nearSquare = aspectRatio >= 0.9 && aspectRatio <= 1.1;
+
+  if (nearSquare) {
+    await createCropCover(inputPath, outputPath);
+    return;
+  }
+
+  await createFitCover(inputPath, outputPath);
+}
+
+async function uploadCoverObject(key, filePath) {
+  const fileStats = await stat(filePath);
+
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME,
+      Key: key,
+      Body: createReadStream(filePath),
+      ContentType: "image/jpeg",
+      ContentDisposition: "inline",
+      CacheControl: "public, max-age=31536000, immutable",
+    })
+  );
+
+  return { url: publicUrlFor(key), size: fileStats.size };
+}
+
+async function extractEmbeddedCover(inputPath, trackId, { force = false } = {}) {
+  const { data: track, error: trackError } = await supabase
+    .from("tracks")
+    .select("embedded_cover_url, embedded_cover_square_url, embedded_cover_fit_url, embedded_cover_crop_url")
+    .eq("id", trackId)
+    .maybeSingle();
+
+  if (trackError) throw trackError;
+  if (
+    track?.embedded_cover_url &&
+    track?.embedded_cover_square_url &&
+    track?.embedded_cover_fit_url &&
+    track?.embedded_cover_crop_url &&
+    !force
+  ) {
+    console.log(`[encode-worker] Embedded cover candidate already exists for ${trackId}; skipping`);
+    return { skipped: true, url: track.embedded_cover_square_url };
+  }
+
+  const artworkPath = path.join(path.dirname(inputPath), "embedded-cover.jpg");
+  const squareArtworkPath = path.join(path.dirname(inputPath), "embedded-cover-square.jpg");
+  const fitArtworkPath = path.join(path.dirname(inputPath), "embedded-cover-fit.jpg");
+  const cropArtworkPath = path.join(path.dirname(inputPath), "embedded-cover-crop.jpg");
+
+  try {
+    await run(ffmpegPath, [
+      "-y",
+      "-i",
+      inputPath,
+      "-map",
+      "0:v:0",
+      "-frames:v",
+      "1",
+      "-q:v",
+      "2",
+      artworkPath,
+    ]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await markEmbeddedCover(trackId, {
+      embedded_cover_url: null,
+      embedded_cover_square_url: null,
+      embedded_cover_fit_url: null,
+      embedded_cover_crop_url: null,
+      embedded_cover_aspect_ratio: null,
+      embedded_cover_style: "auto",
+      embedded_cover_error: "No embedded cover artwork was found in the original source.",
+    });
+    console.warn(`[encode-worker] No embedded cover for ${trackId}: ${message.split("\n")[0]}`);
+    return { skipped: false, url: null };
+  }
+
+  const dimensions = await getImageDimensions(artworkPath);
+  const defaultStyle = dimensions.aspectRatio >= 0.9 && dimensions.aspectRatio <= 1.1 ? "auto" : "fit";
+  await createAutoCover(artworkPath, squareArtworkPath, dimensions.aspectRatio);
+  await createFitCover(artworkPath, fitArtworkPath);
+  await createCropCover(artworkPath, cropArtworkPath);
+
+  const raw = await uploadCoverObject(`${coverPrefixFor(trackId)}/embedded.jpg`, artworkPath);
+  const square = await uploadCoverObject(`${coverPrefixFor(trackId)}/embedded-square.jpg`, squareArtworkPath);
+  const fit = await uploadCoverObject(`${coverPrefixFor(trackId)}/embedded-fit.jpg`, fitArtworkPath);
+  const crop = await uploadCoverObject(`${coverPrefixFor(trackId)}/embedded-crop.jpg`, cropArtworkPath);
+  await markEmbeddedCover(trackId, {
+    embedded_cover_url: raw.url,
+    embedded_cover_square_url: square.url,
+    embedded_cover_fit_url: fit.url,
+    embedded_cover_crop_url: crop.url,
+    embedded_cover_aspect_ratio: Number(dimensions.aspectRatio.toFixed(4)),
+    embedded_cover_style: defaultStyle,
+    embedded_cover_error: null,
+  });
+
+  console.log(
+    `[encode-worker] Extracted embedded cover for ${trackId} (${dimensions.width}x${dimensions.height}, raw ${raw.size} bytes, auto ${square.size} bytes, fit ${fit.size} bytes, crop ${crop.size} bytes)`
+  );
+  return { skipped: false, url: defaultStyle === "fit" ? fit.url : square.url, rawUrl: raw.url };
 }
 
 function sortUploadFiles(files) {
@@ -679,6 +862,13 @@ async function processJob(job) {
     await downloadSource(job.source_key, sourcePath);
     console.log(`[encode-worker] Downloaded ${job.track_id} in ${formatMs(performance.now() - downloadStartedAt)}`);
 
+    if (job.extract_embedded_cover) {
+      await extractEmbeddedCover(sourcePath, job.track_id, { force: forceArtwork }).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[encode-worker] Embedded cover extraction failed for ${job.track_id}: ${message}`);
+      });
+    }
+
     console.log(
       `[encode-worker] Encoding ${job.track_id} as ${targetVariants
         .map((variant) => variant.name)
@@ -780,6 +970,21 @@ async function forceProcessTrack(trackId) {
   });
 }
 
+async function extractArtworkForTrack(trackId) {
+  const job = await getJobForTrack(trackId);
+  const workDir = path.join(os.tmpdir(), `miraclefm-artwork-${trackId}-${randomUUID()}`);
+  const sourcePath = path.join(workDir, "source");
+
+  try {
+    await mkdir(workDir, { recursive: true });
+    console.log(`[encode-worker] Downloading ${job.source_key} for embedded cover scan`);
+    await downloadSource(job.source_key, sourcePath);
+    await extractEmbeddedCover(sourcePath, trackId, { force: forceArtwork });
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
 async function tick() {
   const job = await getNextJob();
   if (!job) return false;
@@ -788,6 +993,14 @@ async function tick() {
 }
 
 console.log("[encode-worker] Listening for queued Miracle FM encoding jobs");
+
+if (artworkOnly && (forcedTrackId || forcedTrackIds.length > 0)) {
+  const targetTrackIds = forcedTrackId ? [forcedTrackId] : forcedTrackIds;
+  for (const trackId of targetTrackIds) {
+    await extractArtworkForTrack(trackId);
+  }
+  process.exit(0);
+}
 
 if (forcedTrackId || forcedTrackIds.length > 0) {
   const targetTrackIds = forcedTrackId ? [forcedTrackId] : forcedTrackIds;

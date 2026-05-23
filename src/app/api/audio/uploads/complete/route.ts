@@ -127,6 +127,7 @@ export async function POST(request: Request) {
     const sourceSize = Number(body.size || 0);
     const targetBitrates = parseTargetBitrates(body.targetBitrates);
     const includeFallback = body.includeFallback !== false;
+    const extractEmbeddedCover = body.extractEmbeddedCover === true;
 
     if (!trackId || !sourceKey.startsWith(`originals/${trackId}/`)) {
       return NextResponse.json({ error: "Invalid upload session" }, { status: 400 });
@@ -164,6 +165,7 @@ export async function POST(request: Request) {
       source_size_bytes: Number.isFinite(sourceSize) ? sourceSize : null,
       target_bitrates: targetBitrates,
       include_fallback: includeFallback,
+      extract_embedded_cover: extractEmbeddedCover,
       status: "queued",
     });
 

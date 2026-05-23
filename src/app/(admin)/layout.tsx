@@ -21,7 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       
       {/* Main Content (Scrollable) */}
       <main className="flex-1 overflow-y-auto relative min-w-0">
-        <div className="p-8 lg:p-12 pb-32">
+        <div className="p-8 pb-48 lg:p-12 lg:pb-44">
           <div className="max-w-[1600px] mx-auto w-full animate-in fade-in duration-700">
             {children}
           </div>
