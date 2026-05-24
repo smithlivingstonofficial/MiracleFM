@@ -3,6 +3,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -88,27 +89,31 @@ export default function UserSidebar() {
   return (
     <aside 
       className={cn(
-        "hidden md:flex flex-col h-full bg-[#050505] border-r border-white/5 transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] relative z-30",
-        isCollapsed ? "w-[80px]" : "w-[280px]"
+        "hidden md:flex flex-col h-full transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] relative z-30 overflow-hidden",
+        "bg-[linear-gradient(180deg,rgba(12,12,15,0.98),rgba(3,3,4,0.98))] border-r border-white/10 shadow-[18px_0_80px_-48px_rgba(255,0,85,0.55)]",
+        isCollapsed ? "w-[88px]" : "w-[300px]"
       )}
     >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_28%_0%,rgba(255,0,85,0.18),transparent_34%),radial-gradient(circle_at_84%_32%,rgba(255,255,255,0.06),transparent_26%)]" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-[#FF0055]/45 to-transparent" />
       
       {/* --- 1. BRAND HEADER --- */}
-      <div className={cn("h-24 flex items-center px-6 shrink-0", isCollapsed ? "justify-center px-0" : "justify-between")}>
+      <div className={cn("h-28 flex items-center px-5 shrink-0 relative z-10", isCollapsed ? "justify-center px-0" : "justify-between")}>
         
         {/* Animated Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="relative w-9 h-9 flex items-center justify-center">
-             <div className="absolute inset-0 bg-[#FF0055] rounded-full blur-md opacity-40 group-hover:opacity-60 animate-pulse transition-opacity" />
-              <img src="/miraclefm-192.png" alt="Logo" className="absolute inset-0 w-full h-full object-cover rounded-full transition-opacity" />
+        <Link href="/" className="flex items-center gap-3 group min-w-0">
+          <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+             <div className="absolute inset-[-5px] rounded-2xl bg-[#FF0055] blur-xl opacity-35 group-hover:opacity-60 transition-opacity" />
+             <div className="absolute inset-0 rounded-2xl bg-white/10 border border-white/15 shadow-[0_18px_40px_-18px_rgba(255,0,85,0.9)]" />
+              <Image src="/miraclefm-192.png" alt="Miracle FM" width={40} height={40} className="absolute inset-1 h-10 w-10 object-cover rounded-xl transition-transform duration-500 group-hover:scale-105" />
           </div>
           
           {!isCollapsed && (
-            <div className="flex flex-col">
-              <span className="text-xl font-black tracking-tighter text-white leading-none">
+            <div className="flex flex-col min-w-0">
+              <span className="text-[21px] font-black tracking-tight text-white leading-none drop-shadow-[0_2px_0_rgba(255,0,85,0.45)]">
                 MIRACLE <span className="text-[#FF0055]">FM</span>
               </span>
-              <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-zinc-500 mt-0.5">Premium</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.38em] text-zinc-500 mt-1">Premium</span>
             </div>
           )}
         </Link>
@@ -117,24 +122,25 @@ export default function UserSidebar() {
         {!isCollapsed && (
           <button 
             onClick={() => setIsCollapsed(true)} 
-            className="text-zinc-600 hover:text-white transition-colors p-1"
+            className="h-9 w-9 rounded-full border border-white/10 bg-white/[0.03] text-zinc-500 hover:text-white hover:bg-white/10 transition-colors grid place-items-center"
+            aria-label="Collapse sidebar"
           >
-            <PanelLeftClose size={18} />
+            <PanelLeftClose size={17} />
           </button>
         )}
       </div>
 
       {/* Toggle Open Button (Visible only when collapsed) */}
       {isCollapsed && (
-        <div className="flex justify-center mb-6">
-          <button onClick={() => setIsCollapsed(false)} className="text-zinc-500 hover:text-[#FF0055] transition-colors">
-            <PanelLeftOpen size={24} />
+        <div className="flex justify-center mb-6 relative z-10">
+          <button onClick={() => setIsCollapsed(false)} className="h-10 w-10 rounded-full border border-white/10 bg-white/[0.03] text-zinc-500 hover:text-[#FF0055] hover:bg-[#FF0055]/10 transition-colors grid place-items-center" aria-label="Expand sidebar">
+            <PanelLeftOpen size={20} />
           </button>
         </div>
       )}
 
       {/* --- 2. NAVIGATION LINKS --- */}
-      <div className="px-4 space-y-2">
+      <div className="px-4 space-y-2 relative z-10">
         {navRoutes.map((route) => {
           const isActive = route.href === "/" ? pathname === route.href : pathname.startsWith(route.href);
           return (
@@ -142,16 +148,23 @@ export default function UserSidebar() {
               key={route.href}
               href={route.href}
               className={cn(
-                "group flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-300 relative overflow-hidden",
-                isActive ? "bg-[#FF0055]/10 text-white" : "text-zinc-400 hover:text-white hover:bg-white/5",
-                isCollapsed && "justify-center px-0 py-3"
+                "group flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 relative overflow-hidden border",
+                isActive
+                  ? "bg-[linear-gradient(135deg,rgba(255,0,85,0.24),rgba(255,255,255,0.055))] text-white border-[#FF0055]/30 shadow-[0_16px_35px_-24px_rgba(255,0,85,0.95)]"
+                  : "text-zinc-400 border-transparent hover:text-white hover:bg-white/[0.055] hover:border-white/10",
+                isCollapsed && "justify-center px-0 py-3.5"
               )}
             >
               {/* Active Indicator Strip */}
-              {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#FF0055] rounded-r-full" />}
+              {isActive && (
+                <>
+                  <div className="absolute inset-y-3 left-0 w-1 bg-[#FF0055] rounded-r-full shadow-[0_0_18px_rgba(255,0,85,0.9)]" />
+                  <div className="absolute right-4 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-white/70" />
+                </>
+              )}
 
               <route.icon 
-                size={22} 
+                size={21} 
                 className={cn(
                   "transition-colors", 
                   isActive ? "text-[#FF0055]" : "group-hover:text-white"
@@ -173,7 +186,7 @@ export default function UserSidebar() {
       </div>
 
       {/* --- 3. LIBRARY & PLAYLISTS --- */}
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-6 px-4 space-y-1">
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-12 px-4 space-y-1 relative z-10">
         
         {/* Library Header */}
         {!isCollapsed ? (
@@ -182,12 +195,12 @@ export default function UserSidebar() {
                 onClick={() => router.push('/library')}
                 className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors"
             >
-                <ListMusic size={14} />
+                <ListMusic size={14} className="text-[#FF0055]" />
                 <span className="text-[11px] font-black uppercase tracking-[0.2em]">Your Playlists</span>
             </button>
             <button 
               onClick={handleCreatePlaylist} 
-              className="text-zinc-500 hover:text-[#FF0055] hover:bg-[#FF0055]/10 p-1.5 rounded-full transition-all"
+              className="text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-[#FF0055] border border-white/10 p-1.5 rounded-full transition-all"
               title="Create Playlist"
             >
               <Plus size={16} />
@@ -204,11 +217,11 @@ export default function UserSidebar() {
             <Link 
                 href="/library/liked" 
                 className={cn(
-                    "flex items-center gap-3 px-3 py-3 rounded-2xl transition-all group border border-transparent",
-                    isCollapsed ? "justify-center px-0 bg-transparent" : "bg-gradient-to-r from-[#FF0055]/10 to-transparent hover:border-[#FF0055]/20"
+                    "flex items-center gap-3 px-3 py-3 rounded-2xl transition-all group border",
+                    isCollapsed ? "justify-center px-0 bg-transparent border-transparent" : "bg-[linear-gradient(135deg,rgba(255,0,85,0.16),rgba(255,255,255,0.04))] border-white/10 hover:border-[#FF0055]/35 hover:bg-[#FF0055]/10"
                 )}
             >
-                <div className="relative w-9 h-9 flex items-center justify-center bg-gradient-to-br from-[#FF0055] to-purple-600 rounded-lg shrink-0 shadow-lg group-hover:scale-105 transition-transform">
+                <div className="relative w-11 h-11 flex items-center justify-center bg-gradient-to-br from-[#FF0055] via-fuchsia-500 to-violet-600 rounded-xl shrink-0 shadow-[0_14px_30px_-16px_rgba(255,0,85,1)] group-hover:scale-105 transition-transform">
                     <Heart size={16} className="text-white fill-white" />
                 </div>
                 {!isCollapsed && (
@@ -227,11 +240,11 @@ export default function UserSidebar() {
               key={pl.id} 
               href={`/playlist/${pl.id}`} 
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition-all group", 
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl border border-transparent hover:border-white/10 hover:bg-white/[0.055] transition-all group", 
                 isCollapsed && "justify-center px-0 py-3"
               )}
             >
-              <div className="relative w-9 h-9 rounded-[8px] overflow-hidden shrink-0 border border-white/5 group-hover:border-white/20 transition-colors">
+              <div className="relative w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-white/10 group-hover:border-white/25 transition-colors shadow-lg">
                 <PlaylistCover 
                   playlistId={pl.id} 
                   explicitCover={pl.cover_url} 
@@ -250,7 +263,7 @@ export default function UserSidebar() {
       </div>
 
       {/* --- 4. BOTTOM GRADIENT (Fade out effect) --- */}
-      <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#050505] to-transparent pointer-events-none" />
+      <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#030304] to-transparent pointer-events-none" />
       
     </aside>
   );

@@ -36,8 +36,8 @@ export default function PlayerTrackInfo({ displayImage }: { displayImage: string
   if (!currentTrack) return null;
 
   return (
-    <div className="flex items-center gap-3 md:gap-4 w-auto md:w-[30%] min-w-0 h-full flex-1 md:flex-none">
-      <button onClick={toggleFullScreen} className="relative h-[52px] w-[52px] md:w-16 md:h-16 rounded-[1.15rem] md:rounded-[1.25rem] overflow-hidden bg-zinc-800 shrink-0 group shadow-lg active:scale-95 transition-transform border border-white/10">
+    <div className="flex items-center gap-3 md:gap-4 w-auto md:w-[32%] min-w-0 h-full flex-1 md:flex-none">
+      <button onClick={toggleFullScreen} className="relative h-[54px] w-[54px] md:w-[72px] md:h-[72px] rounded-[1.2rem] md:rounded-[1.35rem] overflow-hidden bg-zinc-800 shrink-0 group shadow-[0_18px_42px_-22px_rgba(255,255,255,0.5)] active:scale-95 transition-transform border border-white/15">
         {displayImage ? (
           <Image src={displayImage} alt="" fill className="object-cover" />
         ) : (
@@ -45,24 +45,25 @@ export default function PlayerTrackInfo({ displayImage }: { displayImage: string
             <Music2 size={22} />
           </div>
         )}
-        <div className="hidden md:flex absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 items-center justify-center transition-opacity">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-white/10" />
+        <div className="hidden md:flex absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 items-center justify-center transition-opacity">
           <Maximize2 size={20} className="text-white" />
         </div>
       </button>
       
       <div className="min-w-0 flex-1 pr-2 cursor-pointer active:opacity-70 transition-opacity" onClick={toggleFullScreen}>
-        <p className="text-[13px] md:text-base font-black text-white truncate drop-shadow-md leading-tight">{currentTrack.title}</p>
-        <p className="text-[10px] md:text-xs font-bold text-zinc-400 truncate uppercase tracking-wide mt-1">{currentTrack.artists?.name}</p>
+        <p className="text-[13px] md:text-[17px] font-black text-white truncate drop-shadow-md leading-tight">{currentTrack.title}</p>
+        <p className="text-[10px] md:text-xs font-black text-zinc-400 truncate uppercase tracking-[0.12em] mt-1.5">{currentTrack.artists?.name}</p>
       </div>
 
-      <div className="hidden md:flex items-center gap-3 ml-2 shrink-0">
+      <div className="hidden md:flex items-center gap-2 ml-2 shrink-0">
         <LikeButton trackId={currentTrack.id} />
         <div className="relative">
-          <button onClick={fetchMyPlaylists} className="text-zinc-400 hover:text-white transition-colors active:scale-90" aria-label="Save to playlist"><PlusCircle size={20} /></button>
+          <button onClick={fetchMyPlaylists} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.035] text-zinc-400 hover:text-white hover:bg-white/10 transition-colors active:scale-90" aria-label="Save to playlist"><PlusCircle size={18} /></button>
           {showPlaylistMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowPlaylistMenu(false)} />
-              <div className="absolute left-0 bottom-full mb-6 w-64 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl z-50 p-2 animate-in fade-in slide-in-from-bottom-2">
+              <div className="absolute left-0 bottom-full mb-6 w-64 bg-zinc-950/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-50 p-2 animate-in fade-in slide-in-from-bottom-2">
                 <p className="px-3 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest">Save to Playlist</p>
                 <div className="max-h-48 overflow-y-auto no-scrollbar">
                   {myPlaylists.map(pl => (

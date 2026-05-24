@@ -909,18 +909,19 @@ export default function AudioPlayer() {
       {currentTrack && (
         <div
           className={cn(
-            "fixed left-0 right-0 z-40 transition-all duration-300",
-            "bottom-[92px] left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[430px] h-[74px]",
-            "bg-[linear-gradient(135deg,rgba(24,24,27,0.96),rgba(5,5,5,0.96))] backdrop-blur-3xl border border-white/10 shadow-[0_24px_60px_-18px_rgba(0,0,0,0.95)]",
-            "rounded-[1.75rem] px-2.5 overflow-hidden ring-1 ring-white/[0.04]",
-            "md:bottom-0 md:left-0 md:translate-x-0 md:w-full md:max-w-none md:h-[96px]",
-            "md:bg-[#050505]/95 md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-6 md:overflow-visible"
+            "fixed z-40 transition-all duration-300 pointer-events-auto",
+            "bottom-[94px] left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[430px] h-[76px]",
+            "bg-[linear-gradient(135deg,rgba(25,25,30,0.96),rgba(5,5,7,0.96))] backdrop-blur-3xl border border-white/10 shadow-[0_28px_80px_-22px_rgba(0,0,0,0.98)]",
+            "rounded-[1.8rem] px-2.5 overflow-hidden ring-1 ring-white/[0.05]",
+            "md:absolute md:bottom-0 md:left-0 md:right-0 md:translate-x-0 md:w-full md:max-w-none md:h-[108px]",
+            "md:bg-[linear-gradient(180deg,rgba(18,18,21,0.97),rgba(5,5,6,0.98))] md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-7 md:overflow-visible md:shadow-[0_-28px_80px_-48px_rgba(255,0,85,0.5)]"
           )}
           data-source-kind={sourceKind}
           data-load-status={loadStatus}
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,0,85,0.18),transparent_38%)] md:hidden" />
-          <div className="flex items-center justify-between max-w-[1600px] mx-auto h-full gap-2.5 md:gap-4 relative z-10">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,0,85,0.22),transparent_36%),linear-gradient(90deg,rgba(255,255,255,0.05),transparent_34%)]" />
+          <div className="pointer-events-none hidden md:block absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#FF0055]/65 to-transparent" />
+          <div className="flex items-center justify-between max-w-[1680px] mx-auto h-full gap-2.5 md:gap-6 relative z-10">
             <PlayerTrackInfo displayImage={displayImage} />
             <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[44%] pr-1 md:pr-0">
               <PlayerControls />

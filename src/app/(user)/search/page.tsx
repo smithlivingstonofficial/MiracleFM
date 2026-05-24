@@ -4,13 +4,14 @@
 
 import { Suspense, useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search as SearchIcon, Disc, Mic2, X, Loader2, Play, ListMusic } from "lucide-react";
+import { Search as SearchIcon, Disc, Mic2, ListMusic, Clock3 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import TrackRow from "@/components/user/TrackRow";
+import { useRouter, useSearchParams } from "next/navigation";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import SongListAdRow from "@/components/ads/SongListAdRow";
+import SongPlayButton from "@/components/user/SongPlayButton";
+import LikeButton from "@/components/user/LikeButton";
 import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Album, Artist, Playlist, Track } from "@/types/music";
 
@@ -35,6 +36,67 @@ const mergeTracks = (primary: Track[], secondary: Track[]) => {
   });
 };
 
+const formatDuration = (value?: number | null) => {
+  if (!value || !Number.isFinite(value)) return "--:--";
+  const seconds = Math.max(0, Math.round(value > 10_000 ? value / 1000 : value));
+  const min = Math.floor(seconds / 60);
+  const sec = seconds % 60;
+  return `${min}:${sec.toString().padStart(2, "0")}`;
+};
+
+const getTrackImage = (track: Track) =>
+  track.cover_url || track.albums?.cover_url || track.artists?.image_url || "/miraclefm-192.png";
+
+function SearchTrackResult({ track, index, queue }: { track: Track; index: number; queue: Track[] }) {
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 transition-all hover:border-[#FF0055]/30 hover:bg-white/[0.06] md:rounded-[1.35rem] md:p-3.5">
+      <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100 bg-[radial-gradient(circle_at_12%_20%,rgba(255,0,85,0.16),transparent_34%)]" />
+      <div className="relative z-10 flex items-center gap-3 md:gap-4">
+        <div className="hidden w-8 shrink-0 text-center font-mono text-sm text-zinc-500 md:block">
+          {index + 1}
+        </div>
+
+        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-zinc-900 shadow-lg md:h-16 md:w-16">
+          <Image src={getTrackImage(track)} alt="" fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <Link href={`/song/${track.id}`} className="block truncate text-sm font-black text-white transition-colors hover:text-[#FF0055] md:text-base">
+            {track.title}
+          </Link>
+          <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.12em] text-zinc-500 md:text-[11px]">
+            {track.artists?.name || "Miracle FM"}
+          </p>
+          <div className="mt-2 hidden items-center gap-2 text-xs font-medium text-zinc-500 md:flex">
+            <Disc size={13} className="text-[#FF0055]" />
+            <span className="truncate">{track.albums?.title || "Single"}</span>
+          </div>
+        </div>
+
+        <div className="hidden min-w-0 flex-1 text-sm text-zinc-500 lg:block">
+          <p className="truncate">{track.albums?.title || "Single"}</p>
+        </div>
+
+        <div className="hidden items-center gap-1.5 text-xs font-black tabular-nums text-zinc-500 md:flex">
+          <Clock3 size={13} />
+          {formatDuration(track.duration_seconds || track.duration)}
+        </div>
+
+        <div className="hidden items-center md:flex" onClick={(event) => event.stopPropagation()}>
+          <LikeButton trackId={track.id} />
+        </div>
+
+        <SongPlayButton
+          track={track}
+          queue={queue}
+          label=""
+          className="h-12 w-12 shrink-0 px-0 py-0 shadow-[0_14px_34px_-18px_rgba(255,0,85,0.95)] md:h-11 md:w-11"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function SearchPage() {
   return (
     <Suspense fallback={<SearchShell />}>
@@ -45,28 +107,17 @@ export default function SearchPage() {
 
 function SearchShell() {
   return (
-    <div className="relative min-h-screen w-full bg-[#050505] text-zinc-100 pb-32 overflow-x-hidden selection:bg-[#FF0055] selection:text-white">
-      <div className="absolute top-0 inset-x-0 h-[400px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
-      <div className="p-4 md:p-8 max-w-7xl mx-auto">
-        <div className="sticky top-0 z-40 py-4 md:py-6 -mx-4 px-4 md:mx-0 md:px-0 bg-[#050505]/90 backdrop-blur-2xl border-b border-white/5 mb-8 md:mb-10 transition-all">
-          <div className="relative max-w-2xl mx-auto group">
-            <div className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 text-zinc-500 z-10">
-              <Loader2 size={22} className="animate-spin text-[#FF0055]" />
-            </div>
-            <div className="h-[58px] rounded-full border border-white/10 bg-[#0A0A0A] md:h-[68px]" />
-          </div>
-        </div>
-      </div>
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050505] pb-56 text-zinc-100 selection:bg-[#FF0055] selection:text-white md:pb-40">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_50%_0%,rgba(255,0,85,0.16),transparent_42%),linear-gradient(180deg,rgba(25,6,13,0.95),rgba(5,5,5,0.82)_48%,#050505)]" />
+      <div className="relative mx-auto max-w-7xl px-4 pt-16 md:px-8 md:pt-24" />
     </div>
   );
 }
 
 function SearchExperience() {
   const searchParams = useSearchParams();
-  const pathname = usePathname();
   const router = useRouter();
-  const initialQuery = searchParams.get("q") || "";
-  const [query, setQuery] = useState(initialQuery);
+  const query = searchParams.get("q") || "";
   const [results, setResults] = useState<SearchResults>(emptyResults);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -143,23 +194,13 @@ function SearchExperience() {
     return () => clearTimeout(delayDebounceFn);
   }, [query, supabase]);
 
-  useEffect(() => {
-    const trimmedQuery = query.trim();
-    const currentQuery = searchParams.get("q") || "";
-    if (trimmedQuery === currentQuery) return;
-
-    const nextUrl = trimmedQuery
-      ? `${pathname}?q=${encodeURIComponent(trimmedQuery)}`
-      : pathname;
-    router.replace(nextUrl, { scroll: false });
-  }, [pathname, query, router, searchParams]);
-
   const resultCount = results.tracks.length + results.artists.length + results.albums.length + results.playlists.length;
   const showSearchAd = query.trim().length > 1 && !loading && !errorMessage && resultCount > 0;
   const showSongs = activeTab === "all" || activeTab === "songs";
   const showArtists = activeTab === "all" || activeTab === "artists";
   const showAlbums = activeTab === "all" || activeTab === "albums";
   const showPlaylists = activeTab === "all" || activeTab === "playlists";
+  const showOverview = activeTab === "all";
   const topResult: Artist | Album | null = results.artists.length > 0 ? results.artists[0] : (results.albums.length > 0 ? results.albums[0] : null);
   const topResultIsArtist = topResult ? isArtistResult(topResult) : false;
   const topResultImage = topResult
@@ -172,61 +213,31 @@ function SearchExperience() {
     : "";
 
   return (
-    <div className="relative min-h-screen w-full bg-[#050505] text-zinc-100 pb-32 overflow-x-hidden selection:bg-[#FF0055] selection:text-white">
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050505] pb-56 text-zinc-100 selection:bg-[#FF0055] selection:text-white md:pb-40">
       
       {/* Background Atmosphere */}
-      <div className="absolute top-0 inset-x-0 h-[400px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[460px] bg-[radial-gradient(circle_at_50%_0%,rgba(255,0,85,0.18),transparent_42%),radial-gradient(circle_at_18%_26%,rgba(255,255,255,0.055),transparent_26%),linear-gradient(180deg,rgba(25,6,13,0.95),rgba(5,5,5,0.82)_48%,#050505)]" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-[#FF0055]/70 via-[#FF0055]/15 to-transparent" />
 
-      <div className="p-4 md:p-8 max-w-7xl mx-auto">
-        
-        {/* --- SEARCH HEADER --- */}
-        <div className="sticky top-0 z-40 py-4 md:py-6 -mx-4 px-4 md:mx-0 md:px-0 bg-[#050505]/90 backdrop-blur-2xl border-b border-white/5 mb-8 md:mb-10 transition-all">
-          <div className="relative max-w-2xl mx-auto group">
-            
-            {/* Search Icon / Loader */}
-            <div className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-[#FF0055] transition-colors z-10">
-               {loading ? <Loader2 size={22} className="animate-spin text-[#FF0055]" /> : <SearchIcon size={22} />}
-            </div>
-            
-            <input 
-              value={query}
-              onChange={(e) => {
-                  setQuery(e.target.value);
-                  if(e.target.value.trim().length > 1) setLoading(true);
-              }}
-              placeholder="Search songs, artists, albums, or lyrics when available"
-              className="w-full bg-[#0A0A0A] border border-white/10 rounded-full py-4 md:py-5 pl-14 md:pl-16 pr-14 md:pr-16 text-white text-base md:text-lg font-black outline-none focus:bg-black focus:border-[#FF0055]/50 focus:ring-4 focus:ring-[#FF0055]/10 transition-all placeholder:text-zinc-600 shadow-2xl"
-              autoFocus
-            />
-
-            {/* Clear Button */}
-            {query && (
-                <button 
-                  onClick={() => { setQuery(""); setResults(emptyResults); setErrorMessage(""); }}
-                  className="absolute right-5 md:right-6 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10 p-1.5 rounded-full transition-all active:scale-90"
-                  aria-label="Clear search"
-                >
-                    <X size={16} />
-                </button>
-            )}
-          </div>
-        </div>
-
+      <div className="relative mx-auto max-w-7xl px-4 md:px-8">
         {/* --- EMPTY STATE --- */}
         {!query && (
-          <div className="flex flex-col items-center justify-center py-20 md:py-32 text-center animate-in fade-in duration-1000">
-            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(255,255,255,0.02)] animate-[pulse_4s_ease-in-out_infinite]">
-                <SearchIcon size={40} className="text-zinc-700" />
+          <div className="animate-in fade-in flex flex-col items-center justify-center px-2 pb-12 pt-12 text-center duration-1000 md:pb-20 md:pt-20">
+            <div className="relative mb-7 flex h-28 w-28 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] shadow-[0_0_70px_rgba(255,0,85,0.08)]">
+                <div className="absolute inset-0 rounded-full bg-[#FF0055]/10 blur-2xl animate-pulse" />
+                <SearchIcon size={42} className="relative text-zinc-600" />
             </div>
-            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-2">Find Your Worship</h2>
-            <p className="text-sm md:text-base font-medium text-zinc-500 max-w-sm">Search for songs, artists, albums, or lyrics when available.</p>
+            <h2 className="mb-2 text-3xl font-black tracking-tight text-white md:text-5xl">Find Your Worship</h2>
+            <p className="max-w-md text-sm font-semibold leading-6 text-zinc-500 md:text-base">Search for songs, artists, albums, playlists, or lyrics when available.</p>
             {recentSearches.length > 0 && (
               <div className="mt-8 flex flex-wrap justify-center gap-2">
                 {recentSearches.map((item) => (
                   <button
                     key={item}
-                    onClick={() => setQuery(item)}
-                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                    onClick={() => {
+                      router.replace(`/search?q=${encodeURIComponent(item.trim())}`, { scroll: false });
+                    }}
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors hover:border-[#FF0055]/35 hover:bg-[#FF0055]/10 hover:text-white"
                   >
                     {item}
                   </button>
@@ -238,84 +249,9 @@ function SearchExperience() {
 
         {/* --- RESULTS SECTION --- */}
         {query && (
-          <div className="space-y-12 md:space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-                {errorMessage && (
-                  <div className="lg:col-span-12 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200">
-                    {errorMessage}
-                  </div>
-                )}
-                
-                {/* --- LEFT COL: TOP RESULT --- */}
-                {topResult && (
-                    <div className="lg:col-span-5">
-                        <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Top Result</h2>
-                        <Link 
-                            href={topResultIsArtist ? `/artist/${topResult.id}` : `/album/${topResult.id}`} 
-                            className="group relative block overflow-hidden rounded-[2rem] bg-[#0A0A0A] border border-white/5 hover:border-[#FF0055]/30 p-6 md:p-8 active:scale-[0.98] md:active:scale-100 transition-all duration-500 shadow-xl hover:shadow-[0_10px_40px_rgba(255,0,85,0.15)]"
-                        >
-                            {/* Animated Background Glow */}
-                            <div className="absolute -inset-20 bg-gradient-to-br from-[#FF0055]/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 blur-2xl transition-opacity duration-700 pointer-events-none" />
-
-                            <div className="relative z-10 flex flex-col gap-6">
-                                <div className={`relative w-28 h-28 md:w-32 md:h-32 overflow-hidden shadow-2xl ${topResultIsArtist ? 'rounded-full' : 'rounded-2xl'}`}>
-                                    {topResultImage ? (
-                                        <Image src={topResultImage} alt="" fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
-                                    ) : (
-                                        <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                                            {topResultIsArtist ? <Mic2 size={32} className="text-zinc-600"/> : <Disc size={32} className="text-zinc-600"/>}
-                                        </div>
-                                    )}
-                                </div>
-                                
-                                <div className="flex items-end justify-between">
-                                    <div>
-                                        <h3 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none group-hover:text-[#FF0055] transition-colors line-clamp-2">
-                                            {topResultTitle}
-                                        </h3>
-                                        <div className="flex items-center gap-2 mt-3">
-                                            <span className="text-[10px] font-black bg-white/10 px-3 py-1 rounded-full uppercase tracking-widest text-zinc-300">
-                                                {topResultIsArtist ? 'Artist' : 'Album'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Play Button overlay */}
-                                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[#FF0055] flex items-center justify-center text-white shadow-[0_0_20px_rgba(255,0,85,0.4)] translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-[#ff1a66]">
-                                        <Play fill="currentColor" size={24} className="ml-1" />
-                                    </div>
-                                </div>
-                            </div>
-                        </Link>
-                    </div>
-                )}
-
-                {/* --- RIGHT COL: SONGS --- */}
-                {showSongs && results.tracks.length > 0 && (
-                    <div className={topResult ? "lg:col-span-7" : "lg:col-span-12"}>
-                        <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter mb-5">Songs</h2>
-                        <div className="space-y-1">
-                            {results.tracks.map((track, i) => (
-                                <div key={track.id}>
-                                    <div className="active:scale-[0.99] md:active:scale-100 transition-transform">
-                                        <TrackRow 
-                                            track={track} 
-                                            index={i} 
-                                            context="Search" 
-                                            allTracks={results.tracks}
-                                        />
-                                    </div>
-                                    {shouldRenderSongListAdAfter(i, results.tracks.length) && <SongListAdRow fallbackIndex={i} />}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-
+          <div className="animate-in fade-in slide-in-from-bottom-8 space-y-5 pb-8 duration-700 md:space-y-6">
             {resultCount > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+              <div className="search-tabs-scroll sticky top-0 z-20 -mx-4 flex gap-2 overflow-x-auto border-y border-white/5 bg-[#050505]/88 px-4 py-3 shadow-[0_18px_50px_-42px_rgba(255,0,85,0.7)] backdrop-blur-xl md:mx-0 md:mt-4 md:rounded-full md:border md:bg-white/[0.045] md:px-3">
                 {[
                   ["all", "All", resultCount],
                   ["songs", "Songs", results.tracks.length],
@@ -326,10 +262,10 @@ function SearchExperience() {
                   <button
                     key={value}
                     onClick={() => setActiveTab(value as SearchTab)}
-                    className={`shrink-0 rounded-full border px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors ${
+                    className={`shrink-0 rounded-full border px-4 py-2 text-xs font-black uppercase tracking-widest transition-all ${
                       activeTab === value
-                        ? "border-[#FF0055] bg-[#FF0055] text-white"
-                        : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10"
+                        ? "border-[#FF0055] bg-[#FF0055] text-white shadow-[0_0_20px_rgba(255,0,85,0.25)]"
+                        : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
                     }`}
                   >
                     {label} {count}
@@ -337,6 +273,75 @@ function SearchExperience() {
                 ))}
               </div>
             )}
+
+            {loading && (
+              <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 text-sm font-bold text-zinc-400">
+                Searching Miracle FM...
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-7">
+                {errorMessage && (
+                  <div className="lg:col-span-12 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200">
+                    {errorMessage}
+                  </div>
+                )}
+                
+                {/* --- LEFT COL: TOP RESULT --- */}
+                {showOverview && topResult && (
+                    <div className="lg:col-span-4">
+                        <h2 className="mb-4 text-xl font-black tracking-tight text-white md:text-2xl">Top Result</h2>
+                        <Link 
+                            href={topResultIsArtist ? `/artist/${topResult.id}` : `/album/${topResult.id}`} 
+                            className="group relative block overflow-hidden rounded-[1.75rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(0,0,0,0.25))] p-5 shadow-xl transition-all duration-500 active:scale-[0.98] hover:border-[#FF0055]/35 hover:bg-white/[0.06] hover:shadow-[0_18px_60px_-42px_rgba(255,0,85,0.75)] md:p-6"
+                        >
+                            {/* Animated Background Glow */}
+                            <div className="pointer-events-none absolute -inset-20 bg-gradient-to-br from-[#FF0055]/16 via-transparent to-transparent opacity-0 blur-2xl transition-opacity duration-700 group-hover:opacity-100" />
+
+                            <div className="relative z-10 flex items-center gap-5 lg:block">
+                                <div className={`relative h-24 w-24 shrink-0 overflow-hidden shadow-2xl md:h-28 md:w-28 lg:mb-7 lg:h-36 lg:w-36 ${topResultIsArtist ? 'rounded-full' : 'rounded-2xl'}`}>
+                                    {topResultImage ? (
+                                        <Image src={topResultImage} alt="" fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center bg-zinc-800">
+                                            {topResultIsArtist ? <Mic2 size={32} className="text-zinc-600"/> : <Disc size={32} className="text-zinc-600"/>}
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <div className="min-w-0">
+                                    <h3 className="line-clamp-2 text-3xl font-black leading-none tracking-tight text-white transition-colors group-hover:text-[#FF0055] md:text-4xl">
+                                        {topResultTitle}
+                                    </h3>
+                                    <div className="mt-4 flex items-center gap-2">
+                                        <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-300">
+                                            {topResultIsArtist ? 'Artist' : 'Album'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Link>
+                    </div>
+                )}
+
+                {/* --- RIGHT COL: SONGS --- */}
+                {showSongs && results.tracks.length > 0 && (
+                    <div className={showOverview && topResult ? "lg:col-span-8" : "lg:col-span-12"}>
+                        <div className="mb-4 flex items-center justify-between">
+                          <h2 className="text-xl font-black tracking-tight text-white md:text-2xl">Songs</h2>
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">{results.tracks.length} tracks</p>
+                        </div>
+                        <div className="space-y-2.5">
+                            {results.tracks.map((track, i) => (
+                                <div key={track.id}>
+                                    <SearchTrackResult track={track} index={i} queue={results.tracks} />
+                                    {shouldRenderSongListAdAfter(i, results.tracks.length) && <SongListAdRow fallbackIndex={i} />}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {showSearchAd && results.tracks.length < 8 && (
               <ResponsiveAd variant="banner" className="px-0" />

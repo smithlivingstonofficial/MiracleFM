@@ -58,7 +58,7 @@ export default async function UserLayout({ children }: { children: React.ReactNo
           </div>
         </main>
 
-        {/* Audio Player — fixed position, sits above scroll content */}
+        {/* Audio Player: fixed floating pill on mobile, main-pane anchored bar on desktop. */}
         <div className="z-40">
           {/*
             pointer-events-none on the wrapper lets touch events pass through

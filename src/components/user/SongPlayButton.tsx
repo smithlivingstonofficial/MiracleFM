@@ -44,7 +44,7 @@ export default function SongPlayButton({ track, queue, className, label = "Play"
       )}
     >
       {isCurrent && isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-      <span>{isCurrent && isPlaying ? "Pause" : label}</span>
+      {label && <span>{isCurrent && isPlaying ? "Pause" : label}</span>}
     </button>
   );
 }
