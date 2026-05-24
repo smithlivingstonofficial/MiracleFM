@@ -24,23 +24,22 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (profile?.role !== "admin") redirect("/");
 
   return (
-    <div className="flex h-screen bg-surface font-sans overflow-hidden">
-      {/* Sidebar (Fixed Height, Sticky) */}
+    <div className="flex h-screen bg-surface font-sans overflow-hidden text-white isolate">
       <AdminSidebar />
-      
-      {/* Main Content (Scrollable) */}
-      <main className="flex-1 overflow-y-auto relative min-w-0">
-        <div className="p-8 pb-48 lg:p-12 lg:pb-44">
-          <div className="max-w-[1600px] mx-auto w-full animate-in fade-in duration-700">
-            {children}
+
+      <main className="flex-1 flex flex-col h-full relative min-w-0">
+        <div className="flex-1 overflow-y-auto scroll-smooth min-w-0">
+          <div className="p-8 pb-40 lg:p-12 lg:pb-40">
+            <div className="max-w-[1600px] mx-auto w-full animate-in fade-in duration-700">
+              {children}
+            </div>
           </div>
         </div>
-      </main>
 
-      {/* Audio Player (Floating on top of everything) */}
-      <div className="z-[100] relative">
-         <AudioPlayer />
-      </div>
+        <div className="z-[100]">
+          <AudioPlayer />
+        </div>
+      </main>
     </div>
   );
 }

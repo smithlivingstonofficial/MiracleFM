@@ -7,7 +7,7 @@ import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { GoogleAnalytics } from "@next/third-parties/google";
-import { absoluteUrl, DEFAULT_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo";
+import { absoluteUrl, DEFAULT_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/seo";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,11 +29,25 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: SITE_NAME,
+    default: SITE_TITLE,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
+  keywords: [
+    "Miracle FM",
+    "Tamil Christian music",
+    "Tamil Christian songs",
+    "Tamil worship songs",
+    "Christian gospel music",
+    "Tamil gospel songs",
+    "Christian devotional audio",
+    "worship music streaming",
+  ],
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "music",
   verification: {
     google: "0v6Hmws4g7AsVjkst14NDV0ISXErjmmKjnsQu8LqWGk",
   },
@@ -69,19 +83,23 @@ export const metadata: Metadata = {
 
   // ── Open Graph (lock-screen / notification artwork fallback) ───────────────
   openGraph: {
-    title:       SITE_NAME,
+    title:       SITE_TITLE,
     description: SITE_DESCRIPTION,
     url:         SITE_URL,
     siteName:    SITE_NAME,
-    images: [{ url: DEFAULT_IMAGE, width: 1200, height: 630 }],
+    images: [{ url: DEFAULT_IMAGE, width: 512, height: 512, alt: "Miracle FM Tamil Christian Music logo" }],
     locale:      "ta_IN",
     type:        "website",
   },
   twitter: {
-    card: "summary_large_image",
-    title: SITE_NAME,
+    card: "summary",
+    title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    images: [DEFAULT_IMAGE],
+    images: [{ url: DEFAULT_IMAGE, alt: "Miracle FM Tamil Christian Music logo" }],
+  },
+  other: {
+    "msapplication-TileImage": "/miraclefm.jpg",
+    "msapplication-TileColor": "#FF0055",
   },
 };
 
@@ -98,6 +116,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       name: SITE_NAME,
       url: SITE_URL,
       logo: absoluteUrl(DEFAULT_IMAGE),
+      description: SITE_DESCRIPTION,
     },
     {
       "@context": "https://schema.org",
@@ -109,6 +128,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         target: `${absoluteUrl("/search")}?q={search_term_string}`,
         "query-input": "required name=search_term_string",
       },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "MusicStreamingService",
+      name: SITE_NAME,
+      url: SITE_URL,
+      image: absoluteUrl(DEFAULT_IMAGE),
+      logo: absoluteUrl(DEFAULT_IMAGE),
+      description: SITE_DESCRIPTION,
+      inLanguage: ["ta", "en"],
+      genre: ["Tamil Christian", "Gospel", "Worship", "Devotional"],
     },
   ];
 

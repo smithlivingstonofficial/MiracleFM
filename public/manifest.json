@@ -1,7 +1,7 @@
 {
   "name": "Miracle FM",
   "short_name": "Miracle FM",
-  "description": "Tamil Christian Audio Streaming Platform",
+  "description": "Stream Tamil Christian music, worship songs, gospel albums, devotional audio, and uplifting faith playlists on Miracle FM.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

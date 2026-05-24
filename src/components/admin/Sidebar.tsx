@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -14,12 +15,9 @@ import { createClient } from "@/lib/supabase/client";
 export default function AdminSidebar() {
   const pathname = usePathname();
   const supabase = createClient();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem("miraclefm:admin-sidebar-collapsed");
-    if (stored === "true") setIsCollapsed(true);
-  }, []);
+  const [isCollapsed, setIsCollapsed] = useState(() =>
+    typeof window !== "undefined" && window.localStorage.getItem("miraclefm:admin-sidebar-collapsed") === "true"
+  );
 
   const toggleCollapsed = () => {
     setIsCollapsed((current) => {
@@ -49,49 +47,66 @@ export default function AdminSidebar() {
   ];
 
   return (
-    <aside 
+    <aside
       className={cn(
-        "h-screen sticky top-0 hidden md:flex flex-col border-r border-border bg-surface transition-all duration-300 ease-in-out z-40 pb-32", // Added pb-32 to prevent player overlap
-        isCollapsed ? "w-[80px]" : "w-[280px]"
+        "h-full hidden md:flex flex-col transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] relative z-40 overflow-hidden",
+        "bg-[linear-gradient(180deg,rgba(12,12,15,0.99),rgba(3,3,4,0.99))] border-r border-white/10 shadow-[18px_0_80px_-48px_rgba(255,0,85,0.5)]",
+        isCollapsed ? "w-[88px]" : "w-[300px]"
       )}
     >
-      
-      {/* 1. Header & Toggle (Fixed at Top) */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_28%_0%,rgba(255,0,85,0.16),transparent_34%),radial-gradient(circle_at_82%_28%,rgba(255,255,255,0.055),transparent_28%)]" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-[#FF0055]/45 to-transparent" />
+
       <div className={cn(
-        "flex items-center h-24 shrink-0 transition-all duration-300 relative",
-        isCollapsed ? "justify-center px-0" : "justify-between px-6"
+        "flex items-center h-28 shrink-0 transition-all duration-300 relative z-10 px-5",
+        isCollapsed ? "justify-center px-0" : "justify-between"
       )}>
-        {!isCollapsed && (
-          <div className="overflow-hidden whitespace-nowrap">
-            <h1 className="text-2xl font-black tracking-tighter text-white flex items-center gap-1">
-              MIRACLE<span className="text-brand">FM</span>
-              <div className="w-2 h-2 rounded-full bg-brand animate-pulse ml-1" />
-            </h1>
-            <p className="text-[10px] font-bold text-text-dim uppercase tracking-[0.25em] mt-1">
-              Pro Console v2.0
-            </p>
+        <Link href="/dashboard" className="flex min-w-0 items-center gap-3 group">
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+            <div className="absolute inset-[-5px] rounded-2xl bg-[#FF0055] opacity-32 blur-xl transition-opacity group-hover:opacity-55" />
+            <div className="absolute inset-0 rounded-2xl border border-white/15 bg-white/10 shadow-[0_18px_40px_-18px_rgba(255,0,85,0.9)]" />
+            <Image src="/miraclefm-192.png" alt="Miracle FM" width={40} height={40} className="absolute inset-1 h-10 w-10 rounded-xl object-cover transition-transform duration-500 group-hover:scale-105" />
           </div>
-        )}
 
-        {isCollapsed && (
-          <span className="text-brand font-black text-2xl">M</span>
-        )}
-
-        {/* Toggle Button - Now positioned at the top */}
-        <button 
-          onClick={toggleCollapsed}
-          className={cn(
-            "text-zinc-500 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5",
-            isCollapsed ? "absolute -bottom-4" : "" // Subtle adjustment
+          {!isCollapsed && (
+            <div className="min-w-0">
+              <h1 className="flex items-center gap-1 text-[22px] font-black leading-none tracking-tight text-white drop-shadow-[0_2px_0_rgba(255,0,85,0.45)]">
+                MIRACLE<span className="text-brand">FM</span>
+                <span className="ml-1 h-2 w-2 rounded-full bg-brand shadow-[0_0_18px_rgba(255,0,85,0.9)]" />
+              </h1>
+              <p className="mt-2 text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">
+                Pro Console v2.0
+              </p>
+            </div>
           )}
-          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-          {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-        </button>
+        </Link>
+
+        {!isCollapsed && (
+          <button
+            onClick={toggleCollapsed}
+            className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.03] text-zinc-500 transition-colors hover:bg-white/10 hover:text-white"
+            title="Collapse Sidebar"
+            aria-label="Collapse sidebar"
+          >
+            <PanelLeftClose size={17} />
+          </button>
+        )}
       </div>
 
-      {/* 2. Navigation */}
-      <nav className="flex-1 px-3 space-y-2 overflow-y-auto custom-scrollbar overflow-x-hidden pt-4">
+      {isCollapsed && (
+        <div className="relative z-10 mb-6 flex justify-center">
+          <button
+            onClick={toggleCollapsed}
+            className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.03] text-zinc-500 transition-colors hover:bg-[#FF0055]/10 hover:text-[#FF0055]"
+            title="Expand Sidebar"
+            aria-label="Expand sidebar"
+          >
+            <PanelLeftOpen size={20} />
+          </button>
+        </div>
+      )}
+
+      <nav className="relative z-10 flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-4 pt-2 no-scrollbar">
         {menu.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -99,24 +114,31 @@ export default function AdminSidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "group relative flex items-center rounded-xl transition-all duration-300 min-h-[48px]",
-                isCollapsed ? "justify-center px-0" : "gap-3.5 px-4",
-                isActive 
-                  ? "bg-brand text-white shadow-[0_0_20px_rgba(255,0,85,0.3)]" 
-                  : "text-text-muted hover:bg-white/[0.03] hover:text-white"
+                "group relative flex min-h-[50px] items-center overflow-hidden rounded-2xl border transition-all duration-300",
+                isCollapsed ? "justify-center px-0" : "gap-4 px-4",
+                isActive
+                  ? "border-[#FF0055]/35 bg-[linear-gradient(135deg,rgba(255,0,85,0.26),rgba(255,255,255,0.055))] text-white shadow-[0_16px_35px_-24px_rgba(255,0,85,0.95)]"
+                  : "border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/[0.055] hover:text-white"
               )}
             >
+              {isActive && (
+                <>
+                  <div className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[#FF0055] shadow-[0_0_18px_rgba(255,0,85,0.9)]" />
+                  {!isCollapsed && <div className="absolute right-5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-white/70" />}
+                </>
+              )}
+
               <item.icon 
                 size={20} 
                 className={cn(
-                  "transition-transform duration-300 shrink-0", 
-                  isActive ? "scale-105" : "group-hover:scale-110 group-hover:text-brand"
+                  "shrink-0 transition-colors duration-300",
+                  isActive ? "text-[#FF0055]" : "group-hover:text-white"
                 )} 
                 strokeWidth={isActive ? 2.5 : 2}
               />
               
               {!isCollapsed && (
-                <span className={cn("text-sm font-medium whitespace-nowrap opacity-100 transition-opacity duration-300", isActive ? "font-bold" : "")}>
+                <span className={cn("whitespace-nowrap text-sm font-bold tracking-wide transition-opacity duration-300", isActive ? "text-white" : "")}>
                   {item.name}
                 </span>
               )}
@@ -136,21 +158,20 @@ export default function AdminSidebar() {
         })}
       </nav>
 
-      {/* 3. Footer Profile Card (Pushed up by pb-32) */}
-      <div className="p-3 mt-auto">
+      <div className="relative z-10 p-4 mt-auto">
         <div className={cn(
-          "bg-panel border border-border rounded-2xl flex items-center transition-all duration-300 group hover:border-border-hover",
-          isCollapsed ? "justify-center p-2 flex-col gap-4" : "justify-between p-4"
+          "flex items-center rounded-2xl border border-white/10 bg-white/[0.035] transition-all duration-300 hover:border-white/15 hover:bg-white/[0.055]",
+          isCollapsed ? "justify-center p-2 flex-col gap-3" : "justify-between p-4"
         )}>
           <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
-            <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-text-muted shrink-0">
+            <div className="w-10 h-10 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center text-zinc-400 shrink-0">
               <UserCircle size={20} />
             </div>
             
             {!isCollapsed && (
               <div className="flex flex-col overflow-hidden">
-                <span className="text-xs font-bold text-white truncate w-24">Admin User</span>
-                <span className="text-[10px] text-text-dim">Super Admin</span>
+                <span className="text-xs font-bold text-white truncate w-28">Admin User</span>
+                <span className="text-[10px] font-semibold text-zinc-500">Super Admin</span>
               </div>
             )}
           </div>
@@ -158,7 +179,7 @@ export default function AdminSidebar() {
           <button 
             onClick={handleLogout}
             className={cn(
-              "text-text-muted hover:text-red-500 transition-colors shrink-0",
+              "text-zinc-500 hover:text-red-400 transition-colors shrink-0",
               isCollapsed ? "w-full flex justify-center py-2 border-t border-white/5" : "p-2"
             )}
             title="Logout"

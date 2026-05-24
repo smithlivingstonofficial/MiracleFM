@@ -2,9 +2,10 @@ export const SITE_URL =
   (process.env.NEXT_PUBLIC_SITE_URL || "https://miraclefm.vercel.app").replace(/\/+$/, "");
 
 export const SITE_NAME = "Miracle FM";
+export const SITE_TITLE = "Miracle FM - Tamil Christian Music & Worship Songs";
 
 export const SITE_DESCRIPTION =
-  "Listen to Tamil Christian songs, worship music, albums, and artists on Miracle FM.";
+  "Stream Tamil Christian music, worship songs, gospel albums, devotional audio, and uplifting faith playlists on Miracle FM.";
 
 export const DEFAULT_IMAGE = "/miraclefm.jpg";
 
