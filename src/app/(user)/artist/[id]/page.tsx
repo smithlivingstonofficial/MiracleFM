@@ -11,6 +11,7 @@ import SongListAdRow from "@/components/ads/SongListAdRow";
 import ShareButton from "@/components/user/ShareButton";
 import FollowArtistButton from "@/components/user/FollowArtistButton";
 import { shouldRenderSongListAdAfter } from "@/lib/ads";
+import { absoluteUrl, compactObject, DEFAULT_IMAGE, SITE_NAME } from "@/lib/seo";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
@@ -29,13 +30,27 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const description = artist.bio || `Listen to ${artist.name}'s Tamil Christian worship songs on Miracle FM.`;
 
   return {
-    title: artist.name,
+    title: `${artist.name} Songs`,
     description,
+    alternates: {
+      canonical: `/artist/${id}`,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
     openGraph: {
-      title: artist.name,
+      title: `${artist.name} Songs | ${SITE_NAME}`,
       description,
+      url: `/artist/${id}`,
       type: "profile",
-      images: artist.image_url ? [{ url: artist.image_url }] : [{ url: "/miraclefm.jpg" }],
+      images: [{ url: artist.image_url || DEFAULT_IMAGE }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${artist.name} Songs | ${SITE_NAME}`,
+      description,
+      images: [artist.image_url || DEFAULT_IMAGE],
     },
   };
 }
@@ -69,9 +84,37 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
       .flatMap(t => t.genre ||[])
       .filter(g => typeof g === 'string')
   ));
+  const artistDescription = artist.bio || `Listen to ${artist.name}'s Tamil Christian worship songs on Miracle FM.`;
+  const artistJsonLd = compactObject({
+    "@context": "https://schema.org",
+    "@type": "MusicGroup",
+    name: artist.name,
+    url: absoluteUrl(`/artist/${id}`),
+    image: absoluteUrl(artist.image_url || DEFAULT_IMAGE),
+    description: artistDescription,
+    album: albums.map((album) =>
+      compactObject({
+        "@type": "MusicAlbum",
+        name: album.title,
+        url: album.id ? absoluteUrl(`/album/${album.id}`) : undefined,
+        image: album.cover_url ? absoluteUrl(album.cover_url) : undefined,
+      })
+    ),
+    track: topTracks.map((track) =>
+      compactObject({
+        "@type": "MusicRecording",
+        name: track.title,
+        url: absoluteUrl(`/song/${track.id}`),
+      })
+    ),
+  });
 
   return (
     <div className="bg-[#050505] min-h-screen pb-40 relative overflow-x-hidden text-white selection:bg-[#FF0055] selection:text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(artistJsonLd) }}
+      />
       
       {/* --- 1. IMMERSIVE HERO SECTION --- */}
       <div className="relative w-full pt-10 md:pt-20 pb-8 md:pb-12 flex flex-col items-center md:items-start justify-end min-h-[48vh] md:min-h-[46vh] px-4 md:px-12">

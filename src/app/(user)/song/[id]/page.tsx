@@ -9,7 +9,9 @@ import ShareButton from "@/components/user/ShareButton";
 import SongPlayButton from "@/components/user/SongPlayButton";
 import TrackRow from "@/components/user/TrackRow";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
+import { absoluteUrl, compactObject, DEFAULT_IMAGE, SITE_NAME, secondsToIsoDuration } from "@/lib/seo";
 import type { Track } from "@/types/music";
+import type { Metadata } from "next";
 
 export const revalidate = 60;
 
@@ -29,7 +31,7 @@ const formatDuration = (seconds?: number | null) => {
   return `${minutes}:${remaining < 10 ? "0" : ""}${remaining}`;
 };
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
   const { data: track } = await supabase
@@ -43,13 +45,32 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const metadataTrack = track as { title: string; cover_url?: string | null; artists?: { name?: string | null } | { name?: string | null }[] | null };
   const metadataArtist = Array.isArray(metadataTrack.artists) ? metadataTrack.artists[0] : metadataTrack.artists;
   const artistName = metadataArtist?.name;
+  const description = artistName ? `Listen to ${metadataTrack.title} by ${artistName} on Miracle FM.` : `Listen to ${metadataTrack.title} on Miracle FM.`;
+  const image = metadataTrack.cover_url || DEFAULT_IMAGE;
+  const title = artistName ? `${metadataTrack.title} by ${artistName}` : metadataTrack.title;
+
   return {
-    title: metadataTrack.title,
-    description: artistName ? `Listen to ${metadataTrack.title} by ${artistName} on Miracle FM.` : `Listen to ${metadataTrack.title} on Miracle FM.`,
+    title,
+    description,
+    alternates: {
+      canonical: `/song/${id}`,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
     openGraph: {
-      title: metadataTrack.title,
-      description: "Listen on Miracle FM",
-      images: metadataTrack.cover_url ? [{ url: metadataTrack.cover_url }] : undefined,
+      title: `${title} | ${SITE_NAME}`,
+      description,
+      url: `/song/${id}`,
+      type: "music.song",
+      images: [{ url: image }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} | ${SITE_NAME}`,
+      description,
+      images: [image],
     },
   };
 }
@@ -87,9 +108,40 @@ export default async function SongPage({ params }: { params: Promise<{ id: strin
   const qualifiedListens = Number(stats?.qualified_listens || 0);
   const relatedTracks = ((relatedData || []) as Track[]).filter((item) => item.id !== track.id);
   const queue = [track, ...relatedTracks];
+  const songDescription = track.artists?.name
+    ? `Listen to ${track.title} by ${track.artists.name} on Miracle FM.`
+    : `Listen to ${track.title} on Miracle FM.`;
+  const songJsonLd = compactObject({
+    "@context": "https://schema.org",
+    "@type": "MusicRecording",
+    name: track.title,
+    url: absoluteUrl(`/song/${track.id}`),
+    image: absoluteUrl(displayImage),
+    description: songDescription,
+    duration: secondsToIsoDuration(track.duration_seconds || track.duration),
+    byArtist: track.artists?.name
+      ? compactObject({
+          "@type": "MusicGroup",
+          name: track.artists.name,
+          url: track.artists.id ? absoluteUrl(`/artist/${track.artists.id}`) : undefined,
+        })
+      : undefined,
+    inAlbum: track.albums?.title
+      ? compactObject({
+          "@type": "MusicAlbum",
+          name: track.albums.title,
+          url: track.albums.id ? absoluteUrl(`/album/${track.albums.id}`) : undefined,
+          image: track.albums.cover_url ? absoluteUrl(track.albums.cover_url) : undefined,
+        })
+      : undefined,
+  });
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#050505] pb-44 text-white selection:bg-[#FF0055] selection:text-white md:pb-40">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(songJsonLd) }}
+      />
       <div className="relative px-4 pb-8 pt-7 md:px-12 md:pt-16">
         <div className="absolute inset-x-0 top-0 h-[460px] overflow-hidden pointer-events-none md:h-[520px]">
           <Image src={displayImage} alt="" fill className="object-cover opacity-35 blur-[80px] scale-125" priority />

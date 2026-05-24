@@ -2,11 +2,12 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Search as SearchIcon, Disc, Mic2, X, Loader2, Play, ListMusic } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import TrackRow from "@/components/user/TrackRow";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import SongListAdRow from "@/components/ads/SongListAdRow";
@@ -35,7 +36,37 @@ const mergeTracks = (primary: Track[], secondary: Track[]) => {
 };
 
 export default function SearchPage() {
-  const [query, setQuery] = useState("");
+  return (
+    <Suspense fallback={<SearchShell />}>
+      <SearchExperience />
+    </Suspense>
+  );
+}
+
+function SearchShell() {
+  return (
+    <div className="relative min-h-screen w-full bg-[#050505] text-zinc-100 pb-32 overflow-x-hidden selection:bg-[#FF0055] selection:text-white">
+      <div className="absolute top-0 inset-x-0 h-[400px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
+      <div className="p-4 md:p-8 max-w-7xl mx-auto">
+        <div className="sticky top-0 z-40 py-4 md:py-6 -mx-4 px-4 md:mx-0 md:px-0 bg-[#050505]/90 backdrop-blur-2xl border-b border-white/5 mb-8 md:mb-10 transition-all">
+          <div className="relative max-w-2xl mx-auto group">
+            <div className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 text-zinc-500 z-10">
+              <Loader2 size={22} className="animate-spin text-[#FF0055]" />
+            </div>
+            <div className="h-[58px] rounded-full border border-white/10 bg-[#0A0A0A] md:h-[68px]" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchExperience() {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const initialQuery = searchParams.get("q") || "";
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<SearchResults>(emptyResults);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -111,6 +142,17 @@ export default function SearchPage() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [query, supabase]);
+
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+    const currentQuery = searchParams.get("q") || "";
+    if (trimmedQuery === currentQuery) return;
+
+    const nextUrl = trimmedQuery
+      ? `${pathname}?q=${encodeURIComponent(trimmedQuery)}`
+      : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [pathname, query, router, searchParams]);
 
   const resultCount = results.tracks.length + results.artists.length + results.albums.length + results.playlists.length;
   const showSearchAd = query.trim().length > 1 && !loading && !errorMessage && resultCount > 0;

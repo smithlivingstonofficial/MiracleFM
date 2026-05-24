@@ -13,6 +13,7 @@ import SongListAdRow from "@/components/ads/SongListAdRow";
 import ShareButton from "@/components/user/ShareButton";
 import SaveAlbumButton from "@/components/user/SaveAlbumButton";
 import { shouldRenderSongListAdAfter } from "@/lib/ads";
+import { absoluteUrl, compactObject, DEFAULT_IMAGE, SITE_NAME } from "@/lib/seo";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
@@ -32,15 +33,31 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const description = artist?.name
     ? `Listen to ${album.title} by ${artist.name} on Miracle FM.`
     : `Listen to ${album.title} on Miracle FM.`;
+  const title = artist?.name ? `${album.title} by ${artist.name}` : album.title;
+  const image = album.cover_url || DEFAULT_IMAGE;
 
   return {
-    title: album.title,
+    title,
     description,
+    alternates: {
+      canonical: `/album/${id}`,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
     openGraph: {
-      title: album.title,
+      title: `${title} | ${SITE_NAME}`,
       description,
+      url: `/album/${id}`,
       type: "music.album",
-      images: album.cover_url ? [{ url: album.cover_url }] : [{ url: "/miraclefm.jpg" }],
+      images: [{ url: image }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} | ${SITE_NAME}`,
+      description,
+      images: [image],
     },
   };
 }
@@ -70,9 +87,40 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
   
   // Get genres from the first track
   const genres = tracks?.[0]?.genre || [];
+  const albumDescription = album.artists?.name
+    ? `Listen to ${album.title} by ${album.artists.name} on Miracle FM.`
+    : `Listen to ${album.title} on Miracle FM.`;
+  const albumJsonLd = compactObject({
+    "@context": "https://schema.org",
+    "@type": "MusicAlbum",
+    name: album.title,
+    url: absoluteUrl(`/album/${id}`),
+    image: absoluteUrl(album.cover_url || DEFAULT_IMAGE),
+    description: albumDescription,
+    byArtist: album.artists?.name
+      ? compactObject({
+          "@type": "MusicGroup",
+          name: album.artists.name,
+          url: album.artists.id ? absoluteUrl(`/artist/${album.artists.id}`) : undefined,
+        })
+      : undefined,
+    numTracks: trackCount,
+    track: (tracks || []).map((track, index) =>
+      compactObject({
+        "@type": "MusicRecording",
+        position: index + 1,
+        name: track.title,
+        url: absoluteUrl(`/song/${track.id}`),
+      })
+    ),
+  });
 
   return (
     <div className="bg-[#050505] min-h-screen pb-40 relative overflow-x-hidden text-white selection:bg-[#FF0055] selection:text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(albumJsonLd) }}
+      />
       
       {/* --- 1. IMMERSIVE COMPACT HERO --- */}
       {/* Reduced height on mobile to bring content up */}

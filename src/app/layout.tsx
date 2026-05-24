@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { GoogleAnalytics } from "@next/third-parties/google";
+import { absoluteUrl, DEFAULT_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,15 +27,18 @@ export const viewport: Viewport = {
 
 // ─── Metadata ────────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://miraclefm.com"),
+  metadataBase: new URL(SITE_URL),
   title: {
-    default:  "Miracle FM",
-    template: "%s | Miracle FM",
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
   },
-  description: "Tamil Christian Audio Streaming Platform",
-  applicationName: "Miracle FM",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
   verification: {
     google: "0v6Hmws4g7AsVjkst14NDV0ISXErjmmKjnsQu8LqWGk",
+  },
+  alternates: {
+    canonical: "/",
   },
 
   // ── PWA / Home-screen ──────────────────────────────────────────────────────
@@ -65,12 +69,19 @@ export const metadata: Metadata = {
 
   // ── Open Graph (lock-screen / notification artwork fallback) ───────────────
   openGraph: {
-    title:       "Miracle FM",
-    description: "Tamil Christian Audio Streaming Platform",
-    siteName:    "Miracle FM",
-    images: [{ url: "/miraclefm.jpg", width: 1200, height: 630 }],
+    title:       SITE_NAME,
+    description: SITE_DESCRIPTION,
+    url:         SITE_URL,
+    siteName:    SITE_NAME,
+    images: [{ url: DEFAULT_IMAGE, width: 1200, height: 630 }],
     locale:      "ta_IN",
     type:        "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: [DEFAULT_IMAGE],
   },
 };
 
@@ -79,6 +90,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     process.env.NEXT_PUBLIC_MEDIA_BASE_URL ||
     process.env.NEXT_PUBLIC_R2_PUBLIC_URL ||
     "";
+
+  const siteJsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: absoluteUrl(DEFAULT_IMAGE),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: SITE_NAME,
+      url: SITE_URL,
+      potentialAction: {
+        "@type": "SearchAction",
+        target: `${absoluteUrl("/search")}?q={search_term_string}`,
+        "query-input": "required name=search_term_string",
+      },
+    },
+  ];
 
   return (
     // suppressHydrationWarning avoids server/client mismatch on 'dark' class
@@ -100,6 +132,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           older WebViews that still respect it.
         */}
         <meta name="google" content="notranslate" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
+        />
 
         {/* Google AdSense */}
         <script
