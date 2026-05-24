@@ -17,6 +17,11 @@ import PlayerVolume from "./PlayerVolume";
 type CurrentTrack = ReturnType<typeof usePlayerStore.getState>["currentTrack"];
 type SourceKind = "none" | "hls-native" | "hls-js" | "fallback";
 type LoadStatus = "idle" | "loading" | "ready" | "playing" | "error";
+type RecommendationTrackRow = {
+  track_id: string;
+  score?: number;
+  reason?: string;
+};
 
 type WakeLockCapableNavigator = Navigator & {
   wakeLock?: {
@@ -392,7 +397,7 @@ export default function AudioPlayer() {
     if (autoFillInFlightRef.current) return false;
 
     const store = usePlayerStore.getState();
-    const { queue, currentIndex } = store;
+    const { queue, currentIndex, playedTrackIds, currentTrack } = store;
     const remainingTracks = queue.length - currentIndex - 1;
     const needsMoreTracks =
       queue.length <= 1 || remainingTracks <= 0 || (store.isPlaying && queue.length < AUTO_FILL_MIN_QUEUE);
@@ -401,20 +406,61 @@ export default function AudioPlayer() {
 
     autoFillInFlightRef.current = true;
     try {
-      const existingIds = new Set(queue.map((track) => track.id));
-      const { data, error } = await createClient()
-        .from("tracks")
-        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-        .eq("audio_status", "ready")
-        .order("created_at", { ascending: false })
-        .limit(AUTO_FILL_FETCH_LIMIT);
+      const excludedIds = new Set([
+        ...queue.map((track) => track.id),
+        ...playedTrackIds,
+        ...(currentTrack?.id ? [currentTrack.id] : []),
+      ]);
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      if (error || !data?.length) return false;
+      let recommendationTracks: Track[] = [];
+      const { data: recommendationRows } = await supabase.rpc("get_recommendation_tracks", {
+        uid: user?.id ?? null,
+        section_slug: "daily-mix",
+        limit_count: AUTO_FILL_FETCH_LIMIT,
+      });
 
-      const nextTracks = shuffled((data as Track[]).filter((track) => !existingIds.has(track.id))).slice(
-        0,
-        AUTO_FILL_MIN_QUEUE
-      );
+      const recommendedIds = ((recommendationRows || []) as RecommendationTrackRow[])
+        .map((row) => row.track_id)
+        .filter((id) => id && !excludedIds.has(id));
+
+      if (recommendedIds.length > 0) {
+        const { data } = await supabase
+          .from("tracks")
+          .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+          .eq("audio_status", "ready")
+          .in("id", recommendedIds);
+
+        const tracksById = (data || []) as Track[];
+        const byId = new Map(tracksById.map((track) => [track.id, track]));
+        recommendationTracks = recommendedIds
+          .map((id) => byId.get(id))
+          .filter((track): track is Track => Boolean(track && !excludedIds.has(track.id)));
+      }
+
+      let nextTracks = recommendationTracks.slice(0, AUTO_FILL_MIN_QUEUE);
+
+      if (nextTracks.length < AUTO_FILL_MIN_QUEUE) {
+        const { data, error } = await supabase
+          .from("tracks")
+          .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+          .eq("audio_status", "ready")
+          .order("created_at", { ascending: false })
+          .limit(AUTO_FILL_FETCH_LIMIT);
+
+        if (!error && data?.length) {
+          const fallbackTracks = shuffled(
+            (data as Track[]).filter(
+              (track) => !excludedIds.has(track.id) && !nextTracks.some((queuedTrack) => queuedTrack.id === track.id)
+            )
+          );
+          nextTracks = [...nextTracks, ...fallbackTracks].slice(0, AUTO_FILL_MIN_QUEUE);
+        }
+      }
+
       if (!nextTracks.length) return false;
 
       appendToQueueRef.current(nextTracks);

@@ -10,6 +10,9 @@ interface PlayerState {
   currentTrack: Track | null;
   queue: Track[];
   currentIndex: number;
+  playedTrackIds: string[];
+  playHistoryIds: string[];
+  historyIndex: number;
 
   // Modifiers
   isShuffled: boolean;
@@ -41,6 +44,19 @@ interface PlayerState {
   seekTo: (time: number) => void;
 }
 
+const dedupePlayableTracks = (tracks: Track[]) => {
+  const seen = new Set<string>();
+  return tracks.filter((track) => {
+    if (!isPlayableTrack(track) || seen.has(track.id)) return false;
+    seen.add(track.id);
+    return true;
+  });
+};
+
+const appendUniqueId = (ids: string[], id: string) => (ids.includes(id) ? ids : [...ids, id]);
+
+const chooseRandomIndex = (indexes: number[]) => indexes[Math.floor(Math.random() * indexes.length)];
+
 export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => ({
@@ -49,6 +65,9 @@ export const usePlayerStore = create<PlayerState>()(
       currentTrack: null,
       queue:[],
       currentIndex: -1,
+      playedTrackIds: [],
+      playHistoryIds: [],
+      historyIndex: -1,
       
       // Default to Shuffle ON
       isShuffled: true,
@@ -71,16 +90,20 @@ export const usePlayerStore = create<PlayerState>()(
         if (!isPlayableTrack(track)) return;
 
         set({ 
-        currentTrack: track, 
-        queue: [track], 
-        currentIndex: 0, 
-        isPlaying: true 
+          currentTrack: track,
+          queue: [track],
+          currentIndex: 0,
+          playedTrackIds: [track.id],
+          playHistoryIds: [track.id],
+          historyIndex: 0,
+          currentTime: 0,
+          isPlaying: true
         });
       },
 
       // Play a list of tracks (from an Album, Playlist, etc.)
       setQueue: (tracks, startIndex = 0) => {
-        const playableTracks = tracks.filter(isPlayableTrack);
+        const playableTracks = dedupePlayableTracks(tracks);
         if (!playableTracks.length) return;
         const requestedTrack = tracks[startIndex];
         const requestedPlayableIndex = requestedTrack
@@ -95,12 +118,16 @@ export const usePlayerStore = create<PlayerState>()(
           queue: playableTracks,
           currentTrack: playableTracks[safeIndex],
           currentIndex: safeIndex,
+          playedTrackIds: [playableTracks[safeIndex].id],
+          playHistoryIds: [playableTracks[safeIndex].id],
+          historyIndex: 0,
+          currentTime: 0,
           isPlaying: true
         });
       },
 
       appendToQueue: (tracks) => {
-        const playableTracks = tracks.filter(isPlayableTrack);
+        const playableTracks = dedupePlayableTracks(tracks);
         if (!playableTracks.length) return;
 
         set((state) => {
@@ -113,7 +140,7 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       playNext: () => {
-        const { queue, currentIndex, isShuffled, repeatMode } = get();
+        const { queue, currentIndex, isShuffled, repeatMode, playedTrackIds, playHistoryIds, historyIndex } = get();
         if (queue.length === 0) return;
 
         if (repeatMode === "one") {
@@ -126,12 +153,36 @@ export const usePlayerStore = create<PlayerState>()(
           return;
         }
 
-        let nextIndex;
+        const futureTrackId = historyIndex >= 0 ? playHistoryIds[historyIndex + 1] : undefined;
+        if (futureTrackId) {
+          const futureIndex = queue.findIndex((track) => track.id === futureTrackId);
+          if (futureIndex >= 0) {
+            set({
+              currentTrack: queue[futureIndex],
+              currentIndex: futureIndex,
+              historyIndex: historyIndex + 1,
+              currentTime: 0,
+              isPlaying: true,
+            });
+            return;
+          }
+        }
+
+        let nextIndex = -1;
+        let resetPlayedCycle = false;
         if (isShuffled && queue.length > 1) {
-          // SMART SHUFFLE: Ensure the next random track is not the exact same as the current one
-          do {
-            nextIndex = Math.floor(Math.random() * queue.length);
-          } while (nextIndex === currentIndex);
+          const unplayedIndexes = queue
+            .map((track, index) => ({ track, index }))
+            .filter(({ track, index }) => index !== currentIndex && !playedTrackIds.includes(track.id))
+            .map(({ index }) => index);
+
+          if (unplayedIndexes.length > 0) {
+            nextIndex = chooseRandomIndex(unplayedIndexes);
+          } else if (repeatMode === "all") {
+            const nextCycleIndexes = queue.map((_, index) => index).filter((index) => index !== currentIndex);
+            nextIndex = chooseRandomIndex(nextCycleIndexes);
+            resetPlayedCycle = true;
+          }
         } else {
           nextIndex = currentIndex + 1;
         }
@@ -147,6 +198,14 @@ export const usePlayerStore = create<PlayerState>()(
           }
         }
 
+        if (nextIndex < 0) {
+          if (repeatMode !== "all") {
+            set({ isPlaying: false });
+            return;
+          }
+          nextIndex = currentIndex;
+        }
+
         if (nextIndex === currentIndex) {
           set((state) => ({
             currentTime: 0,
@@ -157,11 +216,22 @@ export const usePlayerStore = create<PlayerState>()(
           return;
         }
 
-        set({ currentTrack: queue[nextIndex], currentIndex: nextIndex, isPlaying: true });
+        const nextTrack = queue[nextIndex];
+        const nextHistory = [...playHistoryIds.slice(0, Math.max(historyIndex + 1, 0)), nextTrack.id];
+
+        set({
+          currentTrack: nextTrack,
+          currentIndex: nextIndex,
+          playedTrackIds: resetPlayedCycle ? [nextTrack.id] : appendUniqueId(playedTrackIds, nextTrack.id),
+          playHistoryIds: nextHistory,
+          historyIndex: nextHistory.length - 1,
+          currentTime: 0,
+          isPlaying: true,
+        });
       },
 
       playPrevious: () => {
-        const { queue, currentIndex, isShuffled } = get();
+        const { queue, currentIndex, playHistoryIds, historyIndex } = get();
         if (queue.length === 0) return;
 
         // If song played for > 3 seconds, just restart it
@@ -174,21 +244,32 @@ export const usePlayerStore = create<PlayerState>()(
           return;
         }
 
-        let prevIndex;
-        if (isShuffled && queue.length > 1) {
-          // SMART SHUFFLE: Ensure the previous random track is not the exact same
-          do {
-            prevIndex = Math.floor(Math.random() * queue.length);
-          } while (prevIndex === currentIndex);
-        } else {
-          prevIndex = currentIndex - 1;
+        const previousTrackId = historyIndex > 0 ? playHistoryIds[historyIndex - 1] : undefined;
+        if (previousTrackId) {
+          const previousIndex = queue.findIndex((track) => track.id === previousTrackId);
+          if (previousIndex >= 0) {
+            set({
+              currentTrack: queue[previousIndex],
+              currentIndex: previousIndex,
+              historyIndex: historyIndex - 1,
+              currentTime: 0,
+              isPlaying: true,
+            });
+            return;
+          }
         }
 
-        if (prevIndex < 0) {
-          prevIndex = queue.length - 1; // Loop to the end
-        }
-
-        set({ currentTrack: queue[prevIndex], currentIndex: prevIndex, isPlaying: true });
+        const prevIndex = currentIndex > 0 ? currentIndex - 1 : queue.length - 1;
+        const previousTrack = queue[prevIndex];
+        const nextHistory = [previousTrack.id];
+        set({
+          currentTrack: previousTrack,
+          currentIndex: prevIndex,
+          playHistoryIds: nextHistory,
+          historyIndex: 0,
+          currentTime: 0,
+          isPlaying: true,
+        });
       },
 
       toggleShuffle: () => set((state) => ({ isShuffled: !state.isShuffled })),
