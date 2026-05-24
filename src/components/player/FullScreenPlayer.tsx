@@ -14,7 +14,6 @@ import {
   Pause,
   Play,
   PlusCircle,
-  Radio,
   Repeat,
   Repeat1,
   Share2,
@@ -34,6 +33,8 @@ type LyricLine = {
   time: number | null;
   text: string;
 };
+
+const FULLSCREEN_HISTORY_KEY = "miracleFmFullScreenPlayer";
 
 export default function FullScreenPlayer() {
   const router = useRouter();
@@ -64,6 +65,11 @@ export default function FullScreenPlayer() {
   const [isPanelDragging, setIsPanelDragging] = useState(false);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const dragStartYRef = useRef(0);
+  const dragLastYRef = useRef(0);
+  const dragLastTimeRef = useRef(0);
+  const dragVelocityRef = useRef(0);
+  const historyEntryRef = useRef(false);
+  const suppressNextPopRef = useRef(false);
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
   const lyricRefs = useRef<Record<string, HTMLParagraphElement | null>>({});
   const autoScrollTimerRef = useRef<number | null>(null);
@@ -110,18 +116,87 @@ export default function FullScreenPlayer() {
     };
   }, []);
 
-  const handleClose = () => {
+  useEffect(() => {
+    if (!isFullScreen) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const previousHtmlOverscroll = html.style.overscrollBehaviorY;
+    const previousBodyOverscroll = body.style.overscrollBehaviorY;
+    const previousBodyOverflow = body.style.overflow;
+
+    html.style.overscrollBehaviorY = "none";
+    body.style.overscrollBehaviorY = "none";
+    body.style.overflow = "hidden";
+
+    return () => {
+      html.style.overscrollBehaviorY = previousHtmlOverscroll;
+      body.style.overscrollBehaviorY = previousBodyOverscroll;
+      body.style.overflow = previousBodyOverflow;
+    };
+  }, [isFullScreen]);
+
+  useEffect(() => {
+    if (!isFullScreen) return;
+
+    const state = window.history.state;
+    if (!state?.[FULLSCREEN_HISTORY_KEY]) {
+      window.history.pushState({ ...(state || {}), [FULLSCREEN_HISTORY_KEY]: true }, "");
+      historyEntryRef.current = true;
+    }
+
+    const handlePopState = () => {
+      if (suppressNextPopRef.current) {
+        suppressNextPopRef.current = false;
+        historyEntryRef.current = false;
+        return;
+      }
+
+      historyEntryRef.current = false;
+      setShowLyrics(false);
+      setShowPlaylistMenu(false);
+      setDragY(0);
+      setIsPanelDragging(false);
+      toggleFullScreen();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isFullScreen, toggleFullScreen]);
+
+  const minimizePlayer = (options: { syncHistory?: boolean } = {}) => {
+    const { syncHistory = true } = options;
     setShowLyrics(false);
     setShowPlaylistMenu(false);
     setDragY(0);
     setIsPanelDragging(false);
+
+    if (syncHistory && historyEntryRef.current && window.history.state?.[FULLSCREEN_HISTORY_KEY]) {
+      suppressNextPopRef.current = true;
+      historyEntryRef.current = false;
+      window.history.back();
+    }
+
     toggleFullScreen();
   };
+
+  const handleClose = () => minimizePlayer();
 
   const closeAndNavigate = (href: string) => {
     setShowLyrics(false);
     setShowPlaylistMenu(false);
     setDragY(0);
+    setIsPanelDragging(false);
+
+    if (historyEntryRef.current && window.history.state?.[FULLSCREEN_HISTORY_KEY]) {
+      suppressNextPopRef.current = true;
+      historyEntryRef.current = false;
+      window.history.back();
+      window.setTimeout(() => router.push(href), 0);
+      toggleFullScreen();
+      return;
+    }
+
     toggleFullScreen();
     router.push(href);
   };
@@ -154,14 +229,30 @@ export default function FullScreenPlayer() {
     if (event.pointerType === "mouse") return;
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest("button,a,input,[data-no-panel-drag='true']")) return;
+
+    const dragZone = target?.closest("[data-player-drag-zone='true']");
+    const lyricsScroller = target?.closest("[data-lyrics-scroll='true']") as HTMLElement | null;
+    const canDragFromLyrics = Boolean(lyricsScroller && lyricsScroller.scrollTop <= 0);
+    if (!dragZone && !canDragFromLyrics) return;
+
     dragStartYRef.current = event.clientY;
+    dragLastYRef.current = event.clientY;
+    dragLastTimeRef.current = performance.now();
+    dragVelocityRef.current = 0;
     setIsPanelDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const handlePanelPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!isPanelDragging) return;
+    const now = performance.now();
+    const timeDelta = Math.max(now - dragLastTimeRef.current, 1);
+    dragVelocityRef.current = (event.clientY - dragLastYRef.current) / timeDelta;
+    dragLastYRef.current = event.clientY;
+    dragLastTimeRef.current = now;
+
     const nextY = Math.max(0, event.clientY - dragStartYRef.current);
+    if (nextY > 4) event.preventDefault();
     setDragY(Math.min(nextY, 260));
   };
 
@@ -170,8 +261,8 @@ export default function FullScreenPlayer() {
     event.currentTarget.releasePointerCapture(event.pointerId);
     setIsPanelDragging(false);
 
-    if (dragY > 95) {
-      handleClose();
+    if (dragY > 80 || dragVelocityRef.current > 0.75) {
+      minimizePlayer();
       return;
     }
 
@@ -219,7 +310,7 @@ export default function FullScreenPlayer() {
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[100] h-[100dvh] overflow-hidden bg-[#030303] text-white select-none",
+        "fixed inset-0 z-[100] h-[100dvh] overflow-hidden overscroll-none bg-[#030303] text-white select-none",
         !isPanelDragging && "animate-in slide-in-from-bottom-[100%] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] transition-transform"
       )}
       style={{ transform: dragY ? `translateY(${dragY}px)` : undefined }}
@@ -239,13 +330,15 @@ export default function FullScreenPlayer() {
         )}
       </div>
 
-      <div className="mx-auto flex h-full w-full max-w-[1500px] flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] md:px-8 md:pb-8 md:pt-6">
-        <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-white/25 md:hidden" />
+      <div className="mx-auto flex h-full w-full max-w-[1500px] flex-col px-4 pb-[max(0.85rem,env(safe-area-inset-bottom))] pt-[max(0.65rem,env(safe-area-inset-top))] md:px-8 md:pb-8 md:pt-6">
+        <div data-player-drag-zone="true" className="touch-none pb-2 md:hidden">
+          <div className="mx-auto h-1.5 w-14 rounded-full bg-white/30 shadow-[0_0_18px_rgba(255,255,255,0.12)]" />
+        </div>
 
-        <header className="flex shrink-0 items-center justify-between gap-3">
+        <header data-player-drag-zone="true" className="flex shrink-0 touch-none items-center justify-between gap-3">
           <button
             onClick={handleClose}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/75 transition hover:bg-white/10 hover:text-white active:scale-95"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/[0.07] text-white/78 shadow-[0_16px_40px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition hover:bg-white/12 hover:text-white active:scale-95"
             aria-label="Minimize player"
           >
             <ChevronDown size={27} />
@@ -270,7 +363,7 @@ export default function FullScreenPlayer() {
 
           <button
             onClick={() => closeAndNavigate(`/song/${currentTrack.id}`)}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/75 transition hover:bg-white/10 hover:text-white active:scale-95"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/[0.07] text-white/78 shadow-[0_16px_40px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition hover:bg-white/12 hover:text-white active:scale-95"
             aria-label="Open song page"
             title="Open song"
           >
@@ -278,7 +371,7 @@ export default function FullScreenPlayer() {
           </button>
         </header>
 
-        <main className="grid min-h-0 flex-1 gap-4 pt-3 md:grid-cols-[minmax(330px,0.95fr)_minmax(420px,1.05fr)] md:gap-8 md:pt-7">
+        <main className="grid min-h-0 flex-1 gap-3 pt-2 md:grid-cols-[minmax(330px,0.95fr)_minmax(420px,1.05fr)] md:gap-8 md:pt-7">
           <section className={cn("min-h-0 flex-col", showLyrics ? "hidden md:flex" : "flex")}>
             <div className="flex min-h-0 flex-1 items-center justify-center">
               <ArtworkPanel displayImage={displayImage} title={currentTrack.title} isPlaying={isPlaying} />
@@ -297,7 +390,7 @@ export default function FullScreenPlayer() {
           </section>
 
           <section className="flex min-h-0 flex-col">
-            <div className={cn("min-h-0 overflow-hidden", showLyrics ? "flex-1" : "hidden md:block md:flex-1")}>
+            <div className={cn("min-h-0 min-w-0 overflow-hidden", showLyrics ? "flex-1" : "hidden md:block md:flex-1")}>
               {showLyrics && hasLyrics ? (
                 <LyricsPanel
                   lines={lyricData.lines}
@@ -321,7 +414,12 @@ export default function FullScreenPlayer() {
               )}
             </div>
 
-            <div className="mt-3 shrink-0 space-y-3 rounded-[1.75rem] border border-white/10 bg-black/30 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:mt-4 md:space-y-4 md:p-5">
+            <div
+              className={cn(
+                "mt-3 shrink-0 space-y-3 rounded-[1.6rem] border border-white/10 bg-black/45 p-4 shadow-[0_22px_70px_rgba(0,0,0,0.42),0_0_34px_rgba(255,0,85,0.05)] backdrop-blur-2xl md:mt-4 md:space-y-4 md:rounded-[1.9rem] md:p-5",
+                showLyrics && "max-md:mt-2 max-md:space-y-2 max-md:rounded-[1.35rem] max-md:p-3"
+              )}
+            >
               <ActionDock
                 track={currentTrack}
                 hasLyrics={hasLyrics}
@@ -349,6 +447,7 @@ export default function FullScreenPlayer() {
                 isPlaying={isPlaying}
                 isShuffled={isShuffled}
                 repeatMode={repeatMode}
+                compact={showLyrics}
                 onPlayPause={() => setIsPlaying(!isPlaying)}
                 onPrevious={playPrevious}
                 onNext={playNext}
@@ -365,33 +464,41 @@ export default function FullScreenPlayer() {
 
 function ArtworkPanel({ displayImage, title, isPlaying }: { displayImage?: string | null; title: string; isPlaying: boolean }) {
   return (
-    <div
-      className={cn(
-        "relative aspect-square w-full max-w-[min(76vw,430px)] overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-[0_32px_90px_-24px_rgba(0,0,0,0.95)] transition duration-700 md:max-w-[520px] md:rounded-[2.5rem]",
-        isPlaying ? "scale-100" : "scale-[0.96] opacity-85"
-      )}
-    >
-      {displayImage ? (
-        <Image src={displayImage} alt={title} fill className="object-cover" priority />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-zinc-900">
-          <Music2 size={86} className="text-zinc-700" />
-        </div>
-      )}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent" />
-      <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white/75 backdrop-blur-xl">
-        <Radio size={12} className="text-[#FF0055]" />
-        Live
+    <div className="relative w-full max-w-[min(72vw,390px)] md:max-w-[520px]">
+      <div
+        className={cn(
+          "pointer-events-none absolute -inset-5 rounded-[2.4rem] bg-[#FF0055]/16 blur-3xl md:hidden",
+          isPlaying && "animate-pulse"
+        )}
+      />
+      <div
+        className={cn(
+          "pointer-events-none absolute -inset-8 rounded-[3rem] bg-white/10 blur-[54px] opacity-35 md:hidden",
+          isPlaying && "animate-pulse"
+        )}
+        style={{ animationDelay: "420ms" }}
+      />
+      <div
+        className={cn(
+          "relative aspect-square w-full overflow-hidden rounded-[1.85rem] border border-white/12 bg-white/[0.04] shadow-[0_32px_90px_-24px_rgba(0,0,0,0.95),0_0_54px_rgba(255,255,255,0.04)] transition duration-700 md:rounded-[2.5rem]",
+          isPlaying ? "scale-100" : "scale-[0.96] opacity-85"
+        )}
+      >
+        {displayImage ? (
+          <Image src={displayImage} alt={title} fill className="object-cover" priority />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-zinc-900">
+            <Music2 size={86} className="text-zinc-700" />
+          </div>
+        )}
+        <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-40px_70px_rgba(0,0,0,0.18)]" />
       </div>
-      <div className="absolute bottom-4 left-4 right-4 flex h-12 items-end justify-center gap-1.5 opacity-75">
-        {Array.from({ length: 22 }).map((_, index) => (
-          <span
-            key={index}
-            className={cn("w-1 rounded-full bg-white/70", isPlaying && "animate-pulse")}
-            style={{ height: `${18 + ((index * 13) % 28)}px`, animationDelay: `${index * 55}ms` }}
-          />
-        ))}
-      </div>
+      <div
+        className={cn(
+          "pointer-events-none absolute -bottom-6 left-1/2 h-8 w-[72%] -translate-x-1/2 rounded-full bg-black/70 blur-2xl transition-opacity md:hidden",
+          isPlaying ? "opacity-90" : "opacity-55"
+        )}
+      />
     </div>
   );
 }
@@ -413,7 +520,7 @@ function TrackIdentity({
 }) {
   return (
     <div className="text-center md:text-left">
-      <h1 className="line-clamp-2 text-3xl font-black leading-[0.98] tracking-tight text-white md:text-5xl lg:text-6xl">
+      <h1 className="line-clamp-2 text-[2rem] font-black leading-[0.98] tracking-tight text-white md:text-5xl lg:text-6xl">
         {track.title}
       </h1>
       <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-sm font-bold text-white/62 md:justify-start md:text-base">
@@ -504,19 +611,19 @@ function LyricsPanel({
   return (
     <div
       ref={containerRef}
-      data-no-panel-drag="true"
+      data-lyrics-scroll="true"
       onWheel={onManualScroll}
       onTouchMove={onManualScroll}
-      className="h-full overflow-y-auto rounded-[2rem] border border-white/10 bg-[#0A0A0A]/72 px-5 py-7 shadow-inner backdrop-blur-2xl touch-pan-y md:px-8 md:py-9"
+      className="full-player-lyrics-scroll h-full overscroll-contain overflow-y-auto rounded-[1.75rem] border border-white/10 bg-[#070707]/78 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_70px_rgba(0,0,0,0.34)] backdrop-blur-2xl touch-pan-y [mask-image:linear-gradient(to_bottom,transparent,black_7%,black_90%,transparent)] md:rounded-[2rem] md:px-8 md:py-9"
     >
-      <div className="mb-7 flex items-center justify-between gap-4">
+      <div className="mb-6 flex items-center justify-between gap-4 md:mb-8">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#FF4D89]">Lyrics</p>
           <p className="mt-1 text-xs font-bold text-white/38">{hasTimestamps ? "Synced with playback" : "Lyric sheet"}</p>
         </div>
       </div>
 
-      <div className="space-y-4 pb-24">
+      <div className="space-y-4 pb-24 md:space-y-5">
         {lines.map((line, index) => {
           const isActive = hasTimestamps && index === activeIndex;
           return (
@@ -526,8 +633,8 @@ function LyricsPanel({
                 lyricRefs.current[line.id] = node;
               }}
               className={cn(
-                "whitespace-pre-wrap text-2xl font-black leading-snug tracking-tight transition duration-300 md:text-4xl",
-                !line.text && "h-5",
+                "max-w-full whitespace-pre-wrap break-words text-[1.32rem] font-black leading-[1.32] tracking-tight [overflow-wrap:anywhere] transition duration-300 md:text-[2.55rem] md:leading-[1.22] lg:text-[3rem]",
+                !line.text && "h-7",
                 hasTimestamps
                   ? isActive
                     ? "scale-[1.01] text-white drop-shadow-[0_0_22px_rgba(255,0,85,0.32)]"
@@ -681,6 +788,7 @@ function PlaybackControls({
   isPlaying,
   isShuffled,
   repeatMode,
+  compact,
   onPlayPause,
   onPrevious,
   onNext,
@@ -690,6 +798,7 @@ function PlaybackControls({
   isPlaying: boolean;
   isShuffled: boolean;
   repeatMode: "off" | "all" | "one";
+  compact?: boolean;
   onPlayPause: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -698,23 +807,23 @@ function PlaybackControls({
 }) {
   return (
     <div className="flex items-center justify-between">
-      <button onClick={onShuffle} className={cn("flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.05] transition active:scale-95", isShuffled ? "text-[#FF0055]" : "text-white/48 hover:text-white")} aria-label="Toggle shuffle">
+      <button onClick={onShuffle} className={cn("flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.05] transition active:scale-95", compact && "max-md:h-10 max-md:w-10", isShuffled ? "text-[#FF0055]" : "text-white/48 hover:text-white")} aria-label="Toggle shuffle">
         <Shuffle size={21} />
       </button>
 
-      <div className="flex items-center gap-4 md:gap-6">
-        <button onClick={onPrevious} className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:text-[#FF4D89] active:scale-95" aria-label="Previous track">
+      <div className={cn("flex items-center gap-4 md:gap-6", compact && "max-md:gap-3")}>
+        <button onClick={onPrevious} className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:text-[#FF4D89] active:scale-95", compact && "max-md:h-10 max-md:w-10")} aria-label="Previous track">
           <SkipBack size={28} fill="currentColor" />
         </button>
-        <button onClick={onPlayPause} className="flex h-[4.35rem] w-[4.35rem] items-center justify-center rounded-full bg-white text-black shadow-[0_18px_48px_rgba(255,255,255,0.12)] transition active:scale-95 md:h-20 md:w-20" aria-label={isPlaying ? "Pause" : "Play"}>
+        <button onClick={onPlayPause} className={cn("flex h-[4.35rem] w-[4.35rem] items-center justify-center rounded-full bg-white text-black shadow-[0_18px_48px_rgba(255,255,255,0.12)] transition active:scale-95 md:h-20 md:w-20", compact && "max-md:h-16 max-md:w-16")} aria-label={isPlaying ? "Pause" : "Play"}>
           {isPlaying ? <Pause size={30} fill="currentColor" /> : <Play size={30} fill="currentColor" className="ml-1" />}
         </button>
-        <button onClick={onNext} className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:text-[#FF4D89] active:scale-95" aria-label="Next track">
+        <button onClick={onNext} className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:text-[#FF4D89] active:scale-95", compact && "max-md:h-10 max-md:w-10")} aria-label="Next track">
           <SkipForward size={28} fill="currentColor" />
         </button>
       </div>
 
-      <button onClick={onRepeat} className={cn("relative flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.05] transition active:scale-95", repeatMode !== "off" ? "text-[#FF0055]" : "text-white/48 hover:text-white")} aria-label="Toggle repeat">
+      <button onClick={onRepeat} className={cn("relative flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.05] transition active:scale-95", compact && "max-md:h-10 max-md:w-10", repeatMode !== "off" ? "text-[#FF0055]" : "text-white/48 hover:text-white")} aria-label="Toggle repeat">
         {repeatMode === "one" ? <Repeat1 size={21} /> : <Repeat size={21} />}
         {repeatMode !== "off" && <span className="absolute bottom-1.5 h-1 w-1 rounded-full bg-[#FF0055]" />}
       </button>
@@ -750,7 +859,7 @@ function parseLyrics(lyrics?: string | null): { lines: LyricLine[]; hasTimestamp
   });
 
   return {
-    lines: lines.filter((line) => line.text || line.time !== null),
+    lines,
     hasTimestamps,
   };
 }
