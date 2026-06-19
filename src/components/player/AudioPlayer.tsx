@@ -103,6 +103,16 @@ const isIOS = () => {
   );
 };
 
+const isMobileBrowser = () => {
+  if (typeof navigator === "undefined") return false;
+  const userAgent = navigator.userAgent || "";
+  const touchLikelyMobile = typeof window !== "undefined" && navigator.maxTouchPoints > 1 && window.innerWidth <= 1024;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || touchLikelyMobile;
+};
+
+const shouldPreferFallbackForBackground = (track: NonNullable<CurrentTrack>) =>
+  !isIOS() && isMobileBrowser() && Boolean(track.fallback_audio_url);
+
 const canPrefetch = () => {
   if (typeof navigator === "undefined") return false;
   const connection = (navigator as NetworkAwareNavigator).connection;
@@ -249,6 +259,8 @@ export default function AudioPlayer() {
   const completedRef = useRef(false);
   const stallStartedAtRef = useRef<number | null>(null);
   const autoFillInFlightRef = useRef(false);
+  const fallbackPrimaryActiveRef = useRef(false);
+  const fallbackPrimaryRejectedRef = useRef(false);
 
   const playNextRef = useRef(playNext);
   const playPreviousRef = useRef(playPrevious);
@@ -284,6 +296,14 @@ export default function AudioPlayer() {
     sourceKindRef.current = kind;
     setSourceKind(kind);
   }, []);
+
+  const playbackMetadata = useCallback((metadata: Record<string, unknown> = {}) => ({
+    ...metadata,
+    sourceKind: sourceKindRef.current,
+    isIOS: isIOS(),
+    isMobile: isMobileBrowser(),
+    visibilityState: typeof document === "undefined" ? "unknown" : document.visibilityState,
+  }), []);
 
   const sendPlayEvent = useCallback(
     (eventType: PlaybackEventType, extra: Record<string, unknown> = {}) => {
@@ -376,7 +396,7 @@ export default function AudioPlayer() {
 
       sendPlayEvent("error", {
         error_code: err.name || "play-failed",
-        metadata: { message: err.message, sourceKind: sourceKindRef.current },
+        metadata: playbackMetadata({ message: err.message, reason: "play-if-wanted" }),
       });
 
       if (err.name === "NotAllowedError") {
@@ -391,7 +411,7 @@ export default function AudioPlayer() {
       setIsPlaying(false);
       return false;
     }
-  }, [acquireWakeLock, sendPlayEvent, setIsPlaying, syncPositionState]);
+  }, [acquireWakeLock, playbackMetadata, sendPlayEvent, setIsPlaying, syncPositionState]);
 
   const autoFillQueueIfNeeded = useCallback(async () => {
     if (autoFillInFlightRef.current) return false;
@@ -472,14 +492,57 @@ export default function AudioPlayer() {
     }
   }, []);
 
-  const continueToNextTrack = useCallback(async () => {
+  const continueToNextTrack = useCallback(async (reason = "auto") => {
     userWantsPlayRef.current = true;
     setIsPlayingRef.current(true);
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
 
+    sendPlayEvent("level_switch", {
+      metadata: playbackMetadata({ action: "next-track-transition", reason }),
+    });
+
     await autoFillQueueIfNeeded();
     playNextRef.current();
-  }, [autoFillQueueIfNeeded]);
+  }, [autoFillQueueIfNeeded, playbackMetadata, sendPlayEvent]);
+
+  const loadFallbackDirect = useCallback(
+    (track: NonNullable<CurrentTrack>, token: number, reason: string) => {
+      const audio = audioRef.current;
+      if (!audio) return false;
+
+      try {
+        const fallbackUrl = toAbsoluteUrl(track.fallback_audio_url);
+        if (!fallbackUrl) throw new Error("Missing fallback audio URL.");
+        if (!sameOriginOrHttps(fallbackUrl)) throw new Error("Fallback audio URL must use HTTPS.");
+        if (loadTokenRef.current !== token) return true;
+
+        destroyHls();
+        fallbackPrimaryActiveRef.current = true;
+        fallbackPrimaryRejectedRef.current = false;
+        setActiveSourceKind("fallback");
+        setLoadStatus("loading");
+        audio.src = fallbackUrl;
+        audio.load();
+        sendPlayEvent("level_switch", {
+          metadata: playbackMetadata({
+            action: "source-selected",
+            reason,
+            fallbackMode: "direct",
+          }),
+        });
+        return true;
+      } catch (error) {
+        if (loadTokenRef.current !== token) return true;
+        const message = error instanceof Error ? error.message : String(error);
+        sendPlayEvent("error", {
+          error_code: "fallback-direct-unavailable",
+          metadata: playbackMetadata({ reason, message, url: track.fallback_audio_url }),
+        });
+        return false;
+      }
+    },
+    [destroyHls, playbackMetadata, sendPlayEvent, setActiveSourceKind]
+  );
 
   const loadFallback = useCallback(
     async (track: NonNullable<CurrentTrack>, token: number, reason: string) => {
@@ -491,13 +554,15 @@ export default function AudioPlayer() {
         if (loadTokenRef.current !== token) return true;
 
         destroyHls();
+        fallbackPrimaryActiveRef.current = false;
+        fallbackPrimaryRejectedRef.current = false;
         setActiveSourceKind("fallback");
         setLoadStatus("loading");
         audio.src = fallbackUrl;
         audio.load();
         sendPlayEvent("error", {
           error_code: "hls-fallback",
-          metadata: { reason, fallbackUrl },
+          metadata: playbackMetadata({ reason, fallbackUrl, fallbackMode: "probed" }),
         });
         return true;
       } catch (error) {
@@ -508,13 +573,13 @@ export default function AudioPlayer() {
         setIsPlaying(false);
         sendPlayEvent("error", {
           error_code: "fallback-unavailable",
-          metadata: { reason, message, url: track.fallback_audio_url },
+          metadata: playbackMetadata({ reason, message, url: track.fallback_audio_url }),
         });
         toast.error("Audio source is not playable", { description: message });
         return false;
       }
     },
-    [destroyHls, sendPlayEvent, setActiveSourceKind, setIsPlaying]
+    [destroyHls, playbackMetadata, sendPlayEvent, setActiveSourceKind, setIsPlaying]
   );
 
   const loadTrack = useCallback(
@@ -523,6 +588,7 @@ export default function AudioPlayer() {
       if (!audio) return;
 
       destroyHls();
+      fallbackPrimaryActiveRef.current = false;
       setActiveSourceKind("none");
       setLoadStatus("loading");
       setCurrentTime(0);
@@ -533,6 +599,14 @@ export default function AudioPlayer() {
       const nativeHls =
         audio.canPlayType("application/vnd.apple.mpegurl") ||
         audio.canPlayType("application/x-mpegURL");
+
+      if (
+        shouldPreferFallbackForBackground(track) &&
+        !fallbackPrimaryRejectedRef.current &&
+        loadFallbackDirect(track, token, "mobile-background-primary")
+      ) {
+        return;
+      }
 
       try {
         const hls = await probeHls(track.hls_url);
@@ -577,7 +651,7 @@ export default function AudioPlayer() {
           hlsPlayer.nextLevel = -1;
           sendPlayEvent("level_switch", {
             hls_level: 0,
-            metadata: { levels: data.levels.length, preparedVariant: hls.variantUrl },
+            metadata: playbackMetadata({ levels: data.levels.length, preparedVariant: hls.variantUrl }),
           });
         });
 
@@ -598,7 +672,7 @@ export default function AudioPlayer() {
         hlsPlayer.on(Hls.Events.ERROR, async (_, data) => {
           sendPlayEvent("error", {
             error_code: `${data.type}:${data.details}`,
-            metadata: { fatal: data.fatal, response: data.response, sourceKind: "hls-js" },
+            metadata: playbackMetadata({ fatal: data.fatal, response: data.response, hlsSourceKind: "hls-js" }),
           });
 
           if (!data.fatal || loadTokenRef.current !== token) return;
@@ -627,7 +701,9 @@ export default function AudioPlayer() {
     },
     [
       destroyHls,
+      loadFallbackDirect,
       loadFallback,
+      playbackMetadata,
       playIfWanted,
       sendPlayEvent,
       setActiveSourceKind,
@@ -648,15 +724,22 @@ export default function AudioPlayer() {
     qualifiedListenRef.current = false;
     completedRef.current = false;
     stallStartedAtRef.current = null;
+    fallbackPrimaryActiveRef.current = false;
+    fallbackPrimaryRejectedRef.current = false;
 
-    sendPlayEvent("play_start", { metadata: { source: "audio-player-v2" } });
+    sendPlayEvent("play_start", {
+      metadata: playbackMetadata({
+        source: "audio-player-v2",
+        preferredSource: shouldPreferFallbackForBackground(currentTrack) ? "fallback" : "hls",
+      }),
+    });
     loadTrack(currentTrack, token);
 
     return () => {
       loadTokenRef.current += 1;
       destroyHls();
     };
-  }, [currentTrack, destroyHls, loadTrack, sendPlayEvent]);
+  }, [currentTrack, destroyHls, loadTrack, playbackMetadata, sendPlayEvent]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -701,7 +784,7 @@ export default function AudioPlayer() {
       navigator.mediaSession.playbackState = "playing";
 
       if (action === "next") {
-        continueToNextTrack();
+        continueToNextTrack("media-session-next");
         return;
       }
 
@@ -747,30 +830,67 @@ export default function AudioPlayer() {
   }, [currentTrack, isPlaying]);
 
   useEffect(() => {
+    const recoverPlayback = (reason: string) => {
+      if (!userWantsPlayRef.current) return;
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      hlsRef.current?.startLoad();
+      syncPositionState();
+
+      const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+      const nearlyEnded = duration > 0 && duration - audio.currentTime <= 1.5;
+      if (audio.ended || nearlyEnded) {
+        continueToNextTrack(reason);
+        return;
+      }
+
+      playIfWanted();
+      acquireWakeLock();
+      sendPlayEvent("level_switch", {
+        metadata: playbackMetadata({ action: "lifecycle-recover", reason }),
+      });
+    };
+
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
-      syncPositionState();
-      if (userWantsPlayRef.current) {
-        hlsRef.current?.startLoad();
-        playIfWanted();
-        acquireWakeLock();
-      }
+      recoverPlayback("visibility-visible");
     };
 
     const onResume = () => {
-      if (!userWantsPlayRef.current) return;
-      hlsRef.current?.startLoad();
-      playIfWanted();
+      recoverPlayback("resume");
+    };
+
+    const onPageShow = () => {
+      recoverPlayback("pageshow");
+    };
+
+    const onPageHide = () => {
+      sendPlayEvent("level_switch", {
+        metadata: playbackMetadata({ action: "lifecycle-background", reason: "pagehide" }),
+      });
+    };
+
+    const onFreeze = () => {
+      sendPlayEvent("level_switch", {
+        metadata: playbackMetadata({ action: "lifecycle-background", reason: "freeze" }),
+      });
     };
 
     document.addEventListener("visibilitychange", onVisible);
     document.addEventListener("resume", onResume);
+    document.addEventListener("freeze", onFreeze);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("pagehide", onPageHide);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
       document.removeEventListener("resume", onResume);
+      document.removeEventListener("freeze", onFreeze);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("pagehide", onPageHide);
     };
-  }, [acquireWakeLock, playIfWanted, syncPositionState]);
+  }, [acquireWakeLock, continueToNextTrack, playbackMetadata, playIfWanted, sendPlayEvent, syncPositionState]);
 
   useEffect(() => {
     if (!isPlaying || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
@@ -810,7 +930,9 @@ export default function AudioPlayer() {
     const nextTrack = store.queue?.[store.currentIndex + 1];
     if (!nextTrack) return;
 
-    const url = toAbsoluteUrl(nextTrack.hls_url || nextTrack.fallback_audio_url);
+    const preferredUrl =
+      shouldPreferFallbackForBackground(nextTrack) ? nextTrack.fallback_audio_url || nextTrack.hls_url : nextTrack.hls_url || nextTrack.fallback_audio_url;
+    const url = toAbsoluteUrl(preferredUrl);
     if (!url || lastPrefetchRef.current === url) return;
     lastPrefetchRef.current = url;
 
@@ -823,7 +945,8 @@ export default function AudioPlayer() {
       document.head.appendChild(link);
     } catch {}
 
-    if (nextTrack.hls_url) probeHls(nextTrack.hls_url).catch(() => {});
+    if (shouldPreferFallbackForBackground(nextTrack) && nextTrack.fallback_audio_url) probeFallback(nextTrack.fallback_audio_url).catch(() => {});
+    else if (nextTrack.hls_url) probeHls(nextTrack.hls_url).catch(() => {});
     else probeFallback(nextTrack.fallback_audio_url).catch(() => {});
   }, []);
 
@@ -878,7 +1001,7 @@ export default function AudioPlayer() {
             (currentTime >= 30 || currentTime / duration >= 0.5)
           ) {
             qualifiedListenRef.current = true;
-            sendPlayEvent("listen_qualified", { metadata: { sourceKind: sourceKindRef.current } });
+            sendPlayEvent("listen_qualified", { metadata: playbackMetadata() });
           }
 
           if (Number.isFinite(duration) && duration > 0 && currentTime / duration >= PREFETCH_THRESHOLD) {
@@ -899,14 +1022,14 @@ export default function AudioPlayer() {
             startupReportedRef.current = true;
             sendPlayEvent("startup", {
               startup_ms: Math.round(performance.now() - loadStartedAtRef.current),
-              metadata: { sourceKind: sourceKindRef.current },
+              metadata: playbackMetadata(),
             });
           }
 
           if (stallStartedAtRef.current !== null) {
             sendPlayEvent("stall_recovered", {
               stall_ms: Math.round(performance.now() - stallStartedAtRef.current),
-              metadata: { sourceKind: sourceKindRef.current },
+              metadata: playbackMetadata(),
             });
             stallStartedAtRef.current = null;
           }
@@ -921,14 +1044,14 @@ export default function AudioPlayer() {
         onWaiting={() => {
           if (stallStartedAtRef.current !== null) return;
           stallStartedAtRef.current = performance.now();
-          sendPlayEvent("stall_start", { metadata: { sourceKind: sourceKindRef.current } });
+          sendPlayEvent("stall_start", { metadata: playbackMetadata() });
         }}
         onEnded={() => {
           if (!completedRef.current) {
             completedRef.current = true;
-            sendPlayEvent("complete", { metadata: { sourceKind: sourceKindRef.current } });
+            sendPlayEvent("complete", { metadata: playbackMetadata({ reason: "ended" }) });
           }
-          continueToNextTrack();
+          continueToNextTrack("ended");
         }}
         onError={async () => {
           const track = currentTrack;
@@ -936,11 +1059,27 @@ export default function AudioPlayer() {
           const code = audioRef.current?.error?.code || "unknown";
           sendPlayEvent("error", {
             error_code: `media:${code}`,
-            metadata: { sourceKind: sourceKindRef.current },
+            metadata: playbackMetadata({ reason: "media-element-error" }),
           });
 
           if (track && sourceKindRef.current !== "fallback") {
             await loadFallback(track, token, `media:${code}`);
+            return;
+          }
+
+          if (
+            track?.hls_url &&
+            sourceKindRef.current === "fallback" &&
+            fallbackPrimaryActiveRef.current &&
+            shouldPreferFallbackForBackground(track)
+          ) {
+            fallbackPrimaryActiveRef.current = false;
+            fallbackPrimaryRejectedRef.current = true;
+            sendPlayEvent("error", {
+              error_code: "mobile-fallback-primary-failed",
+              metadata: playbackMetadata({ reason: "retry-hls-after-fallback-primary-error" }),
+            });
+            loadTrack(track, token);
             return;
           }
 
