@@ -1,7 +1,7 @@
 // src/app/layout.tsx
 
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Manrope } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
@@ -9,7 +9,11 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { absoluteUrl, DEFAULT_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/seo";
 
-const inter = Inter({ subsets: ["latin"] });
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 // ─── Viewport (separate export — Next.js 14+ requirement) ───────────────────
 // themeColor drives the OS media-notification accent and Android status bar.
@@ -175,7 +179,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
 
-      <body className={`${inter.className} bg-black text-white antialiased`}>
+      <body className={`${manrope.className} ${manrope.variable} bg-black text-white antialiased`}>
         {children}
         <Toaster position="bottom-right" richColors />
         <Analytics />

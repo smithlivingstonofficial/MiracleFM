@@ -22,9 +22,14 @@
 }
 
 @layer base {
+  html {
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+
   body {
     @apply bg-surface text-text-main antialiased selection:bg-brand selection:text-white;
-    font-feature-settings: "cv11", "ss01"; /* Cleaner Inter font characters */
+    font-feature-settings: "ss01", "ss02", "cv02", "cv03", "cv11";
+    text-rendering: optimizeLegibility;
   }
 }
 

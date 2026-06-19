@@ -3,12 +3,15 @@
 import { useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ListMusic, Music4, Play, Sparkles } from "lucide-react";
+import { ListMusic } from "lucide-react";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import type { GeneratedPlaylist } from "@/types/music";
 
 type RecommendationMixSectionProps = {
   playlists: GeneratedPlaylist[];
+  title?: string;
+  description?: string;
+  maxItems?: number;
 };
 
 const artworkFor = (playlist: GeneratedPlaylist) =>
@@ -29,7 +32,11 @@ function recordImpression(sectionSlug: string, eventType: "card_view" | "open" |
   }).catch(() => {});
 }
 
-export default function RecommendationMixSection({ playlists }: RecommendationMixSectionProps) {
+export default function RecommendationMixSection({
+  playlists,
+  title = "Made For You",
+  maxItems = 10,
+}: RecommendationMixSectionProps) {
   const router = useRouter();
   useEffect(() => {
     playlists.slice(0, 10).forEach((playlist) => {
@@ -41,19 +48,14 @@ export default function RecommendationMixSection({ playlists }: RecommendationMi
 
   return (
     <section className="px-4 md:px-8">
-      <div className="mb-5 flex items-end justify-between gap-4 md:mb-6">
+      <div className="mb-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-2xl font-black tracking-tighter text-white md:text-3xl">
-            Made For You <Sparkles size={16} className="text-[#FF0055]" />
-          </h2>
-          <p className="mt-1 line-clamp-2 text-sm font-medium text-zinc-500">
-            Auto-updating worship mixes from your taste, trends, and listening history.
-          </p>
+          <h2 className="truncate text-2xl font-black tracking-tight text-white md:text-3xl">{title}</h2>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-6 lg:grid-cols-5">
-        {playlists.slice(0, 10).map((playlist) => {
+      <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 no-scrollbar md:-mx-8 md:px-8">
+        {playlists.slice(0, maxItems).map((playlist) => {
           const images = artworkFor(playlist);
           return (
             <article
@@ -62,14 +64,14 @@ export default function RecommendationMixSection({ playlists }: RecommendationMi
                 recordImpression(playlist.section.slug, "open", playlist.tracks.length);
                 router.push(`/mix/${playlist.section.slug}`);
               }}
-              className="group cursor-pointer transition-transform duration-300 active:scale-95 md:active:scale-100"
+              className="group w-[148px] min-w-[148px] cursor-pointer transition-transform duration-300 active:scale-95 md:w-[164px] md:min-w-[164px] md:active:scale-100"
             >
-              <div className="relative aspect-square overflow-hidden rounded-2xl border border-white/5 bg-zinc-900 shadow-lg transition-all duration-500 md:rounded-[2rem] md:group-hover:-translate-y-1.5 md:group-hover:border-[#FF0055]/30 md:group-hover:shadow-[0_10px_30px_rgba(255,0,85,0.15)]">
+              <div className="relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition-all duration-300 md:group-hover:-translate-y-1 md:group-hover:border-[#FF0055]/25">
                 {images.length > 0 ? (
                   <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5 bg-black">
                     {(images.length === 1 ? [images[0], images[0], images[0], images[0]] : images).map((url, index) => (
                       <div key={`${url}-${index}`} className="relative h-full w-full">
-                        <Image src={url} alt="" fill className="object-cover transition-transform duration-700 md:group-hover:scale-110" sizes="180px" />
+                        <Image src={url} alt="" fill className="object-cover transition-transform duration-700 md:group-hover:scale-105" sizes="164px" />
                       </div>
                     ))}
                   </div>
@@ -80,41 +82,23 @@ export default function RecommendationMixSection({ playlists }: RecommendationMi
                   </div>
                 )}
 
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent p-3">
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="rounded-md border border-white/10 bg-black/50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-white backdrop-blur-md">
-                      {playlist.tracks.length} Songs
-                    </span>
-                    <div
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        recordImpression(playlist.section.slug, "play", playlist.tracks.length);
-                      }}
-                      className="rounded-full bg-[#FF0055] p-0.5 text-white shadow-xl shadow-black/40 transition-transform md:opacity-0 md:group-hover:scale-110 md:group-hover:opacity-100"
-                      title={`Play ${playlist.section.title}`}
-                    >
-                      <CollectionPlayButton tracks={playlist.tracks} size="sm" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pointer-events-none absolute inset-0 hidden items-center justify-center bg-black/35 opacity-0 backdrop-blur-[2px] transition-opacity duration-300 md:flex md:group-hover:opacity-100">
-                  <div className="rounded-full bg-white p-4 text-black shadow-xl">
-                    <Play fill="currentColor" className="ml-1 h-6 w-6" />
-                  </div>
+                <div
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    recordImpression(playlist.section.slug, "play", playlist.tracks.length);
+                  }}
+                  className="absolute bottom-2 right-2 rounded-full bg-[#FF0055] p-0.5 text-white shadow-xl shadow-black/40 transition-transform md:opacity-0 md:group-hover:scale-105 md:group-hover:opacity-100"
+                  title={`Play ${playlist.section.title}`}
+                >
+                  <CollectionPlayButton tracks={playlist.tracks} size="sm" />
                 </div>
               </div>
 
-              <div className="px-1 pt-2 md:pt-3">
-                <h3 className="truncate text-sm font-bold text-zinc-100 transition-colors md:text-base md:group-hover:text-[#FF0055]">
+              <div className="px-1 pt-2">
+                <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-zinc-100 transition-colors md:group-hover:text-[#FF0055]">
                   {playlist.section.title}
                 </h3>
-                <div className="mt-0.5 flex items-center gap-1.5 opacity-80">
-                  <Music4 size={10} className="text-[#FF0055]" />
-                  <p className="truncate text-[9px] font-bold uppercase tracking-widest text-zinc-500">
-                    {playlist.section.description}
-                  </p>
-                </div>
+                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-zinc-600">{playlist.tracks.length} Songs</p>
               </div>
             </article>
           );

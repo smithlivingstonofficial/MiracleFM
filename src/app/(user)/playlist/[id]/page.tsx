@@ -268,7 +268,7 @@ export default function PlaylistPage() {
                       placeholder="Playlist Name"
                     />
                     <div className="flex gap-2">
-                      <button onClick={savePlaylistDetails} className="p-3 bg-[#FF0055] rounded-full text-black hover:scale-110 transition shadow-lg">
+                      <button onClick={savePlaylistDetails} className="p-3 bg-[#FF0055] rounded-full text-white hover:scale-110 transition shadow-lg">
                         <Check size={20} strokeWidth={3} />
                       </button>
                       <button onClick={() => { setIsEditing(false); setTempTitle(playlist.title); setTempDescription(playlist.description || ""); setTempIsPublic(Boolean(playlist.is_public)); }} className="p-3 bg-zinc-800 rounded-full text-white hover:bg-zinc-700 transition">

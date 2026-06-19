@@ -37,6 +37,7 @@ interface PlayerState {
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   toggleFullScreen: () => void;
+  setFullScreen: (open: boolean) => void;
   
   // Time Actions
   setCurrentTime: (time: number) => void;
@@ -84,6 +85,7 @@ export const usePlayerStore = create<PlayerState>()(
       setIsPlaying: (isPlaying) => set({ isPlaying }),
       
       toggleFullScreen: () => set((state) => ({ isFullScreen: !state.isFullScreen })),
+      setFullScreen: (open) => set({ isFullScreen: open }),
 
       // Play a single track (creates a new queue of 1)
       setTrack: (track) => {

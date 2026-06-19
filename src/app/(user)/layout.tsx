@@ -6,7 +6,64 @@ import AudioPlayer from "@/components/player/AudioPlayer";
 import FullScreenPlayer from "@/components/player/FullScreenPlayer";
 import HomeHeader from "@/components/user/home/HomeHeader";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
+import DesktopRightRail from "@/components/user/DesktopRightRail";
 import { createClient } from "@/lib/supabase/server";
+import type { Track } from "@/types/music";
+
+type RecommendationTrackRow = {
+  track_id: string;
+};
+
+async function getRightRailTracks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId?: string
+) {
+  if (userId) {
+    const { data: mixData } = await supabase.rpc("get_personalized_mix", { uid: userId, limit_count: 12 });
+    const ids = ((mixData || []) as { id: string }[]).map((track) => track.id).filter(Boolean);
+
+    if (ids.length > 0) {
+      const { data } = await supabase
+        .from("tracks")
+        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+        .eq("audio_status", "ready")
+        .in("id", ids);
+
+      const byId = new Map(((data || []) as Track[]).map((track) => [track.id, track]));
+      const orderedTracks = ids.map((id) => byId.get(id)).filter((track): track is Track => Boolean(track));
+      if (orderedTracks.length > 0) return orderedTracks;
+    }
+  }
+
+  const { data: stats } = await supabase
+    .from("track_engagement_stats")
+    .select("track_id")
+    .order("engagement_score", { ascending: false })
+    .limit(12);
+
+  const ids = ((stats || []) as RecommendationTrackRow[]).map((row) => row.track_id).filter(Boolean);
+
+  if (ids.length > 0) {
+    const { data } = await supabase
+      .from("tracks")
+      .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+      .eq("audio_status", "ready")
+      .in("id", ids);
+
+    const byId = new Map(((data || []) as Track[]).map((track) => [track.id, track]));
+    const orderedTracks = ids.map((id) => byId.get(id)).filter((track): track is Track => Boolean(track));
+    if (orderedTracks.length > 0) return orderedTracks;
+  }
+
+  const { data } = await supabase
+    .from("tracks")
+    .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+    .eq("audio_status", "ready")
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  return (data || []) as Track[];
+}
 
 export default async function UserLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -14,67 +71,44 @@ export default async function UserLayout({ children }: { children: React.ReactNo
     data: { user },
   } = await supabase.auth.getUser();
 
+  const [{ data: banners }, rightRailTracks] = await Promise.all([
+    supabase
+      .from("banners")
+      .select("id, title, description, image_url, target_link")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(3),
+    getRightRailTracks(supabase, user?.id),
+  ]);
+
   return (
-    /*
-      IMPORTANT — why these classes were changed:
-      ─────────────────────────────────────────────────────────────────────────
-      ❌ overflow-hidden  → REMOVED from the outermost shell.
-         Safari on iOS ties the Web Audio context lifecycle to the nearest
-         overflow:hidden ancestor. When the shell is overflow-hidden the OS can
-         suspend the context when the tab loses focus (screen lock, app switch).
-         Overflow clipping is kept ONLY on the inner scroll container where it
-         is actually needed.
-
-      ✅ isolate          → Creates a new stacking context without clipping,
-         so z-index layering still works correctly for the player overlay.
-    */
     <div className="flex h-[100dvh] w-full bg-[#050505] text-white font-sans selection:bg-[#FF0055] selection:text-white isolate">
-
-      {/* 1. Desktop Sidebar */}
       <div className="hidden md:block h-full z-30 relative shrink-0">
         <UserSidebar />
       </div>
 
-      {/* 2. Main Content Area */}
-      <div className="flex-1 flex flex-col h-full relative min-w-0">
-
-        {/*
-          Scrollable Container.
-          overflow-y-auto is scoped here — away from the audio context root —
-          so scrolling never interrupts the audio engine.
-        */}
+      <div className="flex-1 flex h-full relative min-w-0">
         <main
           id="main-content"
-          className="flex-1 overflow-y-auto scroll-smooth no-scrollbar w-full bg-[#050505]"
+          className="min-w-0 flex-1 overflow-y-auto scroll-smooth no-scrollbar bg-[#050505]"
         >
           <HomeHeader user={user} />
-          {/*
-            Padding keeps content clear of the fixed player and nav:
-            • Mobile:  pb-48  (MobileNav ~60px + Player ~64px + buffer)
-            • Desktop: pb-32  (Player 96px + buffer)
-          */}
-          <div className="pb-56 md:pb-36 min-h-full">
-            {children}
-          </div>
+          <div className="pb-56 md:pb-36 min-h-full">{children}</div>
         </main>
 
-        {/* Audio Player: fixed floating pill on mobile, main-pane anchored bar on desktop. */}
+        <DesktopRightRail
+          banners={banners || []}
+          initialTracks={rightRailTracks}
+          isSignedIn={Boolean(user)}
+        />
+
         <div className="z-40">
-          {/*
-            pointer-events-none on the wrapper lets touch events pass through
-            the transparent areas of the pill player on mobile.
-            The player itself sets pointer-events-auto on its own root.
-          */}
           <AudioPlayer />
         </div>
       </div>
 
-      {/* 3. Mobile Navigation */}
       <MobileNav />
-
-      {/* 4. Full Screen Player Overlay */}
       <FullScreenPlayer />
-
       <InstallPrompt />
     </div>
   );

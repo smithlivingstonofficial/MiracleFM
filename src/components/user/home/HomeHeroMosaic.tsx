@@ -66,7 +66,7 @@ function PlaylistFeature({ playlist, tracks }: { playlist: Playlist; tracks: Tra
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[#FF0055]/20 bg-[#FF0055]/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-[#FF0055]">
             <ListMusic size={10} /> Playlist
           </div>
-          <Link href={`/playlist/${playlist.id}`} className="block truncate text-2xl font-black leading-none tracking-tighter text-white hover:text-[#FF0055] md:text-3xl">
+          <Link href={`/playlist/${playlist.id}`} className="block truncate text-2xl font-black leading-snug tracking-tight text-white hover:text-[#FF0055] md:text-3xl">
             {playlist.title}
           </Link>
           <p className="mt-1 line-clamp-1 text-[10px] font-bold text-zinc-400">
@@ -93,7 +93,7 @@ function AlbumFeature({ album, tracks }: { album: Album; tracks: Track[] }) {
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[#FF0055]/20 bg-[#FF0055]/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-[#FF0055]">
             <Disc3 size={10} /> Album
           </div>
-          <Link href={`/album/${album.id}`} className="block truncate text-2xl font-black leading-none tracking-tighter text-white hover:text-[#FF0055] md:text-3xl">
+          <Link href={`/album/${album.id}`} className="block truncate text-2xl font-black leading-snug tracking-tight text-white hover:text-[#FF0055] md:text-3xl">
             {album.title}
           </Link>
           <p className="mt-1 line-clamp-1 text-[10px] font-bold text-zinc-400">{albumArtist(album)}</p>
@@ -125,7 +125,7 @@ function GeneratedFeature({ playlist }: { playlist: GeneratedPlaylist }) {
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[#FF0055]/20 bg-[#FF0055]/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-[#FF0055]">
             <Radio size={10} /> Made For You
           </div>
-          <Link href={`/mix/${playlist.section.slug}`} className="block truncate text-2xl font-black leading-none tracking-tighter text-white hover:text-[#FF0055] md:text-3xl">
+          <Link href={`/mix/${playlist.section.slug}`} className="block truncate text-2xl font-black leading-snug tracking-tight text-white hover:text-[#FF0055] md:text-3xl">
             {playlist.section.title}
           </Link>
           <p className="mt-1 line-clamp-1 text-[10px] font-bold text-zinc-400">{playlist.section.description}</p>
@@ -150,7 +150,7 @@ function TrendingFeature({ tracks }: { tracks: Track[] }) {
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[#FF0055]/20 bg-[#FF0055]/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-[#FF0055]">
             <TrendingUp size={10} /> Trending
           </div>
-          <h2 className="truncate text-2xl font-black leading-none tracking-tighter text-white md:text-3xl">Trending Now</h2>
+          <h2 className="truncate text-2xl font-black leading-snug tracking-tight text-white md:text-3xl">Trending Now</h2>
           <p className="mt-1 text-[10px] font-bold text-zinc-400">Songs listeners are playing today.</p>
         </div>
         <CollectionPlayButton tracks={tracks} size="default" />
@@ -161,6 +161,88 @@ function TrendingFeature({ tracks }: { tracks: Track[] }) {
         ))}
       </div>
     </article>
+  );
+}
+
+type QuickAccessItem =
+  | {
+      id: string;
+      kind: "mix";
+      title: string;
+      subtitle: string;
+      href: string;
+      tracks: Track[];
+      images: string[];
+    }
+  | {
+      id: string;
+      kind: "playlist";
+      title: string;
+      subtitle: string;
+      href: string;
+      tracks: Track[];
+      playlistId: string;
+      coverUrl?: string | null;
+    }
+  | {
+      id: string;
+      kind: "album";
+      title: string;
+      subtitle: string;
+      href: string;
+      tracks: Track[];
+      coverUrl?: string | null;
+    }
+  | {
+      id: string;
+      kind: "tracks";
+      title: string;
+      subtitle: string;
+      href: string;
+      tracks: Track[];
+      image?: string | null;
+    };
+
+function QuickArtwork({ item }: { item: QuickAccessItem }) {
+  if (item.kind === "playlist") {
+    return <PlaylistCover playlistId={item.playlistId} explicitCover={item.coverUrl} className="h-full w-full" />;
+  }
+
+  if (item.kind === "mix") {
+    return <ArtworkGrid images={item.images} fallbackIcon={<Radio size={24} />} />;
+  }
+
+  const image = item.kind === "album" ? item.coverUrl : item.image;
+  if (image) {
+    return <Image src={image} alt="" fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="96px" />;
+  }
+
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-zinc-900 text-zinc-700">
+      {item.kind === "album" ? <Disc3 size={24} /> : <Music4 size={24} />}
+    </div>
+  );
+}
+
+function DesktopDiscoveryGrid({ items }: { items: QuickAccessItem[] }) {
+  return (
+    <div className="hidden xl:block">
+      <div className="grid grid-cols-3 gap-2 2xl:grid-cols-4">
+        {items.slice(0, 8).map((item) => (
+          <article
+            key={item.id}
+            className="group grid min-w-0 grid-cols-[56px_minmax(0,1fr)] items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] p-1.5 transition-colors hover:border-[#FF0055]/30 hover:bg-white/[0.075]"
+          >
+            <Link href={item.href} className="relative h-14 w-14 overflow-hidden rounded-md bg-zinc-900">
+              <QuickArtwork item={item} />
+            </Link>
+            <Link href={item.href} className="min-w-0">
+              <p className="line-clamp-2 text-sm font-black leading-4 text-white transition-colors group-hover:text-[#FF4D89]">{item.title}</p>
+            </Link>
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -185,10 +267,10 @@ function HeroFallback({ playlist, album, mix, tracks }: { playlist?: Playlist; a
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 md:p-10">
         <div className="min-w-0">
           <p className="mb-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#FF0055]">Featured</p>
-          <h1 className="line-clamp-2 text-3xl font-black leading-none tracking-tighter text-white md:text-6xl">{title}</h1>
+          <h1 className="line-clamp-2 text-3xl font-black leading-[1.12] tracking-tight text-white md:text-6xl">{title}</h1>
           <p className="mt-2 line-clamp-2 max-w-xl text-sm font-bold text-zinc-300">{description}</p>
         </div>
-        <div className="hidden rounded-full bg-[#FF0055] p-5 text-black shadow-[0_0_30px_rgba(255,0,85,0.4)] md:block">
+        <div className="hidden rounded-full bg-[#FF0055] p-5 text-white shadow-[0_0_30px_rgba(255,0,85,0.4)] md:block">
           <Play fill="currentColor" size={28} />
         </div>
       </div>
@@ -213,6 +295,64 @@ export default function HomeHeroMosaic({
   const firstAlbum = albums.find((album) => album.id);
   const chartTracks = trendingTracks.length > 0 ? trendingTracks : popularTracks;
   const hasDailyMix = isSignedIn && dailyMix.length > 0;
+  const quickItems: QuickAccessItem[] = [
+    ...(hasDailyMix
+      ? [
+          {
+            id: "daily-mix",
+            kind: "mix" as const,
+            title: "Daily Mix",
+            subtitle: "Fresh worship shaped from your listening.",
+            href: "/mix/daily-mix",
+            tracks: dailyMix,
+            images: generatedArtwork({ tracks: dailyMix } as GeneratedPlaylist),
+          },
+        ]
+      : []),
+    ...recommendationPlaylists
+      .filter((playlist) => playlist.tracks.length > 0)
+      .slice(0, 3)
+      .map((playlist) => ({
+        id: `mix-${playlist.section.slug}`,
+        kind: "mix" as const,
+        title: playlist.section.title,
+        subtitle: playlist.section.description,
+        href: `/mix/${playlist.section.slug}`,
+        tracks: playlist.tracks,
+        images: generatedArtwork(playlist),
+      })),
+    ...playlists.slice(0, 2).map((playlist) => ({
+      id: `playlist-${playlist.id}`,
+      kind: "playlist" as const,
+      title: playlist.title,
+      subtitle: playlist.description || "Editorial playlist",
+      href: `/playlist/${playlist.id}`,
+      tracks: playlistTracks[playlist.id] || [],
+      playlistId: playlist.id,
+      coverUrl: playlist.cover_url,
+    })),
+    ...albums
+      .filter((album): album is Album & { id: string } => Boolean(album.id))
+      .slice(0, 2)
+      .map((album) => ({
+        id: `album-${album.id}`,
+        kind: "album" as const,
+        title: album.title,
+        subtitle: albumArtist(album),
+        href: `/album/${album.id}`,
+        tracks: albumTracks[album.id] || [],
+        coverUrl: album.cover_url,
+      })),
+    {
+      id: "trending-now",
+      kind: "tracks" as const,
+      title: "Trending Now",
+      subtitle: "Songs listeners are playing today.",
+      href: "/search",
+      tracks: chartTracks,
+      image: chartTracks[0]?.cover_url || chartTracks[0]?.albums?.cover_url || chartTracks[0]?.artists?.image_url,
+    },
+  ];
 
   const sideFeature = hasDailyMix ? (
     <MixCard tracks={dailyMix} title="Daily Mix" description="Fresh tunes for your spirit." badgeText="Daily" href="/mix/daily-mix" />
@@ -228,7 +368,8 @@ export default function HomeHeroMosaic({
 
   return (
     <section className="px-4 md:px-8">
-      <div className="grid grid-cols-1 items-stretch gap-4 md:gap-6 xl:grid-cols-[minmax(0,1.75fr)_minmax(320px,0.8fr)]">
+      <DesktopDiscoveryGrid items={quickItems} />
+      <div className="grid grid-cols-1 items-stretch gap-4 md:gap-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(320px,0.8fr)] xl:hidden">
         <div className="w-full active:scale-[0.98] transition-transform duration-300 md:active:scale-100">
           {banners.length > 0 ? (
             <HeroSection banners={banners} />

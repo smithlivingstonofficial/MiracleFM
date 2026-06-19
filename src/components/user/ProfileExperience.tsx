@@ -111,7 +111,7 @@ export default function ProfileExperience({ user, role, stats, genres }: Profile
                   <ShieldCheck size={13} />
                   {role === "admin" ? "Administrator" : "Verified Listener"}
                 </div>
-                <h1 className="break-words text-4xl font-black leading-none tracking-tighter text-white md:text-7xl">
+                <h1 className="break-words text-4xl font-black leading-[1.12] tracking-tight text-white md:text-7xl">
                   {user.name}
                 </h1>
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-bold text-zinc-400">
@@ -151,7 +151,7 @@ export default function ProfileExperience({ user, role, stats, genres }: Profile
                 <Edit3 size={16} />
               </button>
             </div>
-            <h2 className="text-2xl font-black tracking-tighter text-white">Taste Profile</h2>
+            <h2 className="text-2xl font-black leading-tight tracking-tight text-white">Taste Profile</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-zinc-500">
               Used to tune mixes, recommendations, and worship discovery.
             </p>
@@ -204,7 +204,7 @@ function ProfileTile({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{label}</p>
-        <h3 className="mt-1 truncate text-2xl font-black tracking-tighter text-white">{title}</h3>
+        <h3 className="mt-1 truncate text-2xl font-black leading-tight tracking-tight text-white">{title}</h3>
         <p className="mt-1 text-sm font-bold text-zinc-500">{value}</p>
       </div>
       <ChevronRight size={20} className="shrink-0 text-zinc-600 transition-transform group-hover:translate-x-1 group-hover:text-white" />

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronRight, Disc3, ListMusic, Music4, Radio, Sparkles } from "lucide-react";
+import { ChevronRight, Disc3, Music4 } from "lucide-react";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import PlaylistCover from "@/components/user/PlaylistCover";
 import type { Album, GeneratedPlaylist, Playlist, Track } from "@/types/music";
@@ -13,6 +13,10 @@ type FeaturedCollectionShelfProps = {
   recommendationPlaylists: GeneratedPlaylist[];
   playlistTracks: TrackMap;
   albumTracks: TrackMap;
+  title?: string;
+  description?: string;
+  viewAllHref?: string;
+  maxItems?: number;
 };
 
 type FeaturedItem =
@@ -60,6 +64,7 @@ function buildItems({
   recommendationPlaylists,
   playlistTracks,
   albumTracks,
+  maxItems = 8,
 }: FeaturedCollectionShelfProps): FeaturedItem[] {
   const playlistItems: FeaturedItem[] = playlists.map((playlist) => ({
     id: `playlist-${playlist.id}`,
@@ -97,7 +102,7 @@ function buildItems({
     }));
 
   const baseItems = playlistItems.length >= 4 ? playlistItems : [...playlistItems, ...albumItems, ...mixItems];
-  return baseItems.slice(0, 8);
+  return baseItems.slice(0, maxItems);
 }
 
 function ItemArtwork({ item }: { item: FeaturedItem }) {
@@ -137,36 +142,27 @@ function ItemArtwork({ item }: { item: FeaturedItem }) {
   );
 }
 
-function KindIcon({ kind }: { kind: FeaturedItem["kind"] }) {
-  if (kind === "album") return <Disc3 size={10} className="text-[#FF0055]" />;
-  if (kind === "mix") return <Radio size={10} className="text-[#FF0055]" />;
-  return <ListMusic size={10} className="text-[#FF0055]" />;
-}
-
 export default function FeaturedCollectionShelf(props: FeaturedCollectionShelfProps) {
   const items = buildItems(props);
+  const title = props.title || "Curated For You";
+  const viewAllHref = props.viewAllHref || "/library";
   if (items.length === 0) return null;
 
   return (
     <section className="px-4 md:px-8">
       <div className="mb-5 flex items-end justify-between gap-4 md:mb-6">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-2xl font-black tracking-tighter text-white md:text-3xl">
-            Curated For You <Sparkles size={16} className="text-[#FF0055]" />
-          </h2>
-          <p className="mt-1 line-clamp-2 text-sm font-medium text-zinc-500">
-            Playlists, albums, and mixes selected from what is available right now.
-          </p>
+          <h2 className="truncate text-2xl font-black tracking-tight text-white md:text-3xl">{title}</h2>
         </div>
-        <Link href="/library" className="flex shrink-0 items-center gap-1 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-400 transition-colors active:text-white md:hover:text-white">
+        <Link href={viewAllHref} className="flex shrink-0 items-center gap-1 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-400 transition-colors active:text-white md:hover:text-white">
           View All <ChevronRight size={14} />
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-6">
         {items.map((item) => (
           <article key={item.id} className="group min-w-0 transition-transform duration-300 active:scale-95 md:active:scale-100">
-            <div className="relative aspect-square overflow-hidden rounded-2xl border border-white/5 bg-zinc-900 shadow-lg transition-all duration-500 md:group-hover:-translate-y-1 md:group-hover:border-[#FF0055]/30 md:group-hover:shadow-[0_10px_30px_rgba(255,0,85,0.15)]">
+            <div className="relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-[0_14px_34px_rgba(0,0,0,0.22)] transition-all duration-300 md:group-hover:-translate-y-1 md:group-hover:border-[#FF0055]/30 md:group-hover:shadow-[0_10px_30px_rgba(255,0,85,0.12)]">
               <Link href={item.href} className="absolute inset-0 z-0">
                 <ItemArtwork item={item} />
               </Link>
@@ -183,14 +179,10 @@ export default function FeaturedCollectionShelf(props: FeaturedCollectionShelfPr
               </div>
             </div>
 
-            <div className="px-1 pt-2 md:pt-3">
+            <div className="px-1 pt-2">
               <Link href={item.href} className="block truncate text-sm font-bold text-zinc-100 transition-colors md:text-base md:group-hover:text-[#FF0055]">
                 {item.title}
               </Link>
-              <div className="mt-0.5 flex items-center gap-1.5 opacity-80 transition-opacity md:opacity-60 md:group-hover:opacity-100">
-                <KindIcon kind={item.kind} />
-                <p className="truncate text-[9px] font-bold uppercase tracking-widest text-zinc-500">{item.subtitle}</p>
-              </div>
             </div>
           </article>
         ))}

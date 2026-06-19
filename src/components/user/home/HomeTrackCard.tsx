@@ -30,14 +30,14 @@ export default function HomeTrackCard({ track, index, tracks }: HomeTrackCardPro
   return (
     <article
       className={cn(
-        "group grid w-full min-w-0 grid-cols-[48px_minmax(0,1fr)_92px] items-center gap-3 rounded-2xl border border-white/[0.04] bg-[#0A0A0A]/90 p-2 shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-colors md:grid-cols-[56px_minmax(0,1fr)_104px] md:p-2.5",
+        "group grid w-full min-w-0 grid-cols-[48px_minmax(0,1fr)_92px] items-center gap-3 rounded-lg border border-white/[0.06] bg-[#0A0A0A]/90 p-2 shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-colors md:grid-cols-[56px_minmax(0,1fr)_104px] md:p-2.5",
         isCurrent ? "border-[#FF0055]/25 bg-white/[0.08]" : "hover:bg-white/[0.04]"
       )}
     >
       <button
         type="button"
         onClick={handlePlay}
-        className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-zinc-900 text-white shadow-sm transition-transform active:scale-95 md:h-14 md:w-14"
+        className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-zinc-900 text-white shadow-sm transition-transform active:scale-95 md:h-14 md:w-14"
         aria-label={isCurrent && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
         <Image src={displayImage} alt="" fill className="object-cover" sizes="56px" />
@@ -65,7 +65,7 @@ export default function HomeTrackCard({ track, index, tracks }: HomeTrackCardPro
           onClick={handlePlay}
           className={cn(
             "flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-95",
-            isCurrent && isPlaying ? "bg-white text-black" : "bg-[#FF0055] text-black shadow-[0_0_20px_rgba(255,0,85,0.25)] hover:bg-[#ff1a66]"
+            isCurrent && isPlaying ? "bg-white text-black" : "bg-[#FF0055] text-white shadow-[0_0_20px_rgba(255,0,85,0.25)] hover:bg-[#ff1a66]"
           )}
           aria-label={isCurrent && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
         >

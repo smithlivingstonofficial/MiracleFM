@@ -310,7 +310,7 @@ function SearchExperience() {
                                 </div>
                                 
                                 <div className="min-w-0">
-                                    <h3 className="line-clamp-2 text-3xl font-black leading-none tracking-tight text-white transition-colors group-hover:text-[#FF0055] md:text-4xl">
+                                    <h3 className="line-clamp-2 text-3xl font-black leading-[1.12] tracking-tight text-white transition-colors group-hover:text-[#FF0055] md:text-4xl">
                                         {topResultTitle}
                                     </h3>
                                     <div className="mt-4 flex items-center gap-2">

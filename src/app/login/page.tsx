@@ -67,11 +67,11 @@ export default function LoginPage() {
               <Image src="/miraclefm.jpg" alt="Miracle FM" fill className="object-cover" priority />
             </span>
             <span>
-              <span className="block text-2xl font-black leading-none tracking-tighter">MIRACLE FM</span>
+              <span className="block text-2xl font-black leading-tight tracking-tight">MIRACLE FM</span>
               <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.28em] text-zinc-500">Admin Console</span>
             </span>
           </Link>
-          <h1 className="max-w-2xl text-6xl font-black leading-none tracking-tighter">
+          <h1 className="max-w-2xl text-6xl font-black leading-[1.12] tracking-tight">
             Secure access for the people stewarding Miracle FM.
           </h1>
           <p className="mt-5 max-w-xl text-base font-medium leading-7 text-zinc-400">
@@ -86,7 +86,7 @@ export default function LoginPage() {
                 <ShieldCheck size={13} />
                 Admin only
               </div>
-              <h2 className="text-3xl font-black tracking-tighter text-white">Sign in</h2>
+              <h2 className="text-3xl font-black leading-tight tracking-tight text-white">Sign in</h2>
               <p className="mt-1 text-sm font-medium text-zinc-500">Use an approved administrator account.</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-[#FF0055]">

@@ -18,7 +18,7 @@ export default function HomeTrackSection({ title, description, tracks, viewAllHr
     <section className="px-4 md:px-8">
       <div className="mb-4 flex items-end justify-between gap-4 md:mb-5">
         <div className="min-w-0">
-          <h2 className="truncate text-2xl font-black tracking-tighter text-white md:text-3xl">{title}</h2>
+          <h2 className="truncate text-2xl font-black leading-tight tracking-tight text-white md:text-3xl">{title}</h2>
           {description && <p className="mt-1 line-clamp-2 text-sm font-medium text-zinc-500">{description}</p>}
         </div>
         {viewAllHref && (

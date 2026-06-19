@@ -61,11 +61,11 @@ export default async function FaithPage() {
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#FF0055]/10 text-[#FF0055]">
                 <HeartHandshake size={21} />
               </div>
-              <h2 className="min-w-0 text-xl font-black tracking-tighter text-white sm:text-2xl">Today&apos;s Worship</h2>
+              <h2 className="min-w-0 text-xl font-black leading-tight tracking-tight text-white sm:text-2xl">Today&apos;s Worship</h2>
             </div>
             {todayTrack ? (
               <div className="min-w-0">
-                <p className="line-clamp-3 break-words text-[1.55rem] font-black leading-[0.98] tracking-tighter text-white sm:text-3xl">{todayTrack.title}</p>
+                <p className="line-clamp-3 break-words text-[1.55rem] font-black leading-[1.12] tracking-tight text-white sm:text-3xl">{todayTrack.title}</p>
                 <p className="mt-2 text-sm font-bold text-zinc-400">{todayTrack.artists?.name || "Miracle FM"}</p>
                 <div className="mt-6">
                   <CollectionPlayButton tracks={tracks} />

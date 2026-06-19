@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronRight, Disc3, Sparkles } from "lucide-react";
+import { ChevronRight, Disc3 } from "lucide-react";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import type { Album, Track } from "@/types/music";
 
@@ -8,22 +8,24 @@ interface NewReleasesSectionProps {
   albums: Album[];
   albumTracks: Record<string, Track[]>;
   personalized?: boolean;
+  title?: string;
+  description?: string;
+  maxItems?: number;
 }
 
-export default function NewReleasesSection({ albums, albumTracks, personalized = false }: NewReleasesSectionProps) {
+export default function NewReleasesSection({
+  albums,
+  albumTracks,
+  title = "Albums",
+  maxItems = 12,
+}: NewReleasesSectionProps) {
   if (albums.length === 0) return null;
 
   return (
     <section className="px-4 md:px-8">
-      <div className="mb-5 flex items-end justify-between gap-4 md:mb-6">
+      <div className="mb-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#FF0055]/20 bg-[#FF0055]/10 px-3 py-1 text-[9px] font-black uppercase tracking-[0.22em] text-[#FF0055]">
-            <Sparkles size={11} /> {personalized ? "Matched Albums" : "Trending Albums"}
-          </div>
-          <h2 className="truncate text-2xl font-black tracking-tighter text-white md:text-3xl">Albums</h2>
-          <p className="mt-1 line-clamp-2 text-sm font-medium text-zinc-500">
-            {personalized ? "Ordered from your listening taste and favorite voices." : "Fresh and popular albums to start with."}
-          </p>
+          <h2 className="truncate text-2xl font-black tracking-tight text-white md:text-3xl">{title}</h2>
         </div>
         <Link 
           href="/album" 
@@ -33,12 +35,12 @@ export default function NewReleasesSection({ albums, albumTracks, personalized =
         </Link>
       </div>
       
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-6">
-        {albums.slice(0, 12).map((album) => {
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-6">
+        {albums.slice(0, maxItems).map((album) => {
           const tracks = album.id ? albumTracks[album.id] || [] : [];
           return (
           <article key={album.id} className="group min-w-0 transition-transform duration-300 active:scale-95 md:active:scale-100">
-            <div className="relative aspect-square overflow-hidden rounded-2xl border border-white/5 bg-zinc-900 shadow-xl transition-all duration-500 md:group-hover:-translate-y-1 md:group-hover:border-[#FF0055]/30 md:group-hover:shadow-[0_10px_30px_rgba(255,0,85,0.15)]">
+            <div className="relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-[0_14px_34px_rgba(0,0,0,0.22)] transition-all duration-300 md:group-hover:-translate-y-1 md:group-hover:border-[#FF0055]/30 md:group-hover:shadow-[0_10px_30px_rgba(255,0,85,0.12)]">
               <Link href={`/album/${album.id}`} className="absolute inset-0 z-0">
               {album.cover_url ? (
                 <Image 
@@ -66,7 +68,7 @@ export default function NewReleasesSection({ albums, albumTracks, personalized =
               </div>
             </div>
             
-            <div className="px-1 pt-2 md:pt-3">
+            <div className="px-1 pt-2">
               <div className="flex min-w-0 items-start justify-between gap-2">
                 <div className="min-w-0">
                   <Link href={`/album/${album.id}`} className="block truncate text-sm font-bold text-white transition-colors md:text-base md:group-hover:text-[#FF0055]">

@@ -77,7 +77,7 @@ export default async function GeneratedMixPage({ params }: MixPageProps) {
             <span className="mx-auto mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-[#FF0055]/25 bg-[#FF0055]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#FF0055] md:mx-0">
               <Sparkles size={13} /> Auto-Updating Mix
             </span>
-            <h1 className="text-4xl font-black leading-none tracking-tighter text-white md:text-7xl">
+            <h1 className="text-4xl font-black leading-[1.12] tracking-tight text-white md:text-7xl">
               {section.title}
             </h1>
             <p className="mt-4 max-w-2xl text-sm font-medium leading-6 text-zinc-400 md:text-base">

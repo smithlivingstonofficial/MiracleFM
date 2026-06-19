@@ -74,7 +74,7 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
                     <Sparkles size={10} className="text-[#FF0055]" />
                     Featured
                 </div> */}
-                <h1 className="line-clamp-2 max-w-xl text-2xl font-black leading-none tracking-tight text-white drop-shadow-2xl md:text-5xl">
+                <h1 className="line-clamp-2 max-w-xl text-2xl font-black leading-[1.12] tracking-tight text-white drop-shadow-2xl md:text-5xl">
                     {hero.title}
                 </h1>
                 {hero.description && (

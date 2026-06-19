@@ -83,7 +83,7 @@ export default function MixCard({ tracks, title, description, badgeText = "Daily
   return (
     <div
       onClick={() => href && router.push(href)}
-      className={`group relative w-full bg-[#0A0A0A] border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl flex flex-col ${href ? "cursor-pointer" : ""}`}
+      className={`group relative w-full bg-[#0A0A0A] border border-white/10 rounded-lg overflow-hidden shadow-[0_18px_44px_rgba(0,0,0,0.26)] flex flex-col transition-colors md:hover:border-[#FF0055]/30 md:hover:bg-white/[0.035] ${href ? "cursor-pointer" : ""}`}
       role={href ? "link" : undefined}
       tabIndex={href ? 0 : undefined}
       onKeyDown={(event) => {
@@ -96,19 +96,16 @@ export default function MixCard({ tracks, title, description, badgeText = "Daily
       aria-label={href ? `Open ${title}` : undefined}
     >
       
-      {/* --- BACKGROUND EFFECTS --- */}
-      <div className="absolute top-0 right-0 w-40 h-40 bg-[#FF0055]/20 blur-[60px] rounded-full pointer-events-none -z-10" />
-      
       {/* --- HEADER (Top Row: Text Left, Controls Right) --- */}
-      <div className="flex items-start justify-between p-5 pb-3">
+      <div className="flex items-start justify-between p-3 pb-2 md:p-4 md:pb-3">
          
          {/* Left: Text Info */}
          <div className="space-y-2 pr-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FF0055]/10 border border-[#FF0055]/20 text-[#FF0055] text-[9px] font-black uppercase tracking-[0.2em]">
+            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#FF0055]/10 border border-[#FF0055]/20 text-[#FF0055] text-[9px] font-black uppercase tracking-[0.18em]">
                 <Sparkles size={10} className="animate-pulse" /> {badgeText}
             </div>
             <div>
-                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter leading-none">{title}</h2>
+                <h2 className="text-xl md:text-2xl font-black text-white tracking-tight leading-[1.12]">{title}</h2>
                 <p className="text-zinc-400 text-[10px] font-bold mt-1 line-clamp-1">{description}</p>
             </div>
          </div>

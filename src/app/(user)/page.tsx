@@ -6,15 +6,14 @@ import HomeHeroMosaic from "@/components/user/home/HomeHeroMosaic";
 import FeaturedCollectionShelf from "@/components/user/home/FeaturedCollectionShelf";
 import NewReleasesSection from "@/components/user/home/NewReleasesSection";
 import PopularArtistsSection from "@/components/user/home/PopularArtistsSection";
-import ContinueListeningSection from "@/components/user/home/ContinueListeningSection";
-import GuestRecentlyPlayedSection from "@/components/user/home/GuestRecentlyPlayedSection";
 import HomeTrackSection from "@/components/user/home/HomeTrackSection";
 import RecommendationMixSection from "@/components/user/home/RecommendationMixSection";
 import HomeSessionCache from "@/components/user/home/HomeSessionCache";
 import HomeFooter from "@/components/user/home/HomeFooter";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { getRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
-import type { Track } from "@/types/music";
+import { getHomeLayoutSections, type HomeLayoutSection } from "@/lib/home-layout";
+import type { Playlist, Track } from "@/types/music";
 
 type TrackMap = Record<string, Track[]>;
 type PlaylistTrackRow = {
@@ -25,6 +24,9 @@ type TrackWithRelations = Track & {
   artist_id?: string | null;
   album_id?: string | null;
 };
+
+const sectionLimit = (section: HomeLayoutSection, fallback: number) =>
+  Math.min(Math.max(Number(section.settings.max_items || fallback), 1), 24);
 
 // We force the page to be dynamic so user auth works, 
 // but we cache the heavy database queries below.
@@ -161,13 +163,17 @@ export default async function HomePage() {
     .select("*")
     .eq("is_active", true)
     .order("created_at", { ascending: false });
-  const recommendationSections = await getRecommendationSections(supabase, user);
+  const [recommendationSections, homeLayoutSections] = await Promise.all([
+    getRecommendationSections(supabase, user),
+    getHomeLayoutSections(supabase),
+  ]);
 
   // 3. Daily Mix Logic (Dynamic per request, only if logged in)
   let dailyMix: Track[] = [];
   let recentTracks: Track[] = [];
-  let recommendedTracks: Track[] = [];
   let relatedTracks: Track[] = [];
+  let userPlaylists: Playlist[] = [];
+  let userPlaylistTracks: TrackMap = {};
   if (user) {
     const { data: mixData } = await supabase.rpc('get_personalized_mix', { uid: user.id, limit_count: 20 });
     if (mixData && mixData.length > 0) {
@@ -221,9 +227,33 @@ export default async function HomePage() {
       const recentIds = new Set(recentTracks.map((track) => track.id));
       relatedTracks = ((relatedData || []) as Track[]).filter((track) => !recentIds.has(track.id)).slice(0, 8);
     }
+
+    const { data: personalPlaylists } = await supabase
+      .from("playlists")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    userPlaylists = (personalPlaylists || []) as Playlist[];
+
+    const userPlaylistIds = userPlaylists.map((playlist) => playlist.id).filter(Boolean);
+    if (userPlaylistIds.length > 0) {
+      const { data: userPlaylistTrackRows } = await supabase
+        .from("playlist_tracks")
+        .select("playlist_id, tracks(*, artists(id, name, image_url), albums(id, title, cover_url))")
+        .in("playlist_id", userPlaylistIds)
+        .order("added_at", { ascending: true });
+
+      userPlaylistTracks = ((userPlaylistTrackRows || []) as PlaylistTrackRow[]).reduce<TrackMap>((acc, row) => {
+        const track = Array.isArray(row.tracks) ? row.tracks[0] : row.tracks;
+        if (!track || track.audio_status !== "ready") return acc;
+        acc[row.playlist_id] = [...(acc[row.playlist_id] || []), track];
+        return acc;
+      }, {});
+    }
   }
 
-  recommendedTracks = dailyMix.length > 0 ? dailyMix : relatedTracks.length > 0 ? relatedTracks : trendingTracks.length > 0 ? trendingTracks : popularTracks;
   const recommendationPlaylists = await getRecommendationPlaylists(supabase, recommendationSections, user, 12);
 
   const userSignalTracks = user ? [...dailyMix, ...recentTracks, ...relatedTracks] : [];
@@ -269,6 +299,132 @@ export default async function HomePage() {
     return scoreArtist(b) - scoreArtist(a);
   });
 
+  const allPlaylistTracks = { ...playlistTracks, ...userPlaylistTracks };
+  const enabledHomeSections = homeLayoutSections
+    .filter((section) => section.enabled)
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  const renderHomeSection = (section: HomeLayoutSection) => {
+    switch (section.slug) {
+      case "quick-access":
+        return (
+          <HomeHeroMosaic
+            key={section.slug}
+            banners={banners || []}
+            dailyMix={dailyMix}
+            recommendationPlaylists={recommendationPlaylists}
+            playlists={playlists}
+            albums={albums}
+            trendingTracks={trendingTracks}
+            popularTracks={popularTracks}
+            playlistTracks={playlistTracks}
+            albumTracks={albumTracks}
+            isSignedIn={Boolean(user)}
+          />
+        );
+      case "recommendation-mixes":
+        return (
+          <RecommendationMixSection
+            key={section.slug}
+            playlists={recommendationPlaylists}
+            title={section.title}
+            description={section.description}
+            maxItems={sectionLimit(section, 10)}
+          />
+        );
+      case "admin-playlists":
+        return (
+          <FeaturedCollectionShelf
+            key={section.slug}
+            title={section.title}
+            description={section.description}
+            viewAllHref="/library"
+            maxItems={sectionLimit(section, 8)}
+            playlists={playlists}
+            albums={[]}
+            recommendationPlaylists={[]}
+            playlistTracks={playlistTracks}
+            albumTracks={{}}
+          />
+        );
+      case "user-playlists":
+        return user ? (
+          <FeaturedCollectionShelf
+            key={section.slug}
+            title={section.title}
+            description={section.description}
+            viewAllHref="/library"
+            maxItems={sectionLimit(section, 8)}
+            playlists={userPlaylists}
+            albums={[]}
+            recommendationPlaylists={[]}
+            playlistTracks={allPlaylistTracks}
+            albumTracks={{}}
+          />
+        ) : null;
+      case "albums":
+        return (
+          <NewReleasesSection
+            key={section.slug}
+            albums={rankedAlbums}
+            albumTracks={albumTracks}
+            personalized={Boolean(user && userSignalTracks.length > 0)}
+            title={section.title}
+            description={section.description}
+            maxItems={sectionLimit(section, 12)}
+          />
+        );
+      case "artists":
+        return (
+          <PopularArtistsSection
+            key={section.slug}
+            artists={rankedArtists}
+            artistTracks={artistTracks}
+            personalized={Boolean(user && userSignalTracks.length > 0)}
+            title={section.title}
+            description={section.description}
+            maxItems={sectionLimit(section, 12)}
+          />
+        );
+      case "trending-songs":
+        return (
+          <HomeTrackSection
+            key={section.slug}
+            title={section.title}
+            description={section.description}
+            tracks={trendingTracks.length > 0 ? trendingTracks.slice(0, sectionLimit(section, 8)) : popularTracks.slice(0, sectionLimit(section, 8))}
+            context="Trending"
+          />
+        );
+      case "new-songs":
+        return (
+          <HomeTrackSection
+            key={section.slug}
+            title={section.title}
+            description={section.description}
+            tracks={newTracks.slice(0, sectionLimit(section, 8))}
+            context="New Songs"
+          />
+        );
+      case "related-songs":
+        return relatedTracks.length > 0 ? (
+          <HomeTrackSection
+            key={section.slug}
+            title={section.title}
+            description={section.description}
+            tracks={relatedTracks.slice(0, sectionLimit(section, 8))}
+            context="Related"
+          />
+        ) : null;
+      case "feed-ad":
+        return <ResponsiveAd key={section.slug} variant="feed" className="px-4 md:px-8" />;
+      case "banner-ad":
+        return <ResponsiveAd key={section.slug} variant="banner" className="px-4 md:px-8" />;
+      default:
+        return null;
+    }
+  };
+
   // Note: "Greeting" logic is handled internally by <HomeHeader /> for animation
 
   return (
@@ -277,94 +433,10 @@ export default async function HomePage() {
       
       {/* Background Atmosphere */}
       <div className="absolute top-0 inset-x-0 h-[500px] md:h-[600px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
-      <div className="absolute top-[-100px] right-[-50px] md:top-[-200px] md:right-[-100px] w-[300px] h-[300px] md:w-[500px] md:h-[500px] bg-[#FF0055]/10 md:bg-[#FF0055]/5 rounded-full blur-[100px] md:blur-[120px] pointer-events-none -z-10" />
 
-      {/* 2. Hero & Always-Filled Feature Rail */}
-      <div className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-700 md:mt-6">
-        <HomeHeroMosaic
-          banners={banners || []}
-          dailyMix={dailyMix}
-          recommendationPlaylists={recommendationPlaylists}
-          playlists={playlists}
-          albums={albums}
-          trendingTracks={trendingTracks}
-          popularTracks={popularTracks}
-          playlistTracks={playlistTracks}
-          albumTracks={albumTracks}
-          isSignedIn={Boolean(user)}
-        />
-      </div>
-
-      {/* 3. Sections Stack */}
-      <div className="mt-10 space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200 fill-mode-forwards md:mt-12 md:space-y-12">
-        
-        {user ? (
-          <>
-            <ContinueListeningSection tracks={recentTracks} />
-            <RecommendationMixSection playlists={recommendationPlaylists} />
-          </>
-        ) : (
-          <>
-            <GuestRecentlyPlayedSection enabled />
-            <HomeTrackSection
-              title="Trending Songs"
-              description="Songs with real qualified listens from Miracle FM playback."
-              tracks={trendingTracks.length > 0 ? trendingTracks : popularTracks}
-              context="Trending"
-            />
-          </>
-        )}
-
-        <HomeTrackSection
-          title={user ? "Recommended For You" : "Recommended Worship"}
-          description={user ? "Based on your worship collection and recent listening." : "A strong place to start, even before signing in."}
-          tracks={recommendedTracks}
-          context="Recommended"
-        />
-
-        <ResponsiveAd variant="feed" className="px-4 md:px-8" />
-
-        {user && (
-          <HomeTrackSection
-            title="Trending Songs"
-            description="Songs with real qualified listens from Miracle FM playback."
-            tracks={trendingTracks.length > 0 ? trendingTracks : popularTracks}
-            context="Trending"
-          />
-        )}
-
-        <HomeTrackSection
-          title="New Tamil Christian Songs"
-          description="Fresh playable songs added to Miracle FM."
-          tracks={newTracks}
-          context="New Songs"
-        />
-
-        {relatedTracks.length > 0 && (
-          <HomeTrackSection
-            title="Related Songs"
-            description="More songs connected to artists you recently listened to."
-            tracks={relatedTracks}
-            context="Related"
-          />
-        )}
-
-        {!user && <RecommendationMixSection playlists={recommendationPlaylists} />}
-
-        <FeaturedCollectionShelf
-          playlists={playlists}
-          albums={albums}
-          recommendationPlaylists={recommendationPlaylists}
-          playlistTracks={playlistTracks}
-          albumTracks={albumTracks}
-        />
-        
-        <NewReleasesSection albums={rankedAlbums} albumTracks={albumTracks} personalized={Boolean(user && userSignalTracks.length > 0)} />
-
-        <ResponsiveAd variant="banner" className="px-4 md:px-8" />
-          
-        <PopularArtistsSection artists={rankedArtists} artistTracks={artistTracks} personalized={Boolean(user && userSignalTracks.length > 0)} />
-
+      {/* 2. Admin-configurable Sections Stack */}
+      <div className="mt-4 space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 fill-mode-forwards md:mt-6 md:space-y-12">
+        {enabledHomeSections.map(renderHomeSection)}
       </div>
 
       {/* 4. Footer */}

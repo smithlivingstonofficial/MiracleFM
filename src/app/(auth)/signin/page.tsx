@@ -44,11 +44,11 @@ export default function UserSignIn() {
               <Image src="/miraclefm.jpg" alt="Miracle FM" fill className="object-cover" priority />
             </span>
             <span>
-              <span className="block text-2xl font-black leading-none tracking-tighter">MIRACLE FM</span>
+              <span className="block text-2xl font-black leading-tight tracking-tight">MIRACLE FM</span>
               <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.28em] text-zinc-500">Tamil Christian Worship</span>
             </span>
           </Link>
-          <h1 className="max-w-2xl text-6xl font-black leading-none tracking-tighter">
+          <h1 className="max-w-2xl text-6xl font-black leading-[1.12] tracking-tight">
             Keep your worship library close, wherever you listen.
           </h1>
           <p className="mt-5 max-w-xl text-base font-medium leading-7 text-zinc-400">
@@ -65,7 +65,7 @@ export default function UserSignIn() {
               <Sparkles size={13} />
               Listener account
             </div>
-            <h2 className="text-3xl font-black tracking-tighter text-white">Welcome back</h2>
+            <h2 className="text-3xl font-black leading-tight tracking-tight text-white">Welcome back</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-zinc-500">
               Sign in to sync your liked songs, playlists, and recommendations.
             </p>

@@ -41,6 +41,7 @@ export default function FullScreenPlayer() {
   const {
     isFullScreen,
     toggleFullScreen,
+    setFullScreen,
     currentTrack,
     isPlaying,
     setIsPlaying,
@@ -57,6 +58,7 @@ export default function FullScreenPlayer() {
 
   const supabase = useMemo(() => createClient(), []);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [isDesktopRailViewport, setIsDesktopRailViewport] = useState(false);
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
   const [myPlaylists, setMyPlaylists] = useState<Pick<Playlist, "id" | "title">[]>([]);
   const [localProgress, setLocalProgress] = useState(0);
@@ -87,6 +89,18 @@ export default function FullScreenPlayer() {
     [currentTime, lyricData.lines]
   );
   const progressPercent = Math.min((localProgress / (duration || 1)) * 100, 100);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1280px)");
+    const syncViewport = () => {
+      setIsDesktopRailViewport(media.matches);
+      if (media.matches) setFullScreen(false);
+    };
+
+    syncViewport();
+    media.addEventListener("change", syncViewport);
+    return () => media.removeEventListener("change", syncViewport);
+  }, [setFullScreen]);
 
   useEffect(() => {
     if (isSeeking) return;
@@ -305,7 +319,7 @@ export default function FullScreenPlayer() {
     autoScrollTimerRef.current = window.setTimeout(() => setAutoScrollPaused(false), 3500);
   };
 
-  if (!isFullScreen || !currentTrack) return null;
+  if (isDesktopRailViewport || !isFullScreen || !currentTrack) return null;
 
   return (
     <div

@@ -12,7 +12,7 @@ export default function EditorialSection({ playlists }: EditorialSectionProps) {
     <section className="px-4 md:px-8">
       <div className="flex justify-between items-end mb-5 md:mb-6">
         <div>
-          <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-white flex items-center gap-2">
+          <h2 className="flex items-center gap-2 text-2xl font-black leading-tight tracking-tight text-white md:text-3xl">
             Curated For You <Sparkles size={16} className="text-[#FF0055]" />
           </h2>
         </div>
