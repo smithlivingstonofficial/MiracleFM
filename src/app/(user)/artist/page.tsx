@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import Link from "next/link";
-import { Mic2, Sparkles, Search } from "lucide-react";
+import { Mic2 } from "lucide-react";
 import { Fragment } from "react";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 
@@ -23,85 +23,57 @@ export default async function AllArtistsPage() {
       {/* Background Atmosphere */}
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-[#16080d] via-[#050505]/90 to-[#050505] -z-10" />
 
-      <div className="px-4 md:px-8 mt-6 md:mt-8 space-y-7 md:space-y-9">
-        
-        {/* 2. Page Title Section */}
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b border-white/5 pb-5 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-[#FF0055] animate-pulse" />
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Full Roster</span>
-            </div>
-            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter leading-none">
-              Discover Artists
-            </h1>
-          </div>
-
-          {/* Quick Search Button */}
-          <Link 
-            href="/search" 
-            className="group w-full md:w-auto flex items-center justify-center gap-3 px-5 py-3 rounded-full bg-zinc-900/50 border border-white/10 hover:border-[#FF0055]/50 hover:bg-zinc-900 transition-all active:scale-95"
-          >
-            <Search size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
-            <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest">Search Roster</span>
-          </Link>
-        </div>
-
-        <ResponsiveAd variant="banner" className="px-0" />
+      <div className="px-4 md:px-8 mt-5 md:mt-8 space-y-7 md:space-y-9">
 
         {/* 3. Artists Grid */}
-        <div className="grid grid-cols-3 gap-x-3 gap-y-7 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 md:gap-x-5 md:gap-y-9">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-4 md:grid-cols-[repeat(auto-fill,minmax(164px,1fr))] md:gap-5">
           {artists.map((artist, i) => (
             <Fragment key={artist.id}>
-              {artists.length >= 14 && i === 12 && <ResponsiveAd variant="grid" />}
+              {artists.length >= 9 && i === 8 && <ResponsiveAd variant="banner" className="col-span-2 my-1 px-0 sm:col-span-3 md:hidden" />}
 
-            <Link 
-              href={`/artist/${artist.id}`} 
-              className="flex flex-col items-center group active:scale-95 transition-transform duration-300 animate-in fade-in slide-in-from-bottom-8 fill-mode-backwards"
-              style={{ animationDelay: `${i * 50}ms`, animationDuration: '700ms' }} // Staggered animation
-            >
-              {/* Premium Avatar Container */}
-              <div className="relative w-24 h-24 md:w-36 md:h-36 mb-3 md:mb-4">
-                
-                {/* Rotating Glow Ring (Visible on Hover) */}
-                <div className="absolute -inset-1 bg-gradient-to-tr from-[#FF0055] to-transparent rounded-full opacity-0 group-hover:opacity-100 blur-md transition-opacity duration-500" />
-                
-                {/* Border Ring */}
-                <div className="absolute inset-0 rounded-full border-2 md:border-[3px] border-zinc-800 group-hover:border-[#FF0055] transition-colors duration-500 z-10" />
+              <article
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0A]/80 p-3 transition-all duration-300 active:scale-95 animate-in fade-in slide-in-from-bottom-8 fill-mode-backwards md:hover:-translate-y-1 md:hover:border-[#FF0055]/30 md:hover:bg-white/[0.04]"
+                style={{ animationDelay: `${i * 50}ms`, animationDuration: "700ms" }}
+              >
+                <div className="absolute left-3 top-3 z-20 rounded-md border border-white/10 bg-black/50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-zinc-300 backdrop-blur-md">
+                  #{i + 1}
+                </div>
 
-                {/* Image Wrapper */}
-                <div className="absolute inset-[3px] md:inset-[4px] rounded-full overflow-hidden bg-[#050505] z-10">
-                  {artist.image_url ? (
-                    <Image 
-                      src={artist.image_url} 
-                      alt={artist.name} 
-                      fill 
-                      className="object-cover md:filter md:grayscale md:group-hover:grayscale-0 transition-all duration-700 scale-100 group-hover:scale-110" 
-                      sizes="(max-width: 768px) 50vw, 20vw"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-600">
-                       <Mic2 size={32} />
+                <Link
+                  href={`/artist/${artist.id}`}
+                  className="block"
+                >
+                  <div className="relative mx-auto mb-3 mt-5 h-28 w-28 rounded-full p-[3px] md:h-32 md:w-32 md:p-1">
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-b from-[#FF0055] via-[#ff1a66] to-[#4d001a] shadow-[0_0_22px_rgba(255,0,85,0.28)] transition-all duration-500 md:group-hover:shadow-[0_0_34px_rgba(255,0,85,0.48)]" />
+                    <div className="absolute -right-1 bottom-4 h-9 w-9 rounded-full bg-[#FF0055] shadow-[0_0_26px_rgba(255,0,85,0.42)]" />
+
+                    <div className="relative z-10 h-full w-full overflow-hidden rounded-full border-[4px] border-[#050505] bg-zinc-900">
+                      {artist.image_url ? (
+                        <Image
+                          src={artist.image_url}
+                          alt={artist.name}
+                          fill
+                          className="object-cover transition-transform duration-700 md:group-hover:scale-105"
+                          sizes="128px"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-zinc-800 text-zinc-500">
+                          <Mic2 size={34} />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Text Info */}
-              <div className="text-center w-full px-1">
-                <h3 className="font-black text-white text-xs md:text-base group-hover:text-[#FF0055] transition-colors truncate w-full leading-tight">
-                  {artist.name}
-                </h3>
-                <div className="mt-1.5 inline-flex items-center justify-center px-2 py-0.5 rounded-md bg-white/5 border border-white/5 group-hover:border-[#FF0055]/20 transition-colors">
-                  <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-zinc-400">
-                    Artist
-                  </span>
-                </div>
-              </div>
-            </Link>
+                  </div>
+
+                  <div className="relative z-10 text-center">
+                    <p className="line-clamp-2 min-h-10 text-sm font-black leading-5 text-white transition-colors md:group-hover:text-[#FF0055]">{artist.name}</p>
+                  </div>
+                </Link>
+              </article>
             </Fragment>
           ))}
         </div>
+
+        <ResponsiveAd variant="banner" className="hidden px-0 md:block" />
       </div>
     </div>
   );

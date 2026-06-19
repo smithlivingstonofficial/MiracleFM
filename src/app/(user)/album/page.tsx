@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import Link from "next/link";
-import { Disc, Search, Sparkles, Play } from "lucide-react";
+import { Disc, Play } from "lucide-react";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
-import React from "react"; // Required for React.Fragment
+import { Fragment } from "react";
 
 export const revalidate = 60;
 
@@ -25,39 +25,15 @@ export default async function AllAlbumsPage() {
       {/* Background Atmosphere */}
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-[#16080d] via-[#050505]/90 to-[#050505] -z-10" />
 
-      <div className="px-4 md:px-8 mt-6 md:mt-8 space-y-7 md:space-y-9">
-        
-        {/* Page Title Section */}
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b border-white/5 pb-5 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-[#FF0055] animate-pulse" />
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Full Library</span>
-            </div>
-            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter leading-none">
-              All Albums
-            </h1>
-          </div>
-
-          <Link 
-            href="/search" 
-            className="group w-full md:w-auto flex items-center justify-center gap-3 px-5 py-3 rounded-full bg-zinc-900/50 border border-white/10 hover:border-[#FF0055]/50 hover:bg-zinc-900 transition-all active:scale-95"
-          >
-            <Search size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
-            <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest">Search Albums</span>
-          </Link>
-        </div>
-
-        <ResponsiveAd variant="banner" className="px-0" />
+      <div className="px-4 md:px-8 mt-5 md:mt-8 space-y-7 md:space-y-9">
 
         {/* Albums Grid with Embedded Ads */}
         <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-x-5 md:gap-y-8">
           {albums.map((album, i) => (
-            <React.Fragment key={album.id}>
+            <Fragment key={album.id}>
               
-              {/* Gentle sponsored breaks after enough real album cards */}
-              {((albums.length >= 10 && i === 8) || (albums.length >= 24 && i === 20)) && (
-                <ResponsiveAd variant="grid" />
+              {albums.length >= 9 && i === 8 && (
+                <ResponsiveAd variant="banner" className="col-span-2 my-1 px-0 sm:col-span-3 md:hidden" />
               )}
 
               <Link 
@@ -106,9 +82,11 @@ export default async function AllAlbumsPage() {
                   </div>
                 </div>
               </Link>
-            </React.Fragment>
+            </Fragment>
           ))}
         </div>
+
+        <ResponsiveAd variant="banner" className="hidden px-0 md:block" />
       </div>
     </div>
   );

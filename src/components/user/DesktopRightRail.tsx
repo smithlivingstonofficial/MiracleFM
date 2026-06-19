@@ -199,9 +199,9 @@ export default function DesktopRightRail({ banners, initialTracks, isSignedIn }:
               <div className="relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-zinc-900 shadow-[0_22px_60px_rgba(0,0,0,0.55)]">
                 <Image src={displayImage} alt={activeTrack.title} fill className="object-cover" sizes="380px" priority />
                 <div className="absolute inset-0 ring-1 ring-inset ring-white/10" />
-                <p className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-[#FF0055] px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-white shadow-[0_12px_34px_rgba(255,0,85,0.32)]">
+                {/* <p className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-[#FF0055] px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-white shadow-[0_12px_34px_rgba(255,0,85,0.32)]">
                   <Radio size={11} /> Now Playing
-                </p>
+                </p> */}
               </div>
             </div>
 

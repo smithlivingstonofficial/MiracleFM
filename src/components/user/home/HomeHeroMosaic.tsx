@@ -1,13 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Disc3, ListMusic, Music4, Play, Radio, TrendingUp } from "lucide-react";
+import { Disc3, Heart, ListMusic, Mic2, Music4, Play, Radio, Search, TrendingUp } from "lucide-react";
 import HeroSection from "@/components/user/HeroSection";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import MixCard from "@/components/user/MixCard";
 import PlaylistCover from "@/components/user/PlaylistCover";
 import TrackRow from "@/components/user/TrackRow";
-import type { Album, GeneratedPlaylist, Playlist, Track } from "@/types/music";
+import type { Album, Artist, GeneratedPlaylist, Playlist, Track } from "@/types/music";
 
 type TrackMap = Record<string, Track[]>;
 
@@ -23,10 +23,12 @@ type HomeHeroMosaicProps = {
   recommendationPlaylists: GeneratedPlaylist[];
   playlists: Playlist[];
   albums: Album[];
+  artists: Artist[];
   trendingTracks: Track[];
   popularTracks: Track[];
   playlistTracks: TrackMap;
   albumTracks: TrackMap;
+  artistTracks: TrackMap;
   isSignedIn: boolean;
   quickAccessMaxItems?: number;
   mobileLayout?: "quick_grid" | "feature_card";
@@ -198,12 +200,29 @@ type QuickAccessItem =
     }
   | {
       id: string;
+      kind: "artist";
+      title: string;
+      subtitle: string;
+      href: string;
+      tracks: Track[];
+      image?: string | null;
+    }
+  | {
+      id: string;
       kind: "tracks";
       title: string;
       subtitle: string;
       href: string;
       tracks: Track[];
       image?: string | null;
+    }
+  | {
+      id: string;
+      kind: "static";
+      title: string;
+      subtitle: string;
+      href: string;
+      icon: "heart" | "album" | "artist" | "playlist" | "search" | "trending" | "music";
     };
 
 function QuickArtwork({ item }: { item: QuickAccessItem }) {
@@ -215,6 +234,29 @@ function QuickArtwork({ item }: { item: QuickAccessItem }) {
     return <ArtworkGrid images={item.images} fallbackIcon={<Radio size={24} />} />;
   }
 
+  if (item.kind === "static") {
+    const Icon =
+      item.icon === "heart"
+        ? Heart
+        : item.icon === "album"
+          ? Disc3
+          : item.icon === "artist"
+            ? Mic2
+            : item.icon === "playlist"
+              ? ListMusic
+              : item.icon === "trending"
+                ? TrendingUp
+                : item.icon === "music"
+                  ? Music4
+                  : Search;
+
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_18%,rgba(255,255,255,0.16),transparent_34%),linear-gradient(135deg,#251018,#101012)] text-white">
+        <Icon size={23} className={item.icon === "heart" ? "fill-[#FF0055] text-[#FF0055]" : "text-[#FF4D89]"} />
+      </div>
+    );
+  }
+
   const image = item.kind === "album" ? item.coverUrl : item.image;
   if (image) {
     return <Image src={image} alt="" fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="96px" />;
@@ -222,7 +264,7 @@ function QuickArtwork({ item }: { item: QuickAccessItem }) {
 
   return (
     <div className="flex h-full w-full items-center justify-center bg-zinc-900 text-zinc-700">
-      {item.kind === "album" ? <Disc3 size={24} /> : <Music4 size={24} />}
+      {item.kind === "album" ? <Disc3 size={24} /> : item.kind === "artist" ? <Mic2 size={24} /> : <Music4 size={24} />}
     </div>
   );
 }
@@ -258,7 +300,7 @@ function MobileDiscoveryGrid({ items, maxItems }: { items: QuickAccessItem[]; ma
 function DesktopDiscoveryGrid({ items, maxItems }: { items: QuickAccessItem[]; maxItems: number }) {
   return (
     <div className="hidden xl:block">
-      <div className="grid grid-cols-3 gap-2 2xl:grid-cols-4">
+      <div className="grid grid-cols-4 gap-2">
         {items.slice(0, maxItems).map((item) => (
           <QuickAccessCard key={item.id} item={item} compact />
         ))}
@@ -305,13 +347,13 @@ export default function HomeHeroMosaic({
   recommendationPlaylists,
   playlists,
   albums,
+  artists,
   trendingTracks,
   popularTracks,
   playlistTracks,
   albumTracks,
+  artistTracks,
   isSignedIn,
-  quickAccessMaxItems = 8,
-  mobileLayout = "quick_grid",
   showHeroBanner = true,
 }: HomeHeroMosaicProps) {
   const firstGenerated = recommendationPlaylists.find((playlist) => playlist.tracks.length > 0);
@@ -319,32 +361,40 @@ export default function HomeHeroMosaic({
   const firstAlbum = albums.find((album) => album.id);
   const chartTracks = trendingTracks.length > 0 ? trendingTracks : popularTracks;
   const hasDailyMix = isSignedIn && dailyMix.length > 0;
-  const quickItems: QuickAccessItem[] = [
-    ...(hasDailyMix
-      ? [
-          {
-            id: "daily-mix",
-            kind: "mix" as const,
-            title: "Daily Mix",
-            subtitle: "Fresh worship shaped from your listening.",
-            href: "/mix/daily-mix",
-            tracks: dailyMix,
-            images: generatedArtwork({ tracks: dailyMix } as GeneratedPlaylist),
-          },
-        ]
-      : []),
-    ...recommendationPlaylists
-      .filter((playlist) => playlist.tracks.length > 0)
-      .slice(0, 3)
-      .map((playlist) => ({
-        id: `mix-${playlist.section.slug}`,
-        kind: "mix" as const,
-        title: playlist.section.title,
-        subtitle: playlist.section.description,
-        href: `/mix/${playlist.section.slug}`,
-        tracks: playlist.tracks,
-        images: generatedArtwork(playlist),
-      })),
+  const quickAccessTarget = 8;
+  const quickItemsBase: QuickAccessItem[] = [
+    {
+      id: "liked-songs",
+      kind: "static",
+      title: isSignedIn ? "Liked Songs" : "Your Library",
+      subtitle: isSignedIn ? "Saved songs" : "Sign in to save music",
+      href: isSignedIn ? "/library/liked" : "/library",
+      icon: "heart",
+    },
+    {
+      id: "all-albums",
+      kind: "static",
+      title: "Albums",
+      subtitle: "Full library",
+      href: "/album",
+      icon: "album",
+    },
+    {
+      id: "all-artists",
+      kind: "static",
+      title: "Artists",
+      subtitle: "Voices you follow",
+      href: "/artist",
+      icon: "artist",
+    },
+    {
+      id: "all-playlists",
+      kind: "static",
+      title: "Playlists",
+      subtitle: "Curated sets",
+      href: "/library",
+      icon: "playlist",
+    },
     ...playlists.slice(0, 2).map((playlist) => ({
       id: `playlist-${playlist.id}`,
       kind: "playlist" as const,
@@ -367,6 +417,18 @@ export default function HomeHeroMosaic({
         tracks: albumTracks[album.id] || [],
         coverUrl: album.cover_url,
       })),
+    ...artists
+      .filter((artist): artist is Artist & { id: string } => Boolean(artist.id))
+      .slice(0, 2)
+      .map((artist) => ({
+        id: `artist-${artist.id}`,
+        kind: "artist" as const,
+        title: artist.name,
+        subtitle: `${artistTracks[artist.id]?.length || "Open"} Songs`,
+        href: `/artist/${artist.id}`,
+        tracks: artistTracks[artist.id] || [],
+        image: artist.image_url,
+      })),
     {
       id: "trending-now",
       kind: "tracks" as const,
@@ -376,7 +438,32 @@ export default function HomeHeroMosaic({
       tracks: chartTracks,
       image: chartTracks[0]?.cover_url || chartTracks[0]?.albums?.cover_url || chartTracks[0]?.artists?.image_url,
     },
+    {
+      id: "discover",
+      kind: "static",
+      title: "Discover",
+      subtitle: "Find something new",
+      href: "/search",
+      icon: "search",
+    },
+    {
+      id: "top-songs",
+      kind: "static",
+      title: "Top Songs",
+      subtitle: "Popular now",
+      href: "/search",
+      icon: "trending",
+    },
+    {
+      id: "new-songs",
+      kind: "static",
+      title: "New Songs",
+      subtitle: "Fresh releases",
+      href: "/search",
+      icon: "music",
+    },
   ];
+  const quickItems = quickItemsBase.slice(0, quickAccessTarget);
 
   const sideFeature = hasDailyMix ? (
     <MixCard tracks={dailyMix} title="Daily Mix" description="Fresh tunes for your spirit." badgeText="Daily" href="/mix/daily-mix" />
@@ -392,7 +479,7 @@ export default function HomeHeroMosaic({
 
   return (
     <section className="px-4 md:px-8">
-      <DesktopDiscoveryGrid items={quickItems} maxItems={quickAccessMaxItems} />
+      <DesktopDiscoveryGrid items={quickItems} maxItems={quickAccessTarget} />
       <div className="grid grid-cols-1 items-stretch gap-4 md:gap-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(320px,0.8fr)] xl:hidden">
         {showHeroBanner ? (
           <div className="w-full active:scale-[0.98] transition-transform duration-300 md:active:scale-100">
@@ -404,8 +491,8 @@ export default function HomeHeroMosaic({
           </div>
         ) : null}
         <div className="w-full active:scale-[0.98] transition-transform duration-300 md:active:scale-100">
-          {mobileLayout === "quick_grid" ? <MobileDiscoveryGrid items={quickItems} maxItems={quickAccessMaxItems} /> : null}
-          <div className={mobileLayout === "quick_grid" ? "hidden md:block" : ""}>{sideFeature}</div>
+          <MobileDiscoveryGrid items={quickItems} maxItems={quickAccessTarget} />
+          <div className="hidden md:block">{sideFeature}</div>
         </div>
       </div>
     </section>

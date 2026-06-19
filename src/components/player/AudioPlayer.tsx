@@ -492,7 +492,7 @@ export default function AudioPlayer() {
     }
   }, []);
 
-  const continueToNextTrack = useCallback(async (reason = "auto") => {
+  const continueToNextTrack = useCallback((reason = "auto") => {
     userWantsPlayRef.current = true;
     setIsPlayingRef.current(true);
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
@@ -501,8 +501,8 @@ export default function AudioPlayer() {
       metadata: playbackMetadata({ action: "next-track-transition", reason }),
     });
 
-    await autoFillQueueIfNeeded();
     playNextRef.current();
+    void autoFillQueueIfNeeded();
   }, [autoFillQueueIfNeeded, playbackMetadata, sendPlayEvent]);
 
   const loadFallbackDirect = useCallback(
@@ -523,6 +523,7 @@ export default function AudioPlayer() {
         setLoadStatus("loading");
         audio.src = fallbackUrl;
         audio.load();
+        void playIfWanted(token);
         sendPlayEvent("level_switch", {
           metadata: playbackMetadata({
             action: "source-selected",
@@ -541,7 +542,7 @@ export default function AudioPlayer() {
         return false;
       }
     },
-    [destroyHls, playbackMetadata, sendPlayEvent, setActiveSourceKind]
+    [destroyHls, playbackMetadata, playIfWanted, sendPlayEvent, setActiveSourceKind]
   );
 
   const loadFallback = useCallback(
@@ -1006,6 +1007,7 @@ export default function AudioPlayer() {
 
           if (Number.isFinite(duration) && duration > 0 && currentTime / duration >= PREFETCH_THRESHOLD) {
             prefetchNext();
+            void autoFillQueueIfNeeded();
           }
         }}
         onPlay={() => {
@@ -1033,6 +1035,8 @@ export default function AudioPlayer() {
             });
             stallStartedAtRef.current = null;
           }
+
+          void autoFillQueueIfNeeded();
         }}
         onPause={() => {
           if (userWantsPlayRef.current) return;

@@ -331,10 +331,12 @@ export default async function HomePage() {
             recommendationPlaylists={recommendationPlaylists}
             playlists={playlists}
             albums={albums}
+            artists={rankedArtists}
             trendingTracks={trendingTracks}
             popularTracks={popularTracks}
             playlistTracks={playlistTracks}
             albumTracks={albumTracks}
+            artistTracks={artistTracks}
             isSignedIn={Boolean(user)}
             quickAccessMaxItems={sectionLimit(section, 8)}
             mobileLayout={section.settings.quick_access_mobile || "quick_grid"}

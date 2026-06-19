@@ -126,30 +126,7 @@ export default function LibraryPage() {
       <div className="absolute top-0 inset-x-0 h-[400px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
       <div className="absolute top-[-100px] left-[-50px] w-[300px] h-[300px] bg-[#FF0055]/10 rounded-full blur-[120px] pointer-events-none -z-10" />
 
-      <div className="p-4 md:p-8 lg:p-12 max-w-[1600px] mx-auto space-y-8 md:space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
-        
-        {/* --- HEADER --- */}
-        <div className="pt-8 md:pt-4 flex items-center justify-between gap-4">
-          <div>
-            <div className="hidden md:flex items-center gap-2 mb-2">
-              <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-[9px] font-black uppercase tracking-[0.2em] text-[#FF0055] items-center gap-1.5 flex">
-                  <Sparkles size={10} /> Your Collection
-              </span>
-            </div>
-            <h1 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tighter text-white drop-shadow-md leading-none">
-              Your Library
-            </h1>
-          </div>
-          
-          <button 
-            onClick={handleCreatePlaylist}
-            disabled={isCreating}
-            className="group flex items-center justify-center h-10 px-4 md:h-12 md:px-6 gap-2 bg-[#FF0055] hover:bg-[#ff1a66] disabled:bg-[#FF0055]/50 text-white rounded-full transition-all duration-300 font-bold text-xs md:text-sm shadow-[0_0_20px_rgba(255,0,85,0.3)] hover:shadow-[0_0_30px_rgba(255,0,85,0.5)] active:scale-95 shrink-0"
-          >
-            {isCreating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={18} className="md:group-hover:rotate-90 transition-transform duration-300" />}
-            <span className="font-black tracking-widest uppercase text-[10px] md:text-xs">{isCreating ? "Wait..." : "New"}</span>
-          </button>
-        </div>
+      <div className="p-4 pt-5 md:p-8 lg:p-12 max-w-[1600px] mx-auto space-y-8 md:space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
 
         {/* --- LIKED SONGS BANNER (Mobile Horizontal Optimized) --- */}
         <Link href="/library/liked" className="block group active:scale-[0.98] md:active:scale-100 transition-transform duration-300">
@@ -231,9 +208,19 @@ export default function LibraryPage() {
 
         {/* --- USER PLAYLISTS GRID --- */}
         <div>
-          <div className="flex items-center gap-3 mb-5 md:mb-6 px-1">
-             <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white">Your Playlists</h2>
-             <span className="px-2.5 py-0.5 bg-zinc-900 rounded-full text-zinc-400 font-bold text-[10px] md:text-xs border border-white/5">{playlists.length}</span>
+          <div className="mb-5 flex items-center justify-between gap-3 px-1 md:mb-6">
+             <div className="flex min-w-0 items-center gap-3">
+               <h2 className="truncate text-xl font-black tracking-tighter text-white md:text-3xl">Your Playlists</h2>
+               <span className="shrink-0 px-2.5 py-0.5 bg-zinc-900 rounded-full text-zinc-400 font-bold text-[10px] md:text-xs border border-white/5">{playlists.length}</span>
+             </div>
+             <button 
+               onClick={handleCreatePlaylist}
+               disabled={isCreating}
+               className="group flex h-9 shrink-0 items-center justify-center gap-2 rounded-full bg-[#FF0055] px-3 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_20px_rgba(255,0,85,0.28)] transition-all duration-300 hover:bg-[#ff1a66] hover:shadow-[0_0_30px_rgba(255,0,85,0.45)] active:scale-95 disabled:bg-[#FF0055]/50 md:h-11 md:px-5 md:text-xs"
+             >
+               {isCreating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={17} className="md:group-hover:rotate-90 transition-transform duration-300" />}
+               <span>{isCreating ? "Wait" : "New"}</span>
+             </button>
           </div>
 
           {playlists.length === 0 ? (
