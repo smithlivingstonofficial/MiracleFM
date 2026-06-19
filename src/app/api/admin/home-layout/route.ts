@@ -21,6 +21,13 @@ const normalizeSettings = (value: unknown): HomeLayoutSettings => {
   if (Number.isFinite(value.max_items)) settings.max_items = Math.min(Math.max(Number(value.max_items), 1), 24);
   if (value.source === "trending" || value.source === "new" || value.source === "related") settings.source = value.source;
   if (value.variant === "feed" || value.variant === "banner") settings.variant = value.variant;
+  if (value.visibility === "all" || value.visibility === "mobile" || value.visibility === "desktop") settings.visibility = value.visibility;
+  if (value.spacing === "compact" || value.spacing === "normal" || value.spacing === "relaxed") settings.spacing = value.spacing;
+  if (typeof value.show_description === "boolean") settings.show_description = value.show_description;
+  if (value.quick_access_mobile === "quick_grid" || value.quick_access_mobile === "feature_card") {
+    settings.quick_access_mobile = value.quick_access_mobile;
+  }
+  if (typeof value.show_hero === "boolean") settings.show_hero = value.show_hero;
   return settings;
 };
 

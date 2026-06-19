@@ -13,6 +13,7 @@ import HomeFooter from "@/components/user/home/HomeFooter";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { getRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
 import { getHomeLayoutSections, type HomeLayoutSection } from "@/lib/home-layout";
+import { cn } from "@/lib/utils";
 import type { Playlist, Track } from "@/types/music";
 
 type TrackMap = Record<string, Track[]>;
@@ -27,6 +28,21 @@ type TrackWithRelations = Track & {
 
 const sectionLimit = (section: HomeLayoutSection, fallback: number) =>
   Math.min(Math.max(Number(section.settings.max_items || fallback), 1), 24);
+
+const sectionDescription = (section: HomeLayoutSection) =>
+  section.settings.show_description === false ? undefined : section.description;
+
+const sectionVisibilityClass = (section: HomeLayoutSection) => {
+  if (section.settings.visibility === "mobile") return "md:hidden";
+  if (section.settings.visibility === "desktop") return "hidden md:block";
+  return "";
+};
+
+const sectionSpacingClass = (section: HomeLayoutSection) => {
+  if (section.settings.spacing === "compact") return "mb-6 md:mb-8";
+  if (section.settings.spacing === "relaxed") return "mb-14 md:mb-20";
+  return "mb-10 md:mb-12";
+};
 
 // We force the page to be dynamic so user auth works, 
 // but we cache the heavy database queries below.
@@ -320,6 +336,9 @@ export default async function HomePage() {
             playlistTracks={playlistTracks}
             albumTracks={albumTracks}
             isSignedIn={Boolean(user)}
+            quickAccessMaxItems={sectionLimit(section, 8)}
+            mobileLayout={section.settings.quick_access_mobile || "quick_grid"}
+            showHeroBanner={section.settings.show_hero !== false}
           />
         );
       case "recommendation-mixes":
@@ -328,7 +347,7 @@ export default async function HomePage() {
             key={section.slug}
             playlists={recommendationPlaylists}
             title={section.title}
-            description={section.description}
+            description={sectionDescription(section)}
             maxItems={sectionLimit(section, 10)}
           />
         );
@@ -337,7 +356,7 @@ export default async function HomePage() {
           <FeaturedCollectionShelf
             key={section.slug}
             title={section.title}
-            description={section.description}
+            description={sectionDescription(section)}
             viewAllHref="/library"
             maxItems={sectionLimit(section, 8)}
             playlists={playlists}
@@ -352,7 +371,7 @@ export default async function HomePage() {
           <FeaturedCollectionShelf
             key={section.slug}
             title={section.title}
-            description={section.description}
+            description={sectionDescription(section)}
             viewAllHref="/library"
             maxItems={sectionLimit(section, 8)}
             playlists={userPlaylists}
@@ -370,7 +389,7 @@ export default async function HomePage() {
             albumTracks={albumTracks}
             personalized={Boolean(user && userSignalTracks.length > 0)}
             title={section.title}
-            description={section.description}
+            description={sectionDescription(section)}
             maxItems={sectionLimit(section, 12)}
           />
         );
@@ -382,7 +401,7 @@ export default async function HomePage() {
             artistTracks={artistTracks}
             personalized={Boolean(user && userSignalTracks.length > 0)}
             title={section.title}
-            description={section.description}
+            description={sectionDescription(section)}
             maxItems={sectionLimit(section, 12)}
           />
         );
@@ -391,7 +410,7 @@ export default async function HomePage() {
           <HomeTrackSection
             key={section.slug}
             title={section.title}
-            description={section.description}
+            description={sectionDescription(section)}
             tracks={trendingTracks.length > 0 ? trendingTracks.slice(0, sectionLimit(section, 8)) : popularTracks.slice(0, sectionLimit(section, 8))}
             context="Trending"
           />
@@ -401,7 +420,7 @@ export default async function HomePage() {
           <HomeTrackSection
             key={section.slug}
             title={section.title}
-            description={section.description}
+            description={sectionDescription(section)}
             tracks={newTracks.slice(0, sectionLimit(section, 8))}
             context="New Songs"
           />
@@ -411,7 +430,7 @@ export default async function HomePage() {
           <HomeTrackSection
             key={section.slug}
             title={section.title}
-            description={section.description}
+            description={sectionDescription(section)}
             tracks={relatedTracks.slice(0, sectionLimit(section, 8))}
             context="Related"
           />
@@ -435,8 +454,23 @@ export default async function HomePage() {
       <div className="absolute top-0 inset-x-0 h-[500px] md:h-[600px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/80 to-[#050505] -z-10" />
 
       {/* 2. Admin-configurable Sections Stack */}
-      <div className="mt-4 space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 fill-mode-forwards md:mt-6 md:space-y-12">
-        {enabledHomeSections.map(renderHomeSection)}
+      <div className="mt-4 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-1000 fill-mode-forwards md:mt-6">
+        {enabledHomeSections.map((section, index) => {
+          const node = renderHomeSection(section);
+          if (!node) return null;
+
+          return (
+            <div
+              key={section.slug}
+              className={cn(
+                sectionVisibilityClass(section),
+                index === enabledHomeSections.length - 1 ? "" : sectionSpacingClass(section)
+              )}
+            >
+              {node}
+            </div>
+          );
+        })}
       </div>
 
       {/* 4. Footer */}

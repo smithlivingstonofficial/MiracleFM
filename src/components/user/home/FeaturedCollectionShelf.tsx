@@ -145,6 +145,7 @@ function ItemArtwork({ item }: { item: FeaturedItem }) {
 export default function FeaturedCollectionShelf(props: FeaturedCollectionShelfProps) {
   const items = buildItems(props);
   const title = props.title || "Curated For You";
+  const description = props.description;
   const viewAllHref = props.viewAllHref || "/library";
   if (items.length === 0) return null;
 
@@ -153,6 +154,7 @@ export default function FeaturedCollectionShelf(props: FeaturedCollectionShelfPr
       <div className="mb-5 flex items-end justify-between gap-4 md:mb-6">
         <div className="min-w-0">
           <h2 className="truncate text-2xl font-black tracking-tight text-white md:text-3xl">{title}</h2>
+          {description ? <p className="mt-1 line-clamp-1 text-sm font-medium text-zinc-500">{description}</p> : null}
         </div>
         <Link href={viewAllHref} className="flex shrink-0 items-center gap-1 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-400 transition-colors active:text-white md:hover:text-white">
           View All <ChevronRight size={14} />

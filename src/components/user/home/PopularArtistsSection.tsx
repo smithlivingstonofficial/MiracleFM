@@ -17,6 +17,7 @@ export default function PopularArtistsSection({
   artists,
   artistTracks,
   title = "Artists",
+  description,
   maxItems = 12,
 }: PopularArtistsSectionProps) {
   if (artists.length === 0) return null;
@@ -26,6 +27,7 @@ export default function PopularArtistsSection({
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <h2 className="truncate text-2xl font-black tracking-tight text-white md:text-3xl">{title}</h2>
+          {description ? <p className="mt-1 line-clamp-1 text-sm font-medium text-zinc-500">{description}</p> : null}
         </div>
       </div>
 

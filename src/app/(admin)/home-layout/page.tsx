@@ -18,9 +18,17 @@ const sectionTypeLabel = (type: HomeLayoutSection["section_type"]) =>
     .join(" ");
 
 const maxItemsLabel = (section: HomeLayoutSection) => {
-  if (section.section_type === "ad") return section.settings.variant === "banner" ? "Banner" : "Feed";
-  if (section.section_type === "song_list") return section.settings.source || "songs";
-  return `${section.settings.max_items || 8} items`;
+  const visibility = section.settings.visibility === "mobile" ? "Mobile" : section.settings.visibility === "desktop" ? "Desktop" : "All";
+  const base =
+    section.section_type === "ad"
+      ? section.settings.variant === "banner"
+        ? "Banner"
+        : "Feed"
+      : section.section_type === "song_list"
+        ? section.settings.source || "songs"
+        : `${section.settings.max_items || 8} items`;
+
+  return `${visibility} · ${base}`;
 };
 
 export default function HomeLayoutAdminPage() {
@@ -112,8 +120,8 @@ export default function HomeLayoutAdminPage() {
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-white md:text-5xl">Home Layout</h1>
           <p className="mt-2 max-w-2xl text-sm font-medium text-zinc-500">
-            Rearrange, hide, and tune the sections shown on the user home page. The default layout favors playlists,
-            albums, artists, and recommendations over long song lists.
+            Rearrange, hide, and tune the sections shown on the user home page. You can also control device visibility,
+            spacing, descriptions, and the mobile quick-access structure.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -248,6 +256,86 @@ export default function HomeLayoutAdminPage() {
                     {section.enabled ? <Eye size={16} /> : <EyeOff size={16} />}
                   </button>
                 </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 border-t border-white/[0.06] pt-4 md:grid-cols-2 xl:grid-cols-5">
+                <label className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Device</span>
+                  <select
+                    value={section.settings.visibility || "all"}
+                    onChange={(event) =>
+                      updateSettings(section.slug, {
+                        visibility: event.target.value as NonNullable<HomeLayoutSection["settings"]["visibility"]>,
+                      })
+                    }
+                    className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-xs font-black text-white outline-none focus:border-[#FF0055]/50"
+                  >
+                    <option value="all">All Screens</option>
+                    <option value="mobile">Mobile Only</option>
+                    <option value="desktop">Desktop Only</option>
+                  </select>
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Spacing</span>
+                  <select
+                    value={section.settings.spacing || "normal"}
+                    onChange={(event) =>
+                      updateSettings(section.slug, {
+                        spacing: event.target.value as NonNullable<HomeLayoutSection["settings"]["spacing"]>,
+                      })
+                    }
+                    className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-xs font-black text-white outline-none focus:border-[#FF0055]/50"
+                  >
+                    <option value="compact">Compact</option>
+                    <option value="normal">Normal</option>
+                    <option value="relaxed">Relaxed</option>
+                  </select>
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Description</span>
+                  <select
+                    value={section.settings.show_description === false ? "hide" : "show"}
+                    onChange={(event) => updateSettings(section.slug, { show_description: event.target.value === "show" })}
+                    className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-xs font-black text-white outline-none focus:border-[#FF0055]/50"
+                  >
+                    <option value="show">Show</option>
+                    <option value="hide">Hide</option>
+                  </select>
+                </label>
+
+                {section.section_type === "quick_access" ? (
+                  <>
+                    <label className="space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Mobile Layout</span>
+                      <select
+                        value={section.settings.quick_access_mobile || "quick_grid"}
+                        onChange={(event) =>
+                          updateSettings(section.slug, {
+                            quick_access_mobile: event.target.value as NonNullable<HomeLayoutSection["settings"]["quick_access_mobile"]>,
+                          })
+                        }
+                        className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-xs font-black text-white outline-none focus:border-[#FF0055]/50"
+                      >
+                        <option value="quick_grid">Quick Grid</option>
+                        <option value="feature_card">Feature Card</option>
+                      </select>
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Hero Banner</span>
+                      <select
+                        value={section.settings.show_hero === false ? "hide" : "show"}
+                        onChange={(event) => updateSettings(section.slug, { show_hero: event.target.value === "show" })}
+                        className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-xs font-black text-white outline-none focus:border-[#FF0055]/50"
+                      >
+                        <option value="show">Show</option>
+                        <option value="hide">Hide</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
               </div>
             </article>
           ))}

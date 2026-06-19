@@ -28,6 +28,9 @@ type HomeHeroMosaicProps = {
   playlistTracks: TrackMap;
   albumTracks: TrackMap;
   isSignedIn: boolean;
+  quickAccessMaxItems?: number;
+  mobileLayout?: "quick_grid" | "feature_card";
+  showHeroBanner?: boolean;
 };
 
 const albumArtist = (album: Album) => album.artists?.name || "Miracle FM";
@@ -224,22 +227,40 @@ function QuickArtwork({ item }: { item: QuickAccessItem }) {
   );
 }
 
-function DesktopDiscoveryGrid({ items }: { items: QuickAccessItem[] }) {
+function QuickAccessCard({ item, compact = false }: { item: QuickAccessItem; compact?: boolean }) {
+  return (
+    <article className="group grid min-w-0 grid-cols-[56px_minmax(0,1fr)] items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] p-1.5 transition-colors active:bg-white/[0.08] md:hover:border-[#FF0055]/30 md:hover:bg-white/[0.075]">
+      <Link href={item.href} className="relative h-14 w-14 overflow-hidden rounded-md bg-zinc-900">
+        <QuickArtwork item={item} />
+      </Link>
+      <Link href={item.href} className="min-w-0">
+        <p className="line-clamp-2 text-sm font-black leading-4 text-white transition-colors md:group-hover:text-[#FF4D89]">{item.title}</p>
+        {!compact ? <p className="mt-1 line-clamp-1 text-[10px] font-bold text-zinc-500">{item.subtitle}</p> : null}
+      </Link>
+    </article>
+  );
+}
+
+function MobileDiscoveryGrid({ items, maxItems }: { items: QuickAccessItem[]; maxItems: number }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="md:hidden">
+      <div className="grid grid-cols-2 gap-2">
+        {items.slice(0, maxItems).map((item) => (
+          <QuickAccessCard key={item.id} item={item} compact />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DesktopDiscoveryGrid({ items, maxItems }: { items: QuickAccessItem[]; maxItems: number }) {
   return (
     <div className="hidden xl:block">
       <div className="grid grid-cols-3 gap-2 2xl:grid-cols-4">
-        {items.slice(0, 8).map((item) => (
-          <article
-            key={item.id}
-            className="group grid min-w-0 grid-cols-[56px_minmax(0,1fr)] items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] p-1.5 transition-colors hover:border-[#FF0055]/30 hover:bg-white/[0.075]"
-          >
-            <Link href={item.href} className="relative h-14 w-14 overflow-hidden rounded-md bg-zinc-900">
-              <QuickArtwork item={item} />
-            </Link>
-            <Link href={item.href} className="min-w-0">
-              <p className="line-clamp-2 text-sm font-black leading-4 text-white transition-colors group-hover:text-[#FF4D89]">{item.title}</p>
-            </Link>
-          </article>
+        {items.slice(0, maxItems).map((item) => (
+          <QuickAccessCard key={item.id} item={item} compact />
         ))}
       </div>
     </div>
@@ -289,6 +310,9 @@ export default function HomeHeroMosaic({
   playlistTracks,
   albumTracks,
   isSignedIn,
+  quickAccessMaxItems = 8,
+  mobileLayout = "quick_grid",
+  showHeroBanner = true,
 }: HomeHeroMosaicProps) {
   const firstGenerated = recommendationPlaylists.find((playlist) => playlist.tracks.length > 0);
   const firstPlaylist = playlists[0];
@@ -368,16 +392,21 @@ export default function HomeHeroMosaic({
 
   return (
     <section className="px-4 md:px-8">
-      <DesktopDiscoveryGrid items={quickItems} />
+      <DesktopDiscoveryGrid items={quickItems} maxItems={quickAccessMaxItems} />
       <div className="grid grid-cols-1 items-stretch gap-4 md:gap-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(320px,0.8fr)] xl:hidden">
+        {showHeroBanner ? (
+          <div className="w-full active:scale-[0.98] transition-transform duration-300 md:active:scale-100">
+            {banners.length > 0 ? (
+              <HeroSection banners={banners} />
+            ) : (
+              <HeroFallback playlist={firstPlaylist} album={firstAlbum} mix={firstGenerated} tracks={chartTracks} />
+            )}
+          </div>
+        ) : null}
         <div className="w-full active:scale-[0.98] transition-transform duration-300 md:active:scale-100">
-          {banners.length > 0 ? (
-            <HeroSection banners={banners} />
-          ) : (
-            <HeroFallback playlist={firstPlaylist} album={firstAlbum} mix={firstGenerated} tracks={chartTracks} />
-          )}
+          {mobileLayout === "quick_grid" ? <MobileDiscoveryGrid items={quickItems} maxItems={quickAccessMaxItems} /> : null}
+          <div className={mobileLayout === "quick_grid" ? "hidden md:block" : ""}>{sideFeature}</div>
         </div>
-        <div className="w-full active:scale-[0.98] transition-transform duration-300 md:active:scale-100">{sideFeature}</div>
       </div>
     </section>
   );

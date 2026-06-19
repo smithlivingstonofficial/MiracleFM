@@ -14,6 +14,11 @@ export type HomeLayoutSettings = {
   max_items?: number;
   source?: "trending" | "new" | "related";
   variant?: "feed" | "banner";
+  visibility?: "all" | "mobile" | "desktop";
+  spacing?: "compact" | "normal" | "relaxed";
+  show_description?: boolean;
+  quick_access_mobile?: "quick_grid" | "feature_card";
+  show_hero?: boolean;
 };
 
 export type HomeLayoutSection = {
@@ -46,7 +51,7 @@ export const DEFAULT_HOME_LAYOUT_SECTIONS: HomeLayoutSection[] = [
     section_type: "quick_access",
     enabled: true,
     sort_order: 10,
-    settings: { max_items: 6 },
+    settings: { max_items: 8, quick_access_mobile: "quick_grid", show_hero: true },
   },
   {
     slug: "recommendation-mixes",
@@ -148,6 +153,11 @@ const normalizeSettings = (settings: unknown): HomeLayoutSettings => {
   if (Number.isFinite(raw.max_items)) normalized.max_items = Number(raw.max_items);
   if (raw.source === "trending" || raw.source === "new" || raw.source === "related") normalized.source = raw.source;
   if (raw.variant === "feed" || raw.variant === "banner") normalized.variant = raw.variant;
+  if (raw.visibility === "all" || raw.visibility === "mobile" || raw.visibility === "desktop") normalized.visibility = raw.visibility;
+  if (raw.spacing === "compact" || raw.spacing === "normal" || raw.spacing === "relaxed") normalized.spacing = raw.spacing;
+  if (typeof raw.show_description === "boolean") normalized.show_description = raw.show_description;
+  if (raw.quick_access_mobile === "quick_grid" || raw.quick_access_mobile === "feature_card") normalized.quick_access_mobile = raw.quick_access_mobile;
+  if (typeof raw.show_hero === "boolean") normalized.show_hero = raw.show_hero;
 
   return normalized;
 };
