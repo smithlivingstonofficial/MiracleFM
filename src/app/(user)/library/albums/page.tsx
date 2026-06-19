@@ -65,25 +65,25 @@ export default function SavedAlbumsPage() {
   }, [router, supabase]);
 
   return (
-    <div className="min-h-screen bg-[#050505] px-4 py-8 pb-40 text-white md:px-10">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <div className="min-h-screen bg-[#050505] px-4 py-6 pb-40 text-white md:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#FF0055]">
             <Bookmark size={12} /> Saved Collection
           </div>
-          <h1 className="text-4xl font-black tracking-tighter md:text-6xl">Saved Albums</h1>
+          <h1 className="text-3xl font-black tracking-tighter md:text-5xl">Saved Albums</h1>
         </div>
 
         {loading ? (
           <CardGridSkeleton cards={8} />
         ) : albums.length > 0 ? (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 md:gap-x-5 md:gap-y-8">
             {albums.map((album, index) => (
               <Fragment key={album.id}>
                 {albums.length >= 10 && index === 8 && <ResponsiveAd variant="grid" />}
 
               <Link href={`/album/${album.id}`} className="group active:scale-95">
-                <div className="relative aspect-square overflow-hidden rounded-[1.5rem] border border-white/5 bg-zinc-900">
+                <div className="relative aspect-square overflow-hidden rounded-lg border border-white/5 bg-zinc-900">
                   {album.cover_url ? (
                     <Image src={album.cover_url} alt={album.title} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
                   ) : (
@@ -92,7 +92,7 @@ export default function SavedAlbumsPage() {
                     </div>
                   )}
                 </div>
-                <h2 className="mt-3 truncate text-sm font-black text-white">{album.title}</h2>
+                <h2 className="mt-2 truncate text-sm font-black text-white">{album.title}</h2>
                 <p className="truncate text-xs font-bold text-zinc-500">{album.artists?.name}</p>
               </Link>
               </Fragment>

@@ -37,28 +37,28 @@ export default async function LibraryPage() {
     <div className="min-h-screen pb-32 bg-black relative overflow-hidden">
       
       {/* Background Ambient Glow */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#FF0055]/10 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-[#16080d] via-black/70 to-black pointer-events-none" />
 
-      <div className="p-6 md:p-12 max-w-7xl mx-auto space-y-12">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
         
         {/* 1. The "Vault Card" Header */}
-        <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-zinc-900 via-black to-zinc-950 border border-white/10 shadow-2xl p-8 md:p-12">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-black to-zinc-950 border border-white/10 shadow-2xl p-4 md:p-6">
           <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
           
-          <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-8 md:gap-12">
+          <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-7">
             
             {/* Unique 3D-Style Icon Container */}
-            <div className="w-40 h-40 md:w-56 md:h-56 bg-black rounded-full border-[6px] border-[#FF0055] shadow-[0_0_60px_rgba(255,0,85,0.3)] flex items-center justify-center shrink-0 relative group">
-              <Heart size={80} className="text-[#FF0055] fill-[#FF0055] animate-in zoom-in duration-700" />
+            <div className="w-32 h-32 md:w-48 md:h-48 bg-black rounded-full border-[4px] border-[#FF0055] shadow-[0_0_36px_rgba(255,0,85,0.22)] flex items-center justify-center shrink-0 relative group">
+              <Heart size={58} className="text-[#FF0055] fill-[#FF0055] animate-in zoom-in duration-700 md:h-20 md:w-20" />
               <div className="absolute inset-0 rounded-full border border-white/10" />
             </div>
 
-            <div className="flex-1 text-center md:text-left space-y-4">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#FF0055]/10 border border-[#FF0055]/20 text-[#FF0055] text-xs font-black uppercase tracking-widest">
+            <div className="flex-1 text-center md:text-left space-y-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FF0055]/10 border border-[#FF0055]/20 text-[#FF0055] text-[10px] font-black uppercase tracking-widest">
                 <ShieldCheck size={12} /> Personal Vault
               </div>
               
-              <h1 className="text-5xl md:text-8xl font-black text-white tracking-tighter leading-none">
+              <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter leading-none">
                 Liked <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">Songs</span>
               </h1>
               
@@ -89,7 +89,7 @@ export default async function LibraryPage() {
 
             {/* Smart Play Button (New Component) */}
             <div className="shrink-0">
-              <CollectionPlayButton tracks={tracks} />
+              <CollectionPlayButton tracks={tracks} size="default" />
             </div>
           </div>
         </div>

@@ -67,13 +67,12 @@ export default function ResponsiveAd({ variant = "feed", className }: Responsive
     >
       <div
         className={cn(
-          "relative overflow-hidden border border-white/10 bg-white/[0.035] shadow-[0_16px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl",
-          isCompact ? "rounded-[1.5rem] p-3" : "rounded-[1.75rem] p-3 md:p-4"
+          "relative overflow-hidden border border-white/10 bg-white/[0.028] shadow-[0_12px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl",
+          isCompact ? "rounded-xl p-2.5" : "rounded-2xl p-2.5 md:p-3"
         )}
       >
-        <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-[#FF0055]/10 blur-3xl" />
-        <div className="mb-3 flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-3 py-1 text-[9px] font-black uppercase tracking-[0.22em] text-zinc-500">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2.5 py-0.5 text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">
             <Sparkles size={10} className="text-[#FF0055]" />
             Sponsored
           </span>
@@ -84,10 +83,10 @@ export default function ResponsiveAd({ variant = "feed", className }: Responsive
           className={cn(
             "relative z-10 flex w-full items-center justify-center overflow-hidden rounded-2xl border border-white/5 bg-black/25",
             isCompact
-              ? "h-[250px]"
+              ? "h-[220px] md:h-[250px]"
               : isBanner
-                ? "h-[104px] sm:h-[112px] md:h-[132px]"
-                : "h-[210px] sm:h-[220px] md:h-[240px]"
+                ? "h-[76px] sm:h-[92px] md:h-[112px]"
+                : "h-[150px] sm:h-[180px] md:h-[220px]"
           )}
         >
           <ins

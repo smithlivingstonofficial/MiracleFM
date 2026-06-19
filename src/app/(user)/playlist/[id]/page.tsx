@@ -226,22 +226,22 @@ export default function PlaylistPage() {
   );
 
   return (
-    <div className="min-h-screen pb-32 bg-black relative overflow-hidden">
+    <div className="min-h-screen pb-32 bg-black relative overflow-hidden text-white">
       
       {/* Background Ambient Glow */}
-      <div className="absolute top-0 left-0 w-full h-[600px] bg-gradient-to-b from-indigo-900/20 via-black/50 to-black pointer-events-none" />
+      <div className="absolute top-0 left-0 w-full h-72 bg-gradient-to-b from-[#16080d] via-black/70 to-black pointer-events-none" />
 
-      <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-8">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
         
         {/* 1. Header Card */}
-        <div className="relative overflow-hidden rounded-[2.5rem] bg-zinc-900/40 border border-white/5 shadow-2xl p-6 md:p-10 mt-16 md:mt-0 group/card transition-colors hover:bg-zinc-900/60">
+        <div className="relative overflow-hidden rounded-2xl bg-zinc-900/35 border border-white/10 shadow-2xl p-4 md:p-6 mt-4 md:mt-0 group/card transition-colors hover:bg-zinc-900/55">
           
           <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-10 brightness-100 contrast-150 pointer-events-none"></div>
           
-          <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-8 md:gap-12">
+          <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-7">
             
             {/* Playlist Cover */}
-            <div className="relative w-52 h-52 md:w-64 md:h-64 shrink-0 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[2rem] overflow-hidden border border-white/5 group-hover/card:scale-105 transition-transform duration-700">
+            <div className="relative w-40 h-40 sm:w-48 sm:h-48 md:w-52 md:h-52 shrink-0 shadow-[0_18px_42px_rgba(0,0,0,0.42)] rounded-xl overflow-hidden border border-white/5 md:group-hover/card:scale-[1.02] transition-transform duration-500">
               <PlaylistCover 
                 playlistId={playlist.id} 
                 explicitCover={playlist.cover_url} 
@@ -250,8 +250,8 @@ export default function PlaylistPage() {
             </div>
 
             {/* Metadata Info */}
-            <div className="flex-1 text-center md:text-left space-y-4 w-full min-w-0">
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-black uppercase tracking-widest backdrop-blur-md">
+            <div className="flex-1 text-center md:text-left space-y-3 w-full min-w-0">
+              <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/5 border border-white/5 text-zinc-400 text-[9px] font-black uppercase tracking-widest backdrop-blur-md">
                 {isOwner ? "Personal Playlist" : "Editorial Pick"}
               </span>
               
@@ -264,14 +264,14 @@ export default function PlaylistPage() {
                       value={tempTitle}
                       onChange={(e) => setTempTitle(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      className="w-full bg-black/50 text-4xl md:text-7xl font-black text-white outline-none border-b-2 border-[#FF0055] pb-2 placeholder:text-zinc-700"
+                    className="w-full bg-black/50 text-3xl md:text-5xl font-black text-white outline-none border-b-2 border-[#FF0055] pb-2 placeholder:text-zinc-700"
                       placeholder="Playlist Name"
                     />
                     <div className="flex gap-2">
-                      <button onClick={savePlaylistDetails} className="p-3 bg-[#FF0055] rounded-full text-white hover:scale-110 transition shadow-lg">
+                      <button onClick={savePlaylistDetails} className="p-2.5 bg-[#FF0055] rounded-full text-white hover:scale-110 transition shadow-lg">
                         <Check size={20} strokeWidth={3} />
                       </button>
-                      <button onClick={() => { setIsEditing(false); setTempTitle(playlist.title); setTempDescription(playlist.description || ""); setTempIsPublic(Boolean(playlist.is_public)); }} className="p-3 bg-zinc-800 rounded-full text-white hover:bg-zinc-700 transition">
+                      <button onClick={() => { setIsEditing(false); setTempTitle(playlist.title); setTempDescription(playlist.description || ""); setTempIsPublic(Boolean(playlist.is_public)); }} className="p-2.5 bg-zinc-800 rounded-full text-white hover:bg-zinc-700 transition">
                         <X size={20} />
                       </button>
                     </div>
@@ -284,12 +284,12 @@ export default function PlaylistPage() {
                       !isOwner && "cursor-default"
                     )}
                   >
-                    <h1 className="text-4xl md:text-6xl lg:text-8xl font-black text-white tracking-tighter leading-none drop-shadow-xl truncate py-1 border-b-2 border-transparent group-hover/text:border-white/10 transition-all">
+                    <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter leading-[1.02] drop-shadow-xl truncate py-1 border-b-2 border-transparent group-hover/text:border-white/10 transition-all">
                       {playlist.title}
                     </h1>
                     {isOwner && (
-                      <div className="p-3 rounded-full bg-white/5 text-zinc-400 opacity-100 md:opacity-0 group-hover/edit:opacity-100 transition-all hover:bg-white hover:text-black">
-                        <Edit3 size={24} />
+                      <div className="p-2.5 rounded-full bg-white/5 text-zinc-400 opacity-100 md:opacity-0 group-hover/edit:opacity-100 transition-all hover:bg-white hover:text-black">
+                        <Edit3 size={18} />
                       </div>
                     )}
                   </div>
@@ -302,7 +302,7 @@ export default function PlaylistPage() {
                     value={tempDescription}
                     onChange={(event) => setTempDescription(event.target.value)}
                     placeholder="Add a short playlist note"
-                    className="min-h-20 w-full resize-none rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-medium text-zinc-200 outline-none transition-colors focus:border-[#FF0055]/50"
+                    className="min-h-16 w-full resize-none rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-medium text-zinc-200 outline-none transition-colors focus:border-[#FF0055]/50"
                     maxLength={240}
                   />
                   <button
@@ -315,9 +315,9 @@ export default function PlaylistPage() {
                   </button>
                 </div>
               ) : (
-                <div className="mt-4 flex flex-col items-center gap-3 md:items-start">
+                <div className="mt-2 flex flex-col items-center gap-2 md:items-start">
                   {playlist.description && (
-                    <p className="max-w-2xl text-sm font-medium leading-6 text-zinc-400 md:text-base">
+                    <p className="max-w-2xl text-sm font-medium leading-5 text-zinc-400 line-clamp-2">
                       {playlist.description}
                     </p>
                   )}
@@ -328,7 +328,7 @@ export default function PlaylistPage() {
                 </div>
               )}
               
-              <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 pt-2 justify-center md:justify-start">
+              <div className="flex flex-col md:flex-row items-center gap-3 md:gap-5 pt-1 justify-center md:justify-start">
                 <div className="flex items-center gap-2 text-white/90">
                   <span className="text-[#FF0055] font-bold text-sm">Miracle FM</span>
                   <span className="w-1 h-1 bg-white/50 rounded-full" />
@@ -338,13 +338,13 @@ export default function PlaylistPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex flex-row md:flex-col items-center gap-4 shrink-0">
-              <CollectionPlayButton tracks={tracks} size="large" />
+            <div className="flex flex-row md:flex-col items-center gap-3 shrink-0">
+              <CollectionPlayButton tracks={tracks} size="default" />
               
               <div className="flex gap-2">
                 <button
                   onClick={handleShare}
-                  className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/5"
+                  className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/5"
                   aria-label="Share playlist"
                   title="Share playlist"
                 >
@@ -353,7 +353,7 @@ export default function PlaylistPage() {
                 {isOwner && (
                   <button 
                     onClick={() => setIsDeleteModalOpen(true)}
-                    className="p-3 rounded-full bg-white/5 hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-colors border border-white/5"
+                    className="p-2.5 rounded-full bg-white/5 hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-colors border border-white/5"
                     title="Delete Playlist"
                   >
                     <Trash2 size={18} />
@@ -366,7 +366,7 @@ export default function PlaylistPage() {
         </div>
 
         {/* 2. Track List */}
-        <div className="space-y-4 px-2">
+        <div className="space-y-3 px-0 md:px-2">
           {tracks.length > 0 && (
             <div className="hidden md:flex items-center gap-4 px-4 pb-2 border-b border-white/10 text-zinc-500 text-[10px] font-black uppercase tracking-widest">
               <div className="w-8 text-center">#</div>

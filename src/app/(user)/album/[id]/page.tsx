@@ -124,7 +124,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
       
       {/* --- 1. IMMERSIVE COMPACT HERO --- */}
       {/* Reduced height on mobile to bring content up */}
-      <div className="relative w-full pt-10 md:pt-32 pb-6 md:pb-12 flex flex-col items-center md:items-start justify-end px-6 md:px-12">
+      <div className="relative w-full pt-6 md:pt-20 pb-4 md:pb-7 flex flex-col items-center md:items-start justify-end px-4 md:px-8">
         
         {/* Cinematic Background Blur (Stronger on Mobile) */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
@@ -137,7 +137,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
                 className="object-cover opacity-60 blur-[60px] md:blur-[80px] scale-150 saturate-150 mask-gradient" 
                 priority 
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/40 via-[#050505]/80 to-[#050505]" />
+              <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/55 via-[#050505]/86 to-[#050505]" />
             </div>
           ) : (
             <div className="w-full h-full bg-gradient-to-b from-zinc-800 to-[#050505]" />
@@ -145,10 +145,10 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Content Container */}
-        <div className="relative z-10 w-full flex flex-col items-center gap-6 md:flex-row md:items-end md:gap-10">
+        <div className="relative z-10 w-full flex flex-col items-center gap-4 md:flex-row md:items-end md:gap-7">
           
           {/* BIGGER ALBUM ART FOR MOBILE */}
-          <div className="relative w-[70vw] aspect-square max-w-[280px] md:w-64 md:h-64 rounded-2xl md:rounded-[2rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6)] overflow-hidden border border-white/10 group shrink-0 animate-in zoom-in duration-700">
+          <div className="relative w-44 aspect-square sm:w-52 md:w-56 rounded-xl md:rounded-2xl shadow-[0_18px_42px_-14px_rgba(0,0,0,0.7)] overflow-hidden border border-white/10 group shrink-0 animate-in zoom-in duration-700">
              {album.cover_url ? (
                <Image 
                  src={album.cover_url} 
@@ -165,7 +165,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* Album Metadata */}
-          <div className="text-center md:text-left flex-1 space-y-3 w-full">
+          <div className="text-center md:text-left flex-1 space-y-2.5 w-full min-w-0">
             
             {/* Title & Badge */}
             <div className="flex flex-col items-center md:items-start gap-2">
@@ -173,13 +173,13 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
                     <Disc size={10} className="fill-current" /> Album
                 </div>
                 
-                <h1 className="text-3xl md:text-5xl lg:text-7xl font-black tracking-tighter leading-[1.1] drop-shadow-2xl line-clamp-2 px-2 md:px-0">
+                <h1 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tighter leading-[1.04] drop-shadow-2xl line-clamp-2 px-2 md:px-0">
                 {album.title}
                 </h1>
             </div>
             
             {/* Artist Chip & Stats */}
-            <div className="flex flex-col items-center md:items-start gap-3 md:gap-4">
+            <div className="flex flex-col items-center md:items-start gap-2.5 md:gap-3">
                {/* Artist Link */}
                <Link href={`/artist/${album.artists?.id}`} className="group flex items-center gap-2 bg-[#0A0A0A]/60 hover:bg-white/10 pr-4 pl-1 py-1 rounded-full border border-white/5 transition-all active:scale-95 backdrop-blur-md">
                   <div className="w-6 h-6 md:w-8 md:h-8 rounded-full overflow-hidden relative bg-zinc-800 border border-white/10">
@@ -204,32 +204,32 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* --- 2. ACTION BAR (Tight Cluster) --- */}
-      <div className="relative z-20 px-6 md:px-12 mb-8">
-        <div className="flex flex-row items-center justify-center md:justify-start gap-4 md:gap-6">
+      <div className="relative z-20 px-4 md:px-8 mb-5 md:mb-7">
+        <div className="flex flex-row items-center justify-center md:justify-start gap-3 md:gap-4">
           
           {/* Main Play Button - Pulsing */}
           <div className="relative group active:scale-95 transition-transform duration-300">
              <div className="absolute inset-0 bg-[#FF0055] rounded-full blur-md opacity-40 animate-pulse" />
              <div className="relative shadow-[0_0_20px_rgba(255,0,85,0.3)] rounded-full bg-[#FF0055]">
-                <CollectionPlayButton tracks={tracks || []} size="large" />
+                <CollectionPlayButton tracks={tracks || []} size="default" />
              </div>
           </div>
           
           {/* Secondary Actions Row */}
-          <div className="flex items-center gap-3">
-             <SaveAlbumButton albumId={id} />
+          <div className="flex items-center gap-2.5">
+             <SaveAlbumButton albumId={id} className="h-10 px-4" />
 
              <div className="active:scale-90 transition-transform">
                 <StartRadio genres={genres} label={false} />
              </div>
              
-             <ShareButton title={album.title} className="h-12 w-12 backdrop-blur-md" iconSize={22} label="Share album" />
+             <ShareButton title={album.title} className="h-10 w-10 backdrop-blur-md" iconSize={18} label="Share album" />
           </div>
 
         </div>
       </div>
 
-      <div className="px-0 md:px-12 space-y-8 relative z-10">
+      <div className="px-0 md:px-8 space-y-6 relative z-10">
         
         {/* --- 3. TRACK LIST (Full Bleed on Mobile) --- */}
         <div className="space-y-0.5 md:space-y-1">
@@ -261,7 +261,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
               Released on {new Date(album.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
            </p>
            <p className="text-[9px] md:text-[10px] text-rose-600 font-black uppercase tracking-widest">
-              © {releaseYear} {album.artists?.name}. All Rights Reserved.
+              (c) {releaseYear} {album.artists?.name}. All Rights Reserved.
            </p>
         </div>
 

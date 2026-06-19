@@ -23,27 +23,25 @@ export default async function AllAlbumsPage() {
     <div className="relative min-h-screen w-full bg-[#050505] text-zinc-100 pb-40 overflow-x-hidden selection:bg-[#FF0055] selection:text-white">
       
       {/* Background Atmosphere */}
-      <div className="absolute top-0 inset-x-0 h-[400px] bg-gradient-to-b from-[#1a0b10] via-[#050505]/90 to-[#050505] -z-10" />
-      <div className="absolute top-[-100px] right-[-100px] w-[300px] h-[300px] bg-[#FF0055]/10 rounded-full blur-[120px] pointer-events-none -z-10" />
-      <div className="absolute top-[20%] left-[-10%] w-[400px] h-[400px] bg-indigo-900/10 rounded-full blur-[120px] pointer-events-none -z-10" />
+      <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-[#16080d] via-[#050505]/90 to-[#050505] -z-10" />
 
-      <div className="px-4 md:px-12 mt-8 md:mt-12 space-y-12">
+      <div className="px-4 md:px-8 mt-6 md:mt-8 space-y-7 md:space-y-9">
         
         {/* Page Title Section */}
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-6 border-b border-white/5 pb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b border-white/5 pb-5 animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Sparkles size={14} className="text-[#FF0055] animate-pulse" />
               <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Full Library</span>
             </div>
-            <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter leading-none">
+            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter leading-none">
               All Albums
             </h1>
           </div>
 
           <Link 
             href="/search" 
-            className="group w-full md:w-auto flex items-center justify-center gap-3 px-6 py-3.5 rounded-full bg-zinc-900/50 border border-white/10 hover:border-[#FF0055]/50 hover:bg-zinc-900 transition-all active:scale-95"
+            className="group w-full md:w-auto flex items-center justify-center gap-3 px-5 py-3 rounded-full bg-zinc-900/50 border border-white/10 hover:border-[#FF0055]/50 hover:bg-zinc-900 transition-all active:scale-95"
           >
             <Search size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
             <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest">Search Albums</span>
@@ -53,7 +51,7 @@ export default async function AllAlbumsPage() {
         <ResponsiveAd variant="banner" className="px-0" />
 
         {/* Albums Grid with Embedded Ads */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-8 md:gap-x-8 md:gap-y-12">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-x-5 md:gap-y-8">
           {albums.map((album, i) => (
             <React.Fragment key={album.id}>
               
@@ -68,7 +66,7 @@ export default async function AllAlbumsPage() {
                 style={{ animationDelay: `${i * 50}ms`, animationDuration: '700ms' }}
               >
                 {/* Premium Card Container */}
-                <div className="aspect-square relative rounded-[1.5rem] md:rounded-[2.5rem] overflow-hidden bg-zinc-900 shadow-xl border border-white/5 transition-all duration-500 group-hover:border-[#FF0055]/40 group-hover:shadow-[0_10px_40px_-10px_rgba(255,0,85,0.3)] group-hover:-translate-y-2">
+                <div className="aspect-square relative rounded-lg overflow-hidden bg-zinc-900 shadow-xl border border-white/5 transition-all duration-300 md:group-hover:border-[#FF0055]/35 md:group-hover:shadow-[0_10px_32px_-12px_rgba(255,0,85,0.28)] md:group-hover:-translate-y-1">
                   
                   {album.cover_url ? (
                     <Image 
@@ -93,12 +91,12 @@ export default async function AllAlbumsPage() {
                   </div>
                 </div>
                 
-                <div className="mt-4 px-2">
-                  <h3 className="font-bold text-white truncate text-sm md:text-lg group-hover:text-[#FF0055] transition-colors">
+                <div className="mt-2 px-1">
+                  <h3 className="font-bold text-white truncate text-sm md:text-base group-hover:text-[#FF0055] transition-colors">
                     {album.title}
                   </h3>
                   <div className="flex items-center gap-2 mt-1">
-                    <p className="text-xs text-zinc-500 font-bold truncate group-hover:text-zinc-300 transition-colors">
+                    <p className="text-[11px] text-zinc-500 font-bold truncate group-hover:text-zinc-300 transition-colors">
                       {album.artists?.name}
                     </p>
                     <span className="hidden md:inline-block w-1 h-1 bg-zinc-700 rounded-full" />
