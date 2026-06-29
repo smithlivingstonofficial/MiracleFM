@@ -17,6 +17,7 @@ type FeaturedCollectionShelfProps = {
   description?: string;
   viewAllHref?: string;
   maxItems?: number;
+  hideHeader?: boolean;
 };
 
 type FeaturedItem =
@@ -151,43 +152,53 @@ export default function FeaturedCollectionShelf(props: FeaturedCollectionShelfPr
 
   return (
     <section className="px-4 md:px-8">
-      <div className="mb-5 flex items-end justify-between gap-4 md:mb-6">
-        <div className="min-w-0">
-          <h2 className="truncate text-2xl font-black tracking-tight text-white md:text-3xl">{title}</h2>
-          {description ? <p className="mt-1 line-clamp-1 text-sm font-medium text-zinc-500">{description}</p> : null}
+      {!props.hideHeader && (
+        <div className="mb-4 flex items-end justify-between gap-4 md:mb-5">
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-black tracking-tight text-white md:text-2xl">{title}</h2>
+            {description ? <p className="mt-0.5 line-clamp-1 text-xs font-medium text-zinc-500">{description}</p> : null}
+          </div>
+          <Link href={viewAllHref} className="flex shrink-0 items-center gap-1 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-400 transition-colors active:text-white md:hover:text-white">
+            View All <ChevronRight size={14} />
+          </Link>
         </div>
-        <Link href={viewAllHref} className="flex shrink-0 items-center gap-1 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-400 transition-colors active:text-white md:hover:text-white">
-          View All <ChevronRight size={14} />
-        </Link>
-      </div>
+      )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-6">
-        {items.map((item) => (
-          <article key={item.id} className="group min-w-0 transition-transform duration-300 active:scale-95 md:active:scale-100">
-            <div className="relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-[0_14px_34px_rgba(0,0,0,0.22)] transition-all duration-300 md:group-hover:-translate-y-1 md:group-hover:border-[#FF0055]/30 md:group-hover:shadow-[0_10px_30px_rgba(255,0,85,0.12)]">
-              <Link href={item.href} className="absolute inset-0 z-0">
-                <ItemArtwork item={item} />
-              </Link>
+      <div
+        className="relative -mx-4 md:-mx-8"
+        style={{ WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 40px), transparent 100%)" }}
+      >
+        <div className="flex snap-x snap-mandatory gap-3.5 overflow-x-auto px-4 pb-4 pt-0.5 scrollbar-hide md:gap-4.5 md:px-8">
+          {items.map((item) => (
+            <article key={item.id} className="group w-[168px] min-w-[168px] snap-start transition-transform duration-300 active:scale-95 md:w-[192px] md:min-w-[192px] md:active:scale-100">
+              <div className="relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-zinc-900 shadow-[0_14px_34px_rgba(0,0,0,0.22)] transition-all duration-300 md:group-hover:-translate-y-1 md:group-hover:border-[#FF0055]/30 md:group-hover:shadow-[0_10px_30px_rgba(255,0,85,0.12)]">
+                <Link href={item.href} className="absolute inset-0 z-0">
+                  <ItemArtwork item={item} />
+                </Link>
 
-              <div className="absolute inset-0 hidden bg-black/40 opacity-0 backdrop-blur-[2px] transition-opacity duration-300 md:block md:group-hover:opacity-100" />
-              <div className="absolute inset-0 hidden translate-y-4 items-center justify-center opacity-0 transition-all duration-500 md:flex md:group-hover:translate-y-0 md:group-hover:opacity-100">
-                <CollectionPlayButton tracks={item.tracks} size="default" />
+                <div className="absolute inset-0 hidden bg-black/40 opacity-0 backdrop-blur-[2px] transition-opacity duration-300 md:block md:group-hover:opacity-100" />
+                <div className="absolute inset-0 hidden translate-y-4 items-center justify-center opacity-0 transition-all duration-500 md:flex md:group-hover:translate-y-0 md:group-hover:opacity-100">
+                  <CollectionPlayButton tracks={item.tracks} size="default" />
+                </div>
+
+                <div className="absolute bottom-2.5 right-2.5 rounded-md border border-white/10 bg-black/60 px-2 py-0.5 backdrop-blur-md">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-white">
+                    {item.tracks.length > 0 ? `${item.tracks.length} Songs` : item.kind}
+                  </span>
+                </div>
               </div>
 
-              <div className="absolute bottom-3 right-3 rounded-md border border-white/10 bg-black/60 px-2 py-1 backdrop-blur-md">
-                <span className="text-[10px] font-black uppercase tracking-widest text-white">
-                  {item.tracks.length > 0 ? `${item.tracks.length} Songs` : item.kind}
-                </span>
+              <div className="px-1 pt-2.5">
+                <Link href={item.href} className="block truncate text-xs font-bold text-zinc-100 transition-colors md:text-sm md:group-hover:text-[#FF0055]">
+                  {item.title}
+                </Link>
+                {item.subtitle && (
+                  <p className="mt-0.5 truncate text-[11px] font-medium text-zinc-500">{item.subtitle}</p>
+                )}
               </div>
-            </div>
-
-            <div className="px-1 pt-2">
-              <Link href={item.href} className="block truncate text-sm font-bold text-zinc-100 transition-colors md:text-base md:group-hover:text-[#FF0055]">
-                {item.title}
-              </Link>
-            </div>
-          </article>
-        ))}
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );

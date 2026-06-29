@@ -1,6 +1,9 @@
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAnonClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
+import Image from "next/image";
+import Link from "next/link";
+import { ChevronRight, Music4 } from "lucide-react";
 
 import HomeHeroMosaic from "@/components/user/home/HomeHeroMosaic";
 import FeaturedCollectionShelf from "@/components/user/home/FeaturedCollectionShelf";
@@ -14,7 +17,7 @@ import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { getRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
 import { getHomeLayoutSections, type HomeLayoutSection } from "@/lib/home-layout";
 import { cn } from "@/lib/utils";
-import type { Playlist, Track } from "@/types/music";
+import type { Album, Artist, Playlist, Track } from "@/types/music";
 
 type TrackMap = Record<string, Track[]>;
 type PlaylistTrackRow = {
@@ -44,7 +47,7 @@ const sectionSpacingClass = (section: HomeLayoutSection) => {
   return "mb-10 md:mb-12";
 };
 
-// We force the page to be dynamic so user auth works, 
+// We force the page to be dynamic so user auth works,
 // but we cache the heavy database queries below.
 export const dynamic = "force-dynamic";
 
@@ -58,7 +61,7 @@ const getCachedPublicData = unstable_cache(
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const [playlistsRes, artistsRes, albumsRes, newTracksRes, engagementStatsRes] = await Promise.all([
+    const [playlistsRes, artistsRes, albumsRes, newTracksRes, engagementStatsRes, genresRes] = await Promise.all([
       supabaseAnon.from("playlists").select("*").is("user_id", null).limit(6),
       supabaseAnon.from("artists").select("*").limit(12),
       supabaseAnon.from("albums").select("*, artists(id, name, image_url)").order("created_at", { ascending: false }).limit(10),
@@ -73,6 +76,7 @@ const getCachedPublicData = unstable_cache(
         .select("track_id, engagement_score, recent_7d_listens, qualified_listens")
         .order("engagement_score", { ascending: false })
         .limit(24),
+      supabaseAnon.from("genres").select("name, slug").eq("is_active", true).order("sort_order"),
     ]);
 
     let popularTracks: Track[] = [];
@@ -105,8 +109,9 @@ const getCachedPublicData = unstable_cache(
 
     const playlistIds = (playlistsRes.data || []).map((playlist) => playlist.id).filter(Boolean);
     const albumIds = (albumsRes.data || []).map((album) => album.id).filter(Boolean);
+    const artistIds = (artistsRes.data || []).map((artist) => artist.id).filter(Boolean);
 
-    const [playlistTracksRes, albumTracksRes] = await Promise.all([
+    const [playlistTracksRes, albumTracksRes, artistTracksRes] = await Promise.all([
       playlistIds.length > 0
         ? supabaseAnon
             .from("playlist_tracks")
@@ -118,53 +123,78 @@ const getCachedPublicData = unstable_cache(
         ? supabaseAnon
             .from("tracks")
             .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-            .eq("audio_status", "ready")
             .in("album_id", albumIds)
+            .order("created_at", { ascending: true })
+        : Promise.resolve({ data: [] }),
+      artistIds.length > 0
+        ? supabaseAnon
+            .from("tracks")
+            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+            .in("artist_id", artistIds)
             .order("created_at", { ascending: true })
         : Promise.resolve({ data: [] }),
     ]);
 
     const playlistTracks = ((playlistTracksRes.data || []) as PlaylistTrackRow[]).reduce<TrackMap>((acc, row) => {
       const track = Array.isArray(row.tracks) ? row.tracks[0] : row.tracks;
-      if (!track || track.audio_status !== "ready") return acc;
+      if (!track || (track.audio_status && track.audio_status !== "ready")) return acc;
       acc[row.playlist_id] = [...(acc[row.playlist_id] || []), track];
       return acc;
     }, {});
 
     const albumTracks = ((albumTracksRes.data || []) as TrackWithRelations[]).reduce<TrackMap>((acc, track) => {
-      const albumId = track.album_id;
-      if (!albumId || track.audio_status !== "ready") return acc;
+      const albumId = track.album_id || track.albums?.id;
+      if (!albumId) return acc;
+      if (track.audio_status && track.audio_status !== "ready") return acc;
       acc[albumId] = [...(acc[albumId] || []), track];
       return acc;
     }, {});
 
-    const artistTracks = [
-      ...((trendingTracks || []) as TrackWithRelations[]),
-      ...((popularTracks || []) as TrackWithRelations[]),
-      ...((newTracksRes.data || []) as TrackWithRelations[]),
-      ...(Object.values(albumTracks).flat() as TrackWithRelations[]),
-    ].reduce<TrackMap>((acc, track) => {
+    const artistTracks = ((artistTracksRes.data || []) as TrackWithRelations[]).reduce<TrackMap>((acc, track) => {
       const artistId = track.artist_id || track.artists?.id;
-      if (!artistId || track.audio_status !== "ready") return acc;
+      if (!artistId) return acc;
+      if (track.audio_status && track.audio_status !== "ready") return acc;
       if (acc[artistId]?.some((existing) => existing.id === track.id)) return acc;
       acc[artistId] = [...(acc[artistId] || []), track];
       return acc;
     }, {});
 
+    // Build genre shelf: pair active genres with sample cover images from tracks
+    const activeGenres = (genresRes.data || []) as { name: string; slug: string }[];
+    const allReadyTracks = [
+      ...(newTracksRes.data || []),
+      ...(Object.values(albumTracks).flat()),
+    ] as (Track & { genre?: string[] | null })[];
+
+    const genreShelfItems: { name: string; slug: string; trackCount: number; coverImages: string[] }[] = activeGenres.map((genre) => {
+      const matchingTracks = allReadyTracks.filter((t) =>
+        (t.genre || []).some((g: string) => g.toLowerCase() === genre.name.toLowerCase())
+      );
+      const coverImages = Array.from(
+        new Set(
+          matchingTracks
+            .map((t) => t.cover_url || t.albums?.cover_url)
+            .filter((url): url is string => Boolean(url))
+        )
+      ).slice(0, 4);
+      return { name: genre.name, slug: genre.slug, trackCount: matchingTracks.length, coverImages };
+    }).filter((g) => g.trackCount > 0);
+
     return {
-      playlists: playlistsRes.data ||[],
+      playlists: playlistsRes.data || [],
       artists: artistsRes.data || [],
-      albums: albumsRes.data ||[],
+      albums: albumsRes.data || [],
       newTracks: newTracksRes.data || [],
       popularTracks,
       trendingTracks,
       playlistTracks,
       albumTracks,
       artistTracks,
+      genreShelfItems,
     };
   },
-  ['home-page-public-data'], // Cache Key
-  { revalidate: 3600, tags: ['home-data'] } // Revalidates every hour (3600 seconds)
+  ["home-page-public-data"], // Cache Key
+  { revalidate: 3600, tags: ["home-data"] } // Revalidates every hour (3600 seconds)
 );
 
 export default async function HomePage() {
@@ -173,7 +203,8 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   // 2. Get Cached Public Data (Instant load, 0 DB cost)
-  const { playlists, artists, albums, newTracks, popularTracks, trendingTracks, playlistTracks, albumTracks, artistTracks } = await getCachedPublicData();
+  const { playlists, artists, albums, newTracks, popularTracks, trendingTracks, playlistTracks, albumTracks, artistTracks, genreShelfItems } = await getCachedPublicData();
+
   const { data: banners } = await supabase
     .from("banners")
     .select("*")
@@ -286,7 +317,29 @@ export default async function HomePage() {
   const trendingTrackIds = new Set(trendingTracks.map((track) => track.id));
   const popularTrackIds = new Set(popularTracks.map((track) => track.id));
 
-  const rankedAlbums = [...albums].sort((a, b) => {
+  let activeAlbums = [...albums];
+  if (activeAlbums.length === 0) {
+    const extractedMap = new Map<string, Album>();
+    fallbackSignalTracks.forEach((track) => {
+      if (track.albums && track.albums.id && !extractedMap.has(track.albums.id)) {
+        extractedMap.set(track.albums.id, track.albums as Album);
+      }
+    });
+    activeAlbums = Array.from(extractedMap.values());
+  }
+
+  let activeArtists = [...artists];
+  if (activeArtists.length === 0) {
+    const extractedMap = new Map<string, Artist>();
+    fallbackSignalTracks.forEach((track) => {
+      if (track.artists && track.artists.id && !extractedMap.has(track.artists.id)) {
+        extractedMap.set(track.artists.id, track.artists as Artist);
+      }
+    });
+    activeArtists = Array.from(extractedMap.values());
+  }
+
+  const rankedAlbums = activeAlbums.sort((a, b) => {
     const scoreAlbum = (album: (typeof albums)[number]) => {
       const tracks = album.id ? albumTracks[album.id] || [] : [];
       const artistId = album.artists?.id;
@@ -301,7 +354,7 @@ export default async function HomePage() {
     return scoreAlbum(b) - scoreAlbum(a);
   });
 
-  const rankedArtists = [...artists].sort((a, b) => {
+  const rankedArtists = activeArtists.sort((a, b) => {
     const scoreArtist = (artist: (typeof artists)[number]) => {
       const artistId = artist.id || "";
       const tracks = artistTracks[artistId] || [];
@@ -316,13 +369,52 @@ export default async function HomePage() {
   });
 
   const allPlaylistTracks = { ...playlistTracks, ...userPlaylistTracks };
-  const enabledHomeSections = homeLayoutSections
+  let enabledHomeSections = homeLayoutSections
+    .map((section) => {
+      const s = (section.slug || "").toLowerCase();
+      const t = (section.section_type || "").toLowerCase();
+      const title = (section.title || "").toLowerCase();
+      if (s.includes("album") || t.includes("album") || title.includes("album") ||
+          s.includes("artist") || t.includes("artist") || title.includes("artist")) {
+        return { ...section, enabled: true };
+      }
+      return section;
+    })
     .filter((section) => section.enabled)
     .sort((a, b) => a.sort_order - b.sort_order);
 
+  if (!enabledHomeSections.some((s) => (s.slug || "").toLowerCase().includes("album") || (s.section_type || "").toLowerCase().includes("album"))) {
+    enabledHomeSections.push({
+      slug: "albums",
+      title: "Albums",
+      description: "Fresh and popular worship albums.",
+      section_type: "albums",
+      enabled: true,
+      sort_order: 50,
+      settings: { max_items: 12 },
+    });
+  }
+  if (!enabledHomeSections.some((s) => (s.slug || "").toLowerCase().includes("artist") || (s.section_type || "").toLowerCase().includes("artist"))) {
+    enabledHomeSections.push({
+      slug: "artists",
+      title: "Popular Artists",
+      description: "Worship leaders listeners are returning to most.",
+      section_type: "artists",
+      enabled: true,
+      sort_order: 60,
+      settings: { max_items: 12 },
+    });
+  }
+  enabledHomeSections.sort((a, b) => a.sort_order - b.sort_order);
+
   const renderHomeSection = (section: HomeLayoutSection) => {
-    switch (section.slug) {
+    const slug = (section.slug || "").toLowerCase();
+    const type = (section.section_type || "").toLowerCase();
+    const title = (section.title || "").toLowerCase();
+    const key = slug || type;
+    switch (key) {
       case "quick-access":
+      case "quick_access":
         return (
           <HomeHeroMosaic
             key={section.slug}
@@ -338,12 +430,16 @@ export default async function HomePage() {
             albumTracks={albumTracks}
             artistTracks={artistTracks}
             isSignedIn={Boolean(user)}
+            userPlaylists={userPlaylists}
+            recentTracks={recentTracks}
+            relatedTracks={relatedTracks}
             quickAccessMaxItems={sectionLimit(section, 8)}
             mobileLayout={section.settings.quick_access_mobile || "quick_grid"}
             showHeroBanner={section.settings.show_hero !== false}
           />
         );
       case "recommendation-mixes":
+      case "recommendation_mixes":
         return (
           <RecommendationMixSection
             key={section.slug}
@@ -354,21 +450,95 @@ export default async function HomePage() {
           />
         );
       case "admin-playlists":
+      case "admin_playlists": {
+        const activeBanners = banners || [];
+        const firstBanner = activeBanners[0];
+        const bannerImage = firstBanner?.image_url;
+        const bannerTitle = firstBanner?.title || "Miracle FM";
+        const bannerDesc = firstBanner?.description || "Worship music for every moment";
+        const bannerHref = firstBanner?.target_link || "/search";
         return (
-          <FeaturedCollectionShelf
-            key={section.slug}
-            title={section.title}
-            description={sectionDescription(section)}
-            viewAllHref="/library"
-            maxItems={sectionLimit(section, 8)}
-            playlists={playlists}
-            albums={[]}
-            recommendationPlaylists={[]}
-            playlistTracks={playlistTracks}
-            albumTracks={{}}
-          />
+          <div key={section.slug} className="px-4 md:px-8">
+            {/* Tablet/Desktop: Top Header + Side-by-Side Content */}
+            <div className="hidden md:block">
+              {/* Common Section Header spanning across top */}
+              <div className="mb-4 flex items-end justify-between gap-4 md:mb-5">
+                <div className="min-w-0">
+                  <h2 className="truncate text-xl font-black tracking-tight text-white md:text-2xl">{section.title}</h2>
+                  {sectionDescription(section) ? (
+                    <p className="mt-0.5 line-clamp-1 text-xs font-medium text-zinc-500">{sectionDescription(section)}</p>
+                  ) : null}
+                </div>
+                <Link href="/library" className="flex shrink-0 items-center gap-1 py-1 text-[10px] font-black uppercase tracking-widest text-zinc-400 transition-colors active:text-white md:hover:text-white">
+                  View All <ChevronRight size={14} />
+                </Link>
+              </div>
+
+              {/* Side by side content with matched height */}
+              <div className="flex items-start gap-5 lg:gap-6">
+                {/* Left: Banner card — height matches playlist card (192px image + 45px text = 237px) */}
+                <div className="w-[320px] lg:w-[360px] xl:w-[400px] flex-shrink-0">
+                  <a
+                    href={bannerHref}
+                    className="group relative block h-[237px] w-full overflow-hidden rounded-xl border border-white/10 bg-[#0f0f0f] shadow-xl transition-all duration-300 md:hover:-translate-y-1 md:hover:border-[#FF0055]/30 md:hover:shadow-[0_10px_30px_rgba(255,0,85,0.12)]"
+                  >
+                    {bannerImage ? (
+                      <Image
+                        src={bannerImage}
+                        alt={bannerTitle}
+                        fill
+                        className="object-cover brightness-85 transition-transform duration-700 group-hover:scale-[1.03]"
+                        sizes="(max-width: 1280px) 40vw, 480px"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#1a0a14] to-[#0f0f13]" />
+                    )}
+                    {/* Subtle dark vignette */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-transparent to-black/40" />
+                    {/* Small icon in corner — no text */}
+                    <div className="absolute bottom-3 right-3 flex items-center justify-center rounded-full border border-white/20 bg-black/50 p-2.5 text-white backdrop-blur-sm transition-all duration-300 group-hover:border-[#FF0055]/50 group-hover:bg-[#FF0055]/20">
+                      <Music4 size={16} className="text-white" />
+                    </div>
+                  </a>
+                </div>
+                {/* Right: Playlists shelf without redundant header */}
+                <div className="min-w-0 flex-1 -mx-4 md:-mx-8">
+                  <FeaturedCollectionShelf
+                    title={section.title}
+                    description={sectionDescription(section)}
+                    viewAllHref="/library"
+                    maxItems={sectionLimit(section, 8)}
+                    playlists={playlists}
+                    albums={[]}
+                    recommendationPlaylists={[]}
+                    playlistTracks={playlistTracks}
+                    albumTracks={{}}
+                    hideHeader
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile: standard layout with header */}
+            <div className="md:hidden -mx-4">
+              <FeaturedCollectionShelf
+                title={section.title}
+                description={sectionDescription(section)}
+                viewAllHref="/library"
+                maxItems={sectionLimit(section, 8)}
+                playlists={playlists}
+                albums={[]}
+                recommendationPlaylists={[]}
+                playlistTracks={playlistTracks}
+                albumTracks={{}}
+              />
+            </div>
+          </div>
         );
+      }
+
       case "user-playlists":
+      case "user_playlists":
         return user ? (
           <FeaturedCollectionShelf
             key={section.slug}
@@ -384,6 +554,7 @@ export default async function HomePage() {
           />
         ) : null;
       case "albums":
+      case "album":
         return (
           <NewReleasesSection
             key={section.slug}
@@ -396,6 +567,7 @@ export default async function HomePage() {
           />
         );
       case "artists":
+      case "artist":
         return (
           <PopularArtistsSection
             key={section.slug}
