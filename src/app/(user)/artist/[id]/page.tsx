@@ -14,7 +14,7 @@ import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import { absoluteUrl, compactObject, DEFAULT_IMAGE, SITE_NAME } from "@/lib/seo";
 import type { Metadata } from "next";
 
-export const revalidate = 60;
+export const revalidate = 86400;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -128,6 +128,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                 fill 
                 className="object-cover opacity-50 blur-[80px] scale-150 saturate-150" 
                 priority 
+                sizes="256px"
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-b from-zinc-800 to-[#050505]" />
@@ -143,7 +144,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
              <div className="absolute inset-[-10%] bg-[conic-gradient(from_0deg,transparent_0%,#FF0055_50%,transparent_100%)] animate-[spin_4s_linear_infinite] opacity-40 mix-blend-overlay rounded-full" />
              <div className="w-full h-full rounded-full overflow-hidden bg-[#050505] border-[4px] border-[#050505] relative z-10 shadow-inner">
                 {artist.image_url ? (
-                  <Image src={artist.image_url} alt={artist.name} fill className="object-cover" />
+                  <Image src={artist.image_url} alt={artist.name} fill className="object-cover" sizes="(max-width: 768px) 128px, 192px" />
                 ) : (
                   <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-500"><Music4 size={48} /></div>
                 )}

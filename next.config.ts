@@ -22,6 +22,10 @@ const nextConfig: NextConfig = {
 
   // ── 1. Image domains ──────────────────────────────────────────────────────
   images: {
+    minimumCacheTTL: 31536000, // Cache optimized images for 1 year to dramatically reduce Vercel transformations
+    formats: ["image/webp"], // Limit formats to avoid generating multiple formats per image
+    deviceSizes: [640, 750, 1080, 1920], // Restrict responsive breakpoints to reduce transformation matrix
+    imageSizes: [32, 64, 128, 256, 384], // Restrict size options
     remotePatterns: [
       {
         protocol: "https",

@@ -65,7 +65,7 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
           className="relative ml-1 h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/5 shadow-[0_16px_34px_-20px_rgba(255,255,255,0.45)] transition-all active:scale-90 md:h-12 md:w-12 md:hover:border-[#FF0055]"
         >
           {user.user_metadata?.avatar_url ? (
-            <Image src={user.user_metadata.avatar_url} alt="Profile" fill className="object-cover" sizes="(max-width: 768px) 40px, 48px" />
+            <Image src={user.user_metadata.avatar_url} alt="Profile" fill className="object-cover" sizes="(max-width: 768px) 40px, 48px" unoptimized />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-zinc-800 text-xs font-black text-white transition-colors group-hover:bg-zinc-700">
               {user.email?.charAt(0).toUpperCase()}

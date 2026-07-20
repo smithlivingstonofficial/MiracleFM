@@ -5,7 +5,7 @@ import { Disc, Play } from "lucide-react";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
 import { Fragment } from "react";
 
-export const revalidate = 60;
+export const revalidate = 86400;
 
 export default async function AllAlbumsPage() {
   const supabase = await createClient();

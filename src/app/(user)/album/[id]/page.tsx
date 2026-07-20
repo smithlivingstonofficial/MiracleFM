@@ -16,7 +16,7 @@ import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import { absoluteUrl, compactObject, DEFAULT_IMAGE, SITE_NAME } from "@/lib/seo";
 import type { Metadata } from "next";
 
-export const revalidate = 60;
+export const revalidate = 86400;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -136,6 +136,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
                 fill 
                 className="object-cover opacity-60 blur-[60px] md:blur-[80px] scale-150 saturate-150 mask-gradient" 
                 priority 
+                sizes="256px"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/55 via-[#050505]/86 to-[#050505]" />
             </div>
@@ -156,6 +157,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
                  fill 
                  className="object-cover transition-transform duration-700 group-hover:scale-105" 
                  priority 
+                 sizes="(max-width: 768px) 176px, 224px"
                />
              ) : (
                <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
@@ -184,7 +186,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ id: stri
                <Link href={`/artist/${album.artists?.id}`} className="group flex items-center gap-2 bg-[#0A0A0A]/60 hover:bg-white/10 pr-4 pl-1 py-1 rounded-full border border-white/5 transition-all active:scale-95 backdrop-blur-md">
                   <div className="w-6 h-6 md:w-8 md:h-8 rounded-full overflow-hidden relative bg-zinc-800 border border-white/10">
                     {album.artists?.image_url ? (
-                      <Image src={album.artists.image_url} alt="" fill className="object-cover" />
+                      <Image src={album.artists.image_url} alt="" fill className="object-cover" sizes="32px" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center"><Music4 size={12} className="text-zinc-500"/></div>
                     )}

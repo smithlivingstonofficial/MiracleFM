@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       Bucket: process.env.R2_BUCKET_NAME,
       Key: fileName,
       ContentType: contentType,
+      CacheControl: "public, max-age=31536000, immutable",
     });
 
     const url = await getSignedUrl(r2, command, { expiresIn: 3600 });

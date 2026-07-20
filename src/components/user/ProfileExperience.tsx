@@ -98,7 +98,7 @@ export default function ProfileExperience({ user, role, stats, genres }: Profile
             <div className="relative flex flex-col gap-6 md:flex-row md:items-end">
               <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-[1.75rem] border border-white/10 bg-zinc-900 shadow-2xl md:h-40 md:w-40 md:rounded-[2rem]">
                 {user.avatarUrl ? (
-                  <Image src={user.avatarUrl} alt="" fill className="object-cover" sizes="160px" priority />
+                  <Image src={user.avatarUrl} alt="" fill className="object-cover" sizes="160px" priority unoptimized />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-4xl font-black text-zinc-600">
                     {user.email.charAt(0).toUpperCase()}

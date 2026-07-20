@@ -15,7 +15,7 @@ import { absoluteUrl, compactObject, DEFAULT_IMAGE, SITE_NAME, secondsToIsoDurat
 import type { Track } from "@/types/music";
 import type { Metadata } from "next";
 
-export const revalidate = 60;
+export const revalidate = 86400;
 
 type TrackWithIds = Track & {
   artist_id?: string | null;
@@ -169,13 +169,13 @@ export default async function SongPage({ params }: { params: Promise<{ id: strin
       />
       <div className="relative px-4 pb-8 pt-7 md:px-12 md:pt-16">
         <div className="absolute inset-x-0 top-0 h-[460px] overflow-hidden pointer-events-none md:h-[520px]">
-          <Image src={displayImage} alt="" fill className="object-cover opacity-35 blur-[80px] scale-125" priority />
+          <Image src={displayImage} alt="" fill className="object-cover opacity-35 blur-[80px] scale-125" priority sizes="256px" />
           <div className="absolute inset-0 bg-gradient-to-b from-[#050505]/35 via-[#050505]/85 to-[#050505]" />
         </div>
 
         <div className="relative z-10 mx-auto flex max-w-7xl flex-col items-center gap-6 md:flex-row md:items-end md:gap-10">
           <div className="relative aspect-square w-[68vw] max-w-[260px] overflow-hidden rounded-[1.75rem] border border-white/10 bg-zinc-900 shadow-2xl md:w-72 md:rounded-[2rem]">
-            <Image src={displayImage} alt={track.title} fill className="object-cover" priority />
+            <Image src={displayImage} alt={track.title} fill className="object-cover" priority sizes="(max-width: 768px) 260px, 288px" />
           </div>
 
           <div className="w-full min-w-0 flex-1 text-center md:text-left">
