@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Clock, Disc3, Headphones, Music4, ScrollText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAnonClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import AddToPlaylistButton from "@/components/user/AddToPlaylistButton";
 import LikeButton from "@/components/user/LikeButton";
 import ShareButton from "@/components/user/ShareButton";
@@ -75,38 +77,61 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
+function getCachedSongPageData(id: string) {
+  return unstable_cache(
+    async () => {
+      const supabaseAnon = createAnonClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const { data: trackData } = await supabaseAnon
+        .from("tracks")
+        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+        .eq("id", id)
+        .single();
+
+      if (!trackData) return null;
+
+      const track = trackData as TrackWithIds;
+      const artistId = track.artist_id || track.artists?.id;
+
+      const [{ data: stats }, { data: relatedData }] = await Promise.all([
+        supabaseAnon.from("track_listen_stats").select("qualified_listens").eq("track_id", id).maybeSingle(),
+        artistId
+          ? supabaseAnon
+              .from("tracks")
+              .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+              .eq("artist_id", artistId)
+              .eq("audio_status", "ready")
+              .neq("id", id)
+              .limit(8)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const qualifiedListens = Number(stats?.qualified_listens || 0);
+      const relatedTracks = ((relatedData || []) as Track[]).filter((item) => item.id !== track.id);
+
+      return {
+        track,
+        qualifiedListens,
+        relatedTracks,
+      };
+    },
+    ["song-page-data", id],
+    { revalidate: 300, tags: [`song-${id}`, "home-data"] } // Cache for 5 minutes
+  )();
+}
+
 export default async function SongPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
 
-  const { data: trackData } = await supabase
-    .from("tracks")
-    .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-    .eq("id", id)
-    .single();
+  const pageData = await getCachedSongPageData(id);
+  if (!pageData) return notFound();
 
-  if (!trackData) return notFound();
-
-  const track = trackData as TrackWithIds;
-  const artistId = track.artist_id || track.artists?.id;
+  const { track, qualifiedListens, relatedTracks } = pageData;
   const duration = formatDuration(track.duration_seconds || track.duration);
   const displayImage = track.cover_url || track.albums?.cover_url || track.artists?.image_url || "/miraclefm.jpg";
-
-  const [{ data: stats }, { data: relatedData }] = await Promise.all([
-    supabase.from("track_listen_stats").select("qualified_listens").eq("track_id", id).maybeSingle(),
-    artistId
-      ? supabase
-          .from("tracks")
-          .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-          .eq("artist_id", artistId)
-          .eq("audio_status", "ready")
-          .neq("id", id)
-          .limit(8)
-      : Promise.resolve({ data: [] }),
-  ]);
-
-  const qualifiedListens = Number(stats?.qualified_listens || 0);
-  const relatedTracks = ((relatedData || []) as Track[]).filter((item) => item.id !== track.id);
   const queue = [track, ...relatedTracks];
   const songDescription = track.artists?.name
     ? `Listen to ${track.title} by ${track.artists.name} on Miracle FM.`

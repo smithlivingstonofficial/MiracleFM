@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/admin-auth";
 import {
   DEFAULT_HOME_LAYOUT_SECTIONS,
@@ -57,7 +58,7 @@ export async function GET() {
   if (error) return error;
 
   try {
-    const sections = await getHomeLayoutSections(supabase);
+    const sections = await getHomeLayoutSections(supabase, true);
     return NextResponse.json({
       sections,
       defaults: DEFAULT_HOME_LAYOUT_SECTIONS,
@@ -102,7 +103,10 @@ export async function PATCH(request: Request) {
 
     if (upsertError) throw upsertError;
 
-    const nextSections = await getHomeLayoutSections(supabase);
+    revalidateTag("home-layout", "max");
+    revalidateTag("home-data", "max");
+
+    const nextSections = await getHomeLayoutSections(supabase, true);
     return NextResponse.json({ sections: nextSections });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save home layout";

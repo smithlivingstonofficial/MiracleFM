@@ -42,9 +42,9 @@ export default function PlayerTrackInfo({ displayImage }: { displayImage: string
 
   return (
     <div className="flex items-center gap-3 md:gap-4 w-auto md:w-[32%] min-w-0 h-full flex-1 md:flex-none">
-      <button onClick={openFullScreenOnSmallScreens} className="relative h-[54px] w-[54px] md:w-[72px] md:h-[72px] rounded-[1.2rem] md:rounded-[1.35rem] overflow-hidden bg-zinc-800 shrink-0 group shadow-[0_18px_42px_-22px_rgba(255,255,255,0.5)] active:scale-95 transition-transform border border-white/15 xl:cursor-default xl:active:scale-100">
+      <button onClick={openFullScreenOnSmallScreens} className="relative h-[54px] w-[54px] md:w-[52px] md:h-[52px] rounded-[1.2rem] md:rounded-[0.95rem] overflow-hidden bg-zinc-800 shrink-0 group shadow-[0_12px_30px_-15px_rgba(255,255,255,0.3)] active:scale-95 transition-transform border border-white/15 xl:cursor-default xl:active:scale-100">
         {displayImage ? (
-          <Image src={displayImage} alt="" fill className="object-cover" />
+          <Image src={displayImage} alt="" fill className="object-cover" sizes="(max-width: 768px) 54px, 52px" priority />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-zinc-600">
             <Music2 size={22} />
@@ -52,13 +52,13 @@ export default function PlayerTrackInfo({ displayImage }: { displayImage: string
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-white/10" />
         <div className="hidden md:flex xl:hidden absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 items-center justify-center transition-opacity">
-          <Maximize2 size={20} className="text-white" />
+          <Maximize2 size={16} className="text-white" />
         </div>
       </button>
       
       <div className="min-w-0 flex-1 pr-2 cursor-pointer active:opacity-70 transition-opacity xl:cursor-default xl:active:opacity-100" onClick={openFullScreenOnSmallScreens}>
-        <p className="text-[13px] md:text-[17px] font-black text-white truncate drop-shadow-md leading-tight">{currentTrack.title}</p>
-        <p className="text-[10px] md:text-xs font-black text-zinc-400 truncate uppercase tracking-[0.12em] mt-1.5">{currentTrack.artists?.name}</p>
+        <p className="text-[13px] md:text-[15px] font-black text-white truncate drop-shadow-md leading-tight">{currentTrack.title}</p>
+        <p className="text-[10px] md:text-[11px] font-black text-zinc-400 truncate uppercase tracking-[0.12em] mt-1">{currentTrack.artists?.name}</p>
       </div>
 
       <div className="hidden md:flex items-center gap-2 ml-2 shrink-0">

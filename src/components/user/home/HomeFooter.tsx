@@ -9,7 +9,7 @@ export default function HomeFooter() {
           <div className="flex flex-col items-center md:items-start">
             <div className="mb-4 flex items-center gap-3">
               <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-white/10 shadow-[0_0_24px_rgba(255,0,85,0.25)]">
-                <Image src="/miraclefm-192.png" alt="Miracle FM" fill className="object-cover" />
+                <Image src="/miraclefm-192.png" alt="Miracle FM" fill className="object-cover" sizes="48px" />
               </div>
               <div>
                 <h3 className="text-xl font-black tracking-tight text-white">Miracle FM</h3>

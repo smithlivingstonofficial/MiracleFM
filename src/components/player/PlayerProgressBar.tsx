@@ -42,7 +42,7 @@ export default function PlayerProgressBar({ onSeek }: { onSeek: (time: number) =
       </div>
 
       {/* Main Desktop Progress Slider */}
-      <div className="hidden md:flex w-full max-w-[720px] items-center gap-3 text-[11px] font-black text-zinc-500 mt-2.5">
+      <div className="hidden md:flex w-full max-w-[720px] items-center gap-3 text-[11px] font-black text-zinc-500 mt-1.5">
         <span className="w-10 text-right tabular-nums tracking-wider">{formatTime(displayProgress)}</span>
         
         <div className="relative flex-1 flex items-center group h-5 cursor-pointer">

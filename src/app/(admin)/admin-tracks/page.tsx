@@ -72,73 +72,148 @@ export default function AdminTracksPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
+  // Pagination & Debounce State
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(30);
 
+  // Search input debounce timer
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Reset page to 1 when filters or search parameters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    debouncedSearch,
+    activeFilter,
+    activeGenreFilter,
+    selectedArtistFilters,
+    selectedAlbumFilters,
+    selectedPlaylistFilters,
+    sortConfig,
+  ]);
+
+  // Fetch dropdown list options (artists, playlists, albums, genres)
   async function fetchInitialData() {
-    setLoading(true);
-    const [tRes, aRes, pRes, albRes, genreRes] = await Promise.all([
-      supabase.from("tracks").select("*, artists(name, image_url), albums(title, cover_url), playlist_tracks(playlist_id), track_audio_variants(bitrate_kbps, size_bytes), encoding_jobs(source_key, source_size_bytes, source_deleted_at, created_at)"), 
+    const [aRes, pRes, albRes, genreRes] = await Promise.all([
       supabase.from("artists").select("id, name").order("name"),
       supabase.from("playlists").select("id, title").is("user_id", null),
       supabase.from("albums").select("id, title").order("title"),
       fetch("/api/genres").then((response) => response.json()).catch(() => ({ genres: fallbackGenreRows() }))
     ]);
-    if (tRes.data) setTracks(tRes.data);
     if (aRes.data) setArtists(aRes.data);
     if (pRes.data) setPlaylists(pRes.data);
     if (albRes.data) setAlbums(albRes.data);
     if (genreRes.genres?.length) setGenreOptions(genreRes.genres);
+  }
+
+  // Fetch tracks page using current filters, search, and sort parameters
+  async function fetchTracks() {
+    setLoading(true);
+    let query = supabase
+      .from("tracks")
+      .select(
+        "*, artists(name, image_url), albums(title, cover_url), playlist_tracks(playlist_id), track_audio_variants(bitrate_kbps, size_bytes), encoding_jobs(source_key, source_size_bytes, source_deleted_at, created_at)",
+        { count: "exact" }
+      );
+
+    if (debouncedSearch.trim()) {
+      query = query.ilike("title", `%${debouncedSearch}%`);
+    }
+
+    if (selectedArtistFilters.length > 0) {
+      query = query.in("artist_id", selectedArtistFilters);
+    }
+
+    if (selectedAlbumFilters.length > 0) {
+      query = query.in("album_id", selectedAlbumFilters);
+    }
+
+    if (selectedPlaylistFilters.length > 0) {
+      const { data: ptData } = await supabase
+        .from("playlist_tracks")
+        .select("track_id")
+        .in("playlist_id", selectedPlaylistFilters);
+      const trackIds = (ptData || []).map((row: any) => row.track_id).filter(Boolean);
+      query = query.in("id", trackIds.length > 0 ? trackIds : ["00000000-0000-0000-0000-000000000000"]);
+    }
+
+    switch (activeFilter) {
+      case "no_artist":
+        query = query.is("artist_id", null);
+        break;
+      case "no_album":
+        query = query.is("album_id", null);
+        break;
+      case "no_cover":
+        query = query.is("cover_url", null);
+        break;
+      case "no_genre":
+        query = query.or("genre.is.null");
+        break;
+      case "has_genre":
+        query = query.not("genre", "is", null);
+        break;
+    }
+
+    if (activeGenreFilter) {
+      query = query.contains("genre", [activeGenreFilter]);
+    }
+
+    let sortColumn: string = sortConfig.field;
+    if (sortConfig.field === "artist") {
+      sortColumn = "artist_id";
+    } else if (sortConfig.field === "album") {
+      sortColumn = "album_id";
+    }
+    
+    query = query.order(sortColumn, { ascending: sortConfig.order === "asc" });
+
+    const from = (currentPage - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
+
+    const { data, count, error } = await query;
+    if (error) {
+      toast.error("Failed to load tracks");
+    } else {
+      setTracks(data || []);
+      setTotalCount(count || 0);
+    }
     setLoading(false);
   }
 
-  // --- LOGIC: FILTER & SORT ---
+  // Load dropdown lists and load tracks on mount & whenever query parameters change
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
+
+  useEffect(() => {
+    fetchTracks();
+  }, [
+    currentPage,
+    debouncedSearch,
+    activeFilter,
+    activeGenreFilter,
+    selectedArtistFilters,
+    selectedAlbumFilters,
+    selectedPlaylistFilters,
+    sortConfig,
+    pageSize,
+  ]);
+
   const processTracks = () => {
-    const result = tracks.filter(t => {
-      const matchesSearch = 
-        t.title.toLowerCase().includes(search.toLowerCase()) || 
-        t.artists?.name?.toLowerCase().includes(search.toLowerCase()) ||
-        t.albums?.title?.toLowerCase().includes(search.toLowerCase());
-
-      if (!matchesSearch) return false;
-
-      if (selectedArtistFilters.length > 0 && !selectedArtistFilters.includes(t.artist_id)) return false;
-      if (selectedAlbumFilters.length > 0 && !selectedAlbumFilters.includes(t.album_id)) return false;
-      if (selectedPlaylistFilters.length > 0) {
-        const trackPlaylistIds = Array.isArray(t.playlist_tracks) ? t.playlist_tracks.map((row: any) => row.playlist_id) : [];
-        if (!selectedPlaylistFilters.some((playlistId) => trackPlaylistIds.includes(playlistId))) return false;
-      }
-
-      switch (activeFilter) {
-        case "no_artist": return !t.artist_id;
-        case "no_album": return !t.album_id;
-        case "no_cover": return !t.cover_url;
-        case "no_genre": return !t.genre || t.genre.length === 0;
-        case "has_genre": return Array.isArray(t.genre) && t.genre.length > 0;
-        default: return true;
-      }
-    }).filter((track) => {
-      if (!activeGenreFilter) return true;
-      return Array.isArray(track.genre) && track.genre.includes(activeGenreFilter);
-    });
-
-    return result.sort((a, b) => {
-      let aVal, bVal;
-      switch (sortConfig.field) {
-        case "title": aVal = a.title; bVal = b.title; break;
-        case "artist": aVal = a.artists?.name || ""; bVal = b.artists?.name || ""; break;
-        case "album": aVal = a.albums?.title || ""; bVal = b.albums?.title || ""; break;
-        case "created_at": aVal = new Date(a.created_at).getTime(); bVal = new Date(b.created_at).getTime(); break;
-        default: return 0;
-      }
-      if (aVal < bVal) return sortConfig.order === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortConfig.order === "asc" ? 1 : -1;
-      return 0;
-    });
+    return tracks;
   };
 
   const processedTracks = processTracks();
+  const totalPages = Math.max(Math.ceil(totalCount / pageSize), 1);
   const advancedFilterCount = selectedArtistFilters.length + selectedAlbumFilters.length + selectedPlaylistFilters.length;
 
   const toggleArrayValue = (value: string, setter: Dispatch<SetStateAction<string[]>>) => {
@@ -697,32 +772,29 @@ export default function AdminTracksPage() {
   return (
     <div className="space-y-8 pb-32 animate-in fade-in duration-700">
       
-      {/* 1. Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h1 className="text-5xl font-black tracking-tighter text-white">Media Library</h1>
-          <div className="flex items-center gap-3 mt-2">
-            <span className="text-zinc-500 font-medium">Manage {tracks.length} encrypted HLS streams.</span>
-            {tracks.filter(t => !t.artist_id || !t.album_id).length > 0 && (
-              <span className="text-[10px] bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded-full font-bold border border-yellow-500/20">
-                {tracks.filter(t => !t.artist_id || !t.album_id).length} Issues Found
-              </span>
-            )}
-          </div>
+      {/* 1. Header & Controls (Sticky & Compact) */}
+      <div className="sticky top-0 z-30 bg-[#0c0c0e]/95 backdrop-blur-md pt-5 pb-4 border-b border-white/[0.06] -mx-8 px-8 lg:-mx-12 lg:px-12 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+        <div className="flex items-center gap-3.5 shrink-0">
+          <h1 className="text-2xl font-black tracking-tight text-white">Media Library</h1>
+          {tracks.filter((t) => !t.artist_id || !t.album_id).length > 0 && (
+            <span className="text-[10px] bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded-full font-bold border border-yellow-500/20 shrink-0">
+              {tracks.filter((t) => !t.artist_id || !t.album_id).length} Issues
+            </span>
+          )}
         </div>
         
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto xl:justify-end">
           {/* Smart Filter */}
           <div className="relative z-20">
             <button 
               onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
-              className={cn("h-[54px] px-4 rounded-full border flex items-center gap-2 font-bold text-sm transition-all",
+              className={cn("h-10 px-3.5 rounded-full border flex items-center gap-2 font-bold text-xs uppercase tracking-wider transition-all",
                 activeFilter !== 'all' ? "bg-brand text-white border-brand" : "bg-panel border-white/[0.05] text-zinc-400 hover:text-white"
               )}
             >
-              <Filter size={18} />
-              <span className="hidden md:inline">{activeFilter === 'all' ? "Filter" : activeFilter.replace('no_', 'Missing ')}</span>
-              <ChevronDown size={14} className={cn("transition-transform", isFilterMenuOpen && "rotate-180")} />
+              <Filter size={14} />
+              <span>{activeFilter === 'all' ? "Filter" : activeFilter.replace('no_', 'Missing ')}</span>
+              <ChevronDown size={12} className={cn("transition-transform", isFilterMenuOpen && "rotate-180")} />
             </button>
             {isFilterMenuOpen && (
               <>
@@ -742,7 +814,7 @@ export default function AdminTracksPage() {
           <select
             value={activeGenreFilter}
             onChange={(event) => setActiveGenreFilter(event.target.value)}
-            className="hidden h-[54px] rounded-full border border-white/[0.05] bg-panel px-4 text-sm font-bold text-zinc-400 outline-none transition focus:border-brand/30 md:block"
+            className="h-10 rounded-full border border-white/[0.05] bg-panel px-3.5 text-xs font-bold uppercase tracking-wider text-zinc-400 outline-none transition focus:border-brand/30"
           >
             <option value="">All Genres</option>
             {genreOptions.map((genre) => (
@@ -756,18 +828,18 @@ export default function AdminTracksPage() {
             <button
               onClick={() => setIsAdvancedFilterOpen(!isAdvancedFilterOpen)}
               className={cn(
-                "h-[54px] rounded-full border px-4 text-sm font-bold transition-all inline-flex items-center gap-2",
+                "h-10 rounded-full border px-3.5 text-xs font-bold uppercase tracking-wider transition-all inline-flex items-center gap-2",
                 advancedFilterCount > 0 ? "border-brand bg-brand text-white" : "border-white/[0.05] bg-panel text-zinc-400 hover:text-white"
               )}
             >
-              <Album size={18} />
-              <span className="hidden lg:inline">Advanced</span>
+              <Album size={14} />
+              <span>Advanced</span>
               {advancedFilterCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-black text-brand">
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-black text-brand">
                   {advancedFilterCount}
                 </span>
               )}
-              <ChevronDown size={14} className={cn("transition-transform", isAdvancedFilterOpen && "rotate-180")} />
+              <ChevronDown size={12} className={cn("transition-transform", isAdvancedFilterOpen && "rotate-180")} />
             </button>
 
             {isAdvancedFilterOpen && (
@@ -856,43 +928,43 @@ export default function AdminTracksPage() {
           </div>
 
           <div className="relative group flex-1 md:flex-none">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-brand transition-colors" size={20} />
-            <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full md:w-72 bg-panel border border-white/[0.05] rounded-full py-4 pl-14 pr-6 text-sm font-bold outline-none focus:ring-4 focus:ring-brand/10 focus:border-brand/20 transition-all" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-brand transition-colors" size={16} />
+            <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full md:w-64 bg-panel border border-white/[0.05] rounded-full h-10 pl-11 pr-4 text-xs font-bold outline-none focus:ring-4 focus:ring-brand/10 focus:border-brand/20 transition-all text-white placeholder-zinc-500" />
           </div>
 
-          <button onClick={() => router.push('/upload')} className="bg-brand hover:bg-brand-hover text-white p-4 rounded-full shadow-lg shadow-brand/20 transition-all hover:scale-105 active:scale-95">
-            <Plus size={24} />
+          <button onClick={() => router.push('/upload')} className="bg-brand hover:bg-brand-hover text-white h-10 w-10 shrink-0 flex items-center justify-center rounded-full shadow-lg shadow-brand/20 transition-all hover:scale-105 active:scale-95">
+            <Plus size={20} />
           </button>
         </div>
       </div>
 
-      {/* 2. List Container */}
-      <div className="bg-panel border border-white/[0.05] rounded-[2.5rem] overflow-hidden shadow-2xl relative min-h-[400px]">
+      {/* 2. List Container (Compact Layout) */}
+      <div className="bg-panel border border-white/[0.05] rounded-[1.5rem] overflow-hidden shadow-2xl relative min-h-[400px]">
         
         {/* Sortable Header */}
-        <div className="grid grid-cols-12 px-8 py-6 border-b border-white/[0.05] bg-zinc-900/50 items-center text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-black">
+        <div className="grid grid-cols-12 px-6 py-4 border-b border-white/[0.05] bg-zinc-900/50 items-center text-[9px] uppercase tracking-[0.2em] text-zinc-500 font-black">
           <div className="col-span-1">
             <button onClick={toggleSelectAll} className="hover:text-brand transition-colors">
-              {selectedIds.length > 0 && selectedIds.length === processedTracks.length ? <CheckSquare size={22} className="text-brand" /> : <Square size={22} />}
+              {selectedIds.length > 0 && selectedIds.length === processedTracks.length ? <CheckSquare size={18} className="text-brand" /> : <Square size={18} />}
             </button>
           </div>
           <div className="col-span-5 cursor-pointer hover:text-white flex items-center gap-2" onClick={() => handleSort("title")}>
-            Track Detail {sortConfig.field === "title" && <ArrowUpDown size={12} className={sortConfig.order === "asc" ? "rotate-180" : ""} />}
+            Track Detail {sortConfig.field === "title" && <ArrowUpDown size={11} className={sortConfig.order === "asc" ? "rotate-180" : ""} />}
           </div>
           <div className="col-span-3 hidden md:flex items-center gap-2 cursor-pointer hover:text-white" onClick={() => handleSort("artist")}>
-            Artist / Album {sortConfig.field === "artist" && <ArrowUpDown size={12} className={sortConfig.order === "asc" ? "rotate-180" : ""} />}
+            Artist / Album {sortConfig.field === "artist" && <ArrowUpDown size={11} className={sortConfig.order === "asc" ? "rotate-180" : ""} />}
           </div>
           <div className="col-span-2 hidden md:flex items-center gap-2 cursor-pointer hover:text-white" onClick={() => handleSort("created_at")}>
-            Date {sortConfig.field === "created_at" && <ArrowUpDown size={12} className={sortConfig.order === "asc" ? "rotate-180" : ""} />}
+            Date {sortConfig.field === "created_at" && <ArrowUpDown size={11} className={sortConfig.order === "asc" ? "rotate-180" : ""} />}
           </div>
           <div className="col-span-1 text-right">Edit</div>
         </div>
 
         <div className="divide-y divide-white/[0.02]">
           {loading ? (
-            <div className="p-20 flex flex-col items-center justify-center gap-4 text-zinc-500"><Loader2 className="animate-spin text-brand" size={32} /></div>
+            <div className="p-20 flex flex-col items-center justify-center gap-4 text-zinc-500"><Loader2 className="animate-spin text-brand" size={28} /></div>
           ) : processedTracks.length === 0 ? (
-            <div className="p-20 text-center text-zinc-500 text-sm font-medium">No tracks found.</div>
+            <div className="p-20 text-center text-zinc-500 text-xs font-semibold">No tracks found.</div>
           ) : processedTracks.map((track, index) => {
             const isSelected = selectedIds.includes(track.id);
             const isCurrent = currentTrack?.id === track.id;
@@ -911,36 +983,35 @@ export default function AdminTracksPage() {
               <div 
                 key={track.id} 
                 onClick={(e) => toggleSelect(track.id, index, e)} 
-                className={cn("grid grid-cols-12 px-8 py-4 items-center group transition-all duration-100 cursor-pointer select-none", isSelected ? "bg-brand/[0.04]" : "hover:bg-white/[0.01]")}
+                className={cn("grid grid-cols-12 px-6 py-4.5 items-center group transition-all duration-100 cursor-pointer select-none", isSelected ? "bg-brand/[0.04]" : "hover:bg-white/[0.01]")}
               >
                 <div className="col-span-1" onClick={(e) => e.stopPropagation()}>
                   <button onClick={(e) => toggleSelect(track.id, index, e)} className={cn("transition-colors", isSelected ? "text-brand" : "text-zinc-800 group-hover:text-zinc-600")}>
-                    {isSelected ? <CheckSquare size={22} /> : <Square size={22} />}
+                    {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
                   </button>
                 </div>
 
-                <div className="col-span-5 flex items-center gap-5">
+                <div className="col-span-5 flex items-center gap-4.5">
                   <div className="relative shrink-0">
-                    <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-white/5 shadow-md group/cover cursor-pointer" onClick={(e) => handlePlayTrack(track, e)}>
-                      {displayImage ? <Image src={displayImage} alt="" fill className="object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-800"><Music size={20} /></div>}
+                    <div className="relative w-11 h-11 rounded-lg overflow-hidden bg-zinc-950 border border-white/5 shadow-md group/cover cursor-pointer" onClick={(e) => handlePlayTrack(track, e)}>
+                      {displayImage ? <Image src={displayImage} alt="" fill className="object-cover" sizes="44px" /> : <div className="w-full h-full flex items-center justify-center text-zinc-800"><Music size={16} /></div>}
                       <div className={cn("absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity backdrop-blur-[1px]", isCurrent ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100")}>
-                        {isCurrent && isPlaying ? <Pause size={18} fill="white" className="text-white" /> : <Play size={18} fill="white" className="text-white ml-1" />}
+                        {isCurrent && isPlaying ? <Pause size={14} fill="white" className="text-white" /> : <Play size={14} fill="white" className="text-white ml-0.5" />}
                       </div>
                     </div>
                     {candidateImage && (
                       <button
                         onClick={(e) => applyEmbeddedCover(track, e)}
                         title="Use embedded cover"
-                        className="absolute -bottom-1.5 -right-1.5 h-7 w-7 overflow-hidden rounded-lg border border-brand/50 bg-black shadow-lg ring-2 ring-panel"
+                        className="absolute -bottom-1 -right-1 h-5 w-5 overflow-hidden rounded-md border border-brand/50 bg-black shadow-lg ring-2 ring-panel"
                       >
-                        <Image src={candidateImage} alt="" fill className="object-cover" />
+                        <Image src={candidateImage} alt="" fill className="object-cover" sizes="20px" />
                       </button>
                     )}
                   </div>
                   
                   <div className="min-w-0 pr-4 flex-1">
                     <div className="flex items-center gap-2">
-                       {/* INLINE EDITING LOGIC */}
                        {isEditing ? (
                          <input
                            autoFocus
@@ -949,7 +1020,7 @@ export default function AdminTracksPage() {
                            onKeyDown={handleKeyDown}
                            onBlur={saveTitleEdit}
                            onClick={(e) => e.stopPropagation()}
-                           className="bg-black border border-brand text-white font-bold text-sm px-2 py-1 rounded-md w-full outline-none"
+                           className="bg-black border border-brand text-white font-bold text-xs px-2 py-0.5 rounded-md w-full outline-none"
                          />
                        ) : (
                          <p 
@@ -961,9 +1032,10 @@ export default function AdminTracksPage() {
                          </p>
                        )}
                        
-                       {healthIssues && <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" title={`Missing: ${healthIssues}`} />}
+                       {healthIssues && <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse shrink-0" title={`Missing: ${healthIssues}`} />}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    
+                    <div className="flex items-center gap-2 mt-1">
                        <span className={cn(
                          "text-[10px] font-bold uppercase tracking-wider",
                          track.audio_status === "ready" ? "text-green-500" :
@@ -978,17 +1050,18 @@ export default function AdminTracksPage() {
                           track.audio_status === "queued" ? "Queued" :
                           "Legacy HLS"}
                        </span>
-                       <button onClick={(e) => handleCopyId(track.id, e)} className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-400 transition-opacity" title="Copy ID"><Copy size={10} /></button>
+                       <button onClick={(e) => handleCopyId(track.id, e)} className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-400 transition-opacity" title="Copy ID"><Copy size={9} /></button>
                        <button
                          onClick={(e) => copyEncodeCommand([track.id], missingBitratesFor(track), e)}
                          disabled={!sourceAvailable}
                          className="opacity-0 group-hover:opacity-100 text-zinc-600 transition-opacity hover:text-brand disabled:cursor-not-allowed disabled:opacity-20"
                          title={sourceAvailable ? "Copy encode command" : "Original source deleted"}
                        >
-                         <Terminal size={10} />
+                         <Terminal size={9} />
                        </button>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                       {bitrates.length > 0 ? bitrates.map((bitrate: number) => (
                         <span key={bitrate} className="rounded-full bg-green-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-green-400">
                           {bitrate}k
@@ -1046,9 +1119,9 @@ export default function AdminTracksPage() {
 
                 {/* Artist/Album Column */}
                 <div className="col-span-3 hidden md:block">
-                  <p className={cn("text-xs font-bold", track.artists ? "text-zinc-300" : "text-red-500 italic")}>{track.artists?.name || "Unassigned Artist"}</p>
-                  <p className={cn("text-[10px] font-medium mt-1", track.albums ? "text-zinc-500" : "text-red-900 italic")}>{track.albums?.title || "No Album"}</p>
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  <p className={cn("text-xs font-bold truncate", track.artists ? "text-zinc-300" : "text-red-500 italic")}>{track.artists?.name || "Unassigned Artist"}</p>
+                  <p className={cn("text-[10px] font-medium text-zinc-500 truncate mt-1.5", track.albums ? "text-zinc-500" : "text-red-900 italic")}>{track.albums?.title || "No Album"}</p>
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {normalizeGenreList(Array.isArray(track.genre) ? track.genre : []).slice(0, 3).map((genre) => (
                       <span
                         key={genre}
@@ -1064,28 +1137,91 @@ export default function AdminTracksPage() {
                 </div>
 
                 <div className="col-span-2 hidden md:block">
-                   <div className="flex items-center gap-2 text-zinc-600 font-mono text-[10px] font-bold"><Calendar size={12} /> {new Date(track.created_at).toLocaleDateString()}</div>
-                   <div className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-zinc-600">
-                     <HardDrive size={12} />
+                   <div className="flex items-center gap-1.5 text-zinc-500 font-mono text-[10px] font-semibold"><Calendar size={11} /> {new Date(track.created_at).toLocaleDateString()}</div>
+                   <div className="mt-2.5 flex items-center gap-1 text-[9px] font-bold text-zinc-600">
+                     <HardDrive size={10} />
                      <span>{formatBytes(encodedSize(track))}</span>
                      {sourceJob?.source_size_bytes && <span className="text-zinc-700">+ {formatBytes(sourceJob.source_size_bytes)} src</span>}
                    </div>
                 </div>
 
-                <div className="col-span-1 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="col-span-1 flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   {candidateImage && track.cover_url !== candidateImage && (
-                    <button onClick={(e) => applyEmbeddedCover(track, e)} className="p-2 rounded-lg text-zinc-500 hover:text-brand hover:bg-brand/10" title="Use embedded cover"><ImageIcon size={16} /></button>
+                    <button onClick={(e) => applyEmbeddedCover(track, e)} className="p-1.5 rounded-lg text-zinc-500 hover:text-brand hover:bg-brand/10" title="Use embedded cover"><ImageIcon size={14} /></button>
                   )}
                   {track.cover_url && (
-                    <button onClick={(e) => clearTrackCover(track, e)} className="p-2 rounded-lg text-zinc-500 hover:text-yellow-300 hover:bg-yellow-500/10" title="Turn off track cover"><Eraser size={16} /></button>
+                    <button onClick={(e) => clearTrackCover(track, e)} className="p-1.5 rounded-lg text-zinc-500 hover:text-yellow-300 hover:bg-yellow-500/10" title="Turn off track cover"><Eraser size={14} /></button>
                   )}
-                  <button onClick={(e) => openLyricsEditor(track, e)} className="p-2 rounded-lg text-zinc-500 hover:text-green-400 hover:bg-green-500/10" title="Edit lyrics"><FileText size={16} /></button>
-                  <button onClick={(e) => { e.stopPropagation(); router.push(`/tracks/${track.id}`) }} className="p-2 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10"><Edit2 size={16} /></button>
+                  <button onClick={(e) => openLyricsEditor(track, e)} className="p-1.5 rounded-lg text-zinc-500 hover:text-green-400 hover:bg-green-500/10" title="Edit lyrics"><FileText size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); router.push(`/tracks/${track.id}`) }} className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10"><Edit2 size={14} /></button>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {/* Pagination Controls */}
+        {totalCount > 0 && (
+          <div className="flex items-center justify-between border-t border-white/[0.05] bg-zinc-950/40 px-8 py-5 text-xs font-bold text-zinc-400">
+            <div className="flex items-center gap-4">
+              <div>
+                Showing <span className="text-white">{totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to{" "}
+                <span className="text-white">
+                  {Math.min(currentPage * pageSize, totalCount)}
+                </span>{" "}
+                of <span className="text-white">{totalCount}</span> tracks
+              </div>
+              <div className="flex items-center gap-2 border-l border-white/10 pl-4">
+                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[10px]">Show:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-transparent border border-white/10 hover:border-white/20 text-white rounded-lg px-2 py-0.5 text-xs outline-none cursor-pointer font-bold font-mono transition-all focus:border-brand/50"
+                >
+                  <option value="10" className="bg-[#121212] text-white">10</option>
+                  <option value="20" className="bg-[#121212] text-white">20</option>
+                  <option value="30" className="bg-[#121212] text-white">30</option>
+                  <option value="50" className="bg-[#121212] text-white">50</option>
+                  <option value="100" className="bg-[#121212] text-white">100</option>
+                </select>
+              </div>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className={cn(
+                    "rounded-full border border-white/10 px-4 py-2 font-black uppercase tracking-widest text-zinc-300 transition-colors text-[10px]",
+                    currentPage === 1
+                      ? "opacity-40 cursor-not-allowed"
+                      : "hover:bg-white/5 hover:text-white hover:border-white/20 active:scale-95"
+                  )}
+                >
+                  Prev
+                </button>
+                <span className="text-zinc-500 font-mono">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className={cn(
+                    "rounded-full border border-white/10 px-4 py-2 font-black uppercase tracking-widest text-zinc-300 transition-colors text-[10px]",
+                    currentPage === totalPages
+                      ? "opacity-40 cursor-not-allowed"
+                      : "hover:bg-white/5 hover:text-white hover:border-white/20 active:scale-95"
+                  )}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Floating Toolbar */}

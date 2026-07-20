@@ -110,8 +110,10 @@ const isMobileBrowser = () => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || touchLikelyMobile;
 };
 
-const shouldPreferFallbackForBackground = (track: NonNullable<CurrentTrack>) =>
-  !isIOS() && isMobileBrowser() && Boolean(track.fallback_audio_url);
+const shouldPreferFallbackForBackground = (track: NonNullable<CurrentTrack>) => {
+  const isHidden = typeof document !== "undefined" && document.hidden;
+  return (isHidden || (!isIOS() && isMobileBrowser())) && Boolean(track.fallback_audio_url);
+};
 
 const canPrefetch = () => {
   if (typeof navigator === "undefined") return false;
@@ -267,6 +269,7 @@ export default function AudioPlayer() {
   const setIsPlayingRef = useRef(setIsPlaying);
   const setCurrentTimeRef = useRef(setCurrentTime);
   const appendToQueueRef = useRef(appendToQueue);
+  const currentTrackRef = useRef(currentTrack);
 
   useEffect(() => {
     playNextRef.current = playNext;
@@ -289,6 +292,10 @@ export default function AudioPlayer() {
   }, [appendToQueue]);
 
   useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
+  useEffect(() => {
     userWantsPlayRef.current = isPlaying;
   }, [isPlaying]);
 
@@ -307,6 +314,16 @@ export default function AudioPlayer() {
 
   const sendPlayEvent = useCallback(
     (eventType: PlaybackEventType, extra: Record<string, unknown> = {}) => {
+      // Discard transient events to prevent excessive DB writes and network egress in dev/free tier
+      if (
+        eventType === "level_switch" ||
+        eventType === "stall_start" ||
+        eventType === "stall_recovered" ||
+        eventType === "startup"
+      ) {
+        return;
+      }
+
       if (!currentTrack || !sessionIdRef.current) return;
 
       const audio = audioRef.current;
@@ -853,9 +870,49 @@ export default function AudioPlayer() {
       });
     };
 
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      recoverPlayback("visibility-visible");
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        recoverPlayback("visibility-visible");
+      } else if (document.visibilityState === "hidden") {
+        // Document has gone to the background (locked/minimized)
+        // If we are currently playing HLS with hls.js (which pauses in background),
+        // we swap to progressive fallback (MP3/AAC) at the exact same play head location!
+        const audio = audioRef.current;
+        const track = currentTrackRef.current;
+        if (!audio || !track || sourceKindRef.current !== "hls-js" || !track.fallback_audio_url) {
+          sendPlayEvent("level_switch", {
+            metadata: playbackMetadata({ action: "lifecycle-background", reason: "visibilitychange-hidden" }),
+          });
+          return;
+        }
+
+        const savedTime = audio.currentTime;
+        const wasPlaying = !audio.paused;
+
+        try {
+          const fallbackUrl = toAbsoluteUrl(track.fallback_audio_url);
+          destroyHls();
+          fallbackPrimaryActiveRef.current = true;
+          setActiveSourceKind("fallback");
+          
+          audio.src = fallbackUrl;
+          audio.load();
+          audio.currentTime = savedTime;
+          if (wasPlaying) {
+            audio.play().catch(() => {
+              // Ignore play interruption errors
+            });
+          }
+          sendPlayEvent("level_switch", {
+            metadata: playbackMetadata({
+              action: "visibility-background-fallback-swap",
+              savedTime,
+            }),
+          });
+        } catch (err) {
+          // Keep active source kind clean
+        }
+      }
     };
 
     const onResume = () => {
@@ -878,20 +935,29 @@ export default function AudioPlayer() {
       });
     };
 
-    document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     document.addEventListener("resume", onResume);
     document.addEventListener("freeze", onFreeze);
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("pagehide", onPageHide);
 
     return () => {
-      document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("resume", onResume);
       document.removeEventListener("freeze", onFreeze);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [acquireWakeLock, continueToNextTrack, playbackMetadata, playIfWanted, sendPlayEvent, syncPositionState]);
+  }, [
+    acquireWakeLock,
+    continueToNextTrack,
+    destroyHls,
+    playbackMetadata,
+    playIfWanted,
+    sendPlayEvent,
+    setActiveSourceKind,
+    syncPositionState,
+  ]);
 
   useEffect(() => {
     if (!isPlaying || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
@@ -1102,14 +1168,14 @@ export default function AudioPlayer() {
             "bottom-[94px] left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-[430px] h-[76px]",
             "bg-[linear-gradient(135deg,rgba(25,25,30,0.96),rgba(5,5,7,0.96))] backdrop-blur-3xl border border-white/10 shadow-[0_28px_80px_-22px_rgba(0,0,0,0.98)]",
             "rounded-[1.8rem] px-2.5 overflow-hidden ring-1 ring-white/[0.05]",
-            "md:absolute md:bottom-0 md:left-0 md:right-0 md:translate-x-0 md:w-full md:max-w-none md:h-[108px]",
-            "md:bg-[linear-gradient(180deg,rgba(18,18,21,0.97),rgba(5,5,6,0.98))] md:border-t md:border-x-0 md:border-b-0 md:rounded-none md:px-7 md:overflow-visible md:shadow-[0_-28px_80px_-48px_rgba(255,0,85,0.5)]"
+            "md:absolute md:bottom-0 md:left-0 md:right-0 md:translate-x-0 md:w-full md:max-w-none md:h-[84px]",
+            "md:bg-zinc-950/90 md:backdrop-blur-md md:border-t md:border-white/[0.06] md:rounded-none md:px-8 md:overflow-visible md:shadow-[0_-15px_35px_rgba(0,0,0,0.6)]"
           )}
           data-source-kind={sourceKind}
           data-load-status={loadStatus}
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,0,85,0.22),transparent_36%),linear-gradient(90deg,rgba(255,255,255,0.05),transparent_34%)]" />
-          <div className="pointer-events-none hidden md:block absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#FF0055]/65 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,0,85,0.12),transparent_36%),linear-gradient(90deg,rgba(255,255,255,0.05),transparent_34%)]" />
+          <div className="pointer-events-none hidden md:block absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#FF0055]/35 to-transparent" />
           <div className="flex items-center justify-between max-w-[1680px] mx-auto h-full gap-2.5 md:gap-6 relative z-10">
             <PlayerTrackInfo displayImage={displayImage} />
             <div className="flex items-center justify-end md:justify-center md:flex-col flex-none md:flex-1 max-w-[44%] pr-1 md:pr-0">

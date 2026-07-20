@@ -1,5 +1,9 @@
+import { createClient as createAnonClient } from "@supabase/supabase-js";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import type { GeneratedPlaylist, RecommendationSection, RecommendedTrack, Track } from "@/types/music";
+
+const RECOMMENDATION_TRACK_SELECT = "id, title, artist_id, album_id, hls_url, fallback_audio_url, audio_status, audio_version, cover_url, duration, duration_seconds, genre, play_count, artists(id, name, image_url), albums(id, title, cover_url)";
 
 type RecommendationTrackRow = {
   track_id: string;
@@ -122,10 +126,37 @@ export function getFallbackSection(slug: string) {
   return DEFAULT_RECOMMENDATION_SECTIONS.find((section) => section.slug === slug) || null;
 }
 
+export const getCachedRecommendationSections = unstable_cache(
+  async () => {
+    const supabaseAnon = createAnonClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { data, error } = await supabaseAnon.rpc("get_recommendation_sections", { uid: null });
+
+    if (error || !data?.length) {
+      return DEFAULT_RECOMMENDATION_SECTIONS;
+    }
+
+    return data as RecommendationSection[];
+  },
+  ["recommendation-sections"],
+  { revalidate: 3600, tags: ["home-data"] }
+);
+
 export async function getRecommendationSections(
-  supabase: SupabaseClient,
-  user: Pick<User, "id"> | null
+  supabase?: SupabaseClient,
+  user?: Pick<User, "id"> | null,
+  forceFresh = false
 ): Promise<RecommendationSection[]> {
+  if (!forceFresh) {
+    return getCachedRecommendationSections();
+  }
+
+  if (!supabase) {
+    throw new Error("Supabase client is required for forceFresh database fetch");
+  }
+
   const { data, error } = await supabase.rpc("get_recommendation_sections", { uid: user?.id ?? null });
 
   if (error || !data?.length) {
@@ -133,6 +164,34 @@ export async function getRecommendationSections(
   }
 
   return data as RecommendationSection[];
+}
+
+export function getCachedRecommendationPlaylists(userId: string | null, limitPerSection = 12) {
+  return unstable_cache(
+    async () => {
+      const supabaseAnon = createAnonClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const sections = await getCachedRecommendationSections();
+      const playlists = await Promise.all(
+        sections.map((section) =>
+          getRecommendationPlaylist(
+            supabaseAnon,
+            section,
+            userId ? { id: userId } : null,
+            Math.min(section.track_limit, limitPerSection)
+          )
+        )
+      );
+      return playlists.filter((playlist) => playlist.tracks.length > 0);
+    },
+    ["recommendation-playlists", userId || "guest", String(limitPerSection)],
+    {
+      revalidate: userId ? 120 : 3600, // 2 mins for users, 1 hour for guests
+      tags: userId ? [`user-rec-${userId}`, "home-data"] : ["guest-rec", "home-data"],
+    }
+  )();
 }
 
 export async function getRecommendationPlaylist(
@@ -154,12 +213,12 @@ export async function getRecommendationPlaylist(
   if (trackIds.length > 0) {
     const { data } = await supabase
       .from("tracks")
-      .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+      .select(RECOMMENDATION_TRACK_SELECT)
       .eq("audio_status", "ready")
       .in("id", trackIds);
 
     const rowById = new Map(rows.map((row) => [row.track_id, row]));
-    const trackById = new Map((data || []).map((track) => [track.id, track as Track]));
+    const trackById = new Map((data as unknown as Track[] || []).map((track) => [track.id, track]));
     const orderedTracks = trackIds
       .map<RecommendedTrack | null>((id) => {
         const track = trackById.get(id);
@@ -188,7 +247,7 @@ export async function getRecommendationPlaylist(
 
     const query = supabase
       .from("tracks")
-      .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+      .select(RECOMMENDATION_TRACK_SELECT)
       .eq("audio_status", "ready");
 
     const { data } =
@@ -196,10 +255,10 @@ export async function getRecommendationPlaylist(
         ? await query.in("id", fallbackIds)
         : await query.order("created_at", { ascending: false }).limit(limit);
 
-    const byId = new Map((data || []).map((track) => [track.id, track as Track]));
+    const byId = new Map((data as unknown as Track[] || []).map((track) => [track.id, track]));
     const ordered = fallbackIds.length > 0 ? fallbackIds.map((id) => byId.get(id)).filter(Boolean) : data || [];
 
-    tracks = (ordered as Track[])
+    tracks = (ordered as unknown as Track[])
       .filter((track) => Boolean(track.hls_url || track.fallback_audio_url))
       .map((track) => ({
         ...track,

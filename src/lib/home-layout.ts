@@ -1,4 +1,6 @@
+import { createClient as createAnonClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 
 export type HomeLayoutSectionType =
   | "quick_access"
@@ -172,7 +174,36 @@ export const normalizeHomeLayoutSection = (section: HomeLayoutSection): HomeLayo
   settings: normalizeSettings(section.settings),
 });
 
-export async function getHomeLayoutSections(supabase: SupabaseClient): Promise<HomeLayoutSection[]> {
+export const getCachedHomeLayoutSections = unstable_cache(
+  async () => {
+    const supabaseAnon = createAnonClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { data, error } = await supabaseAnon
+      .from("home_layout_sections")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (error || !data?.length) return DEFAULT_HOME_LAYOUT_SECTIONS;
+
+    return (data as HomeLayoutSection[])
+      .map(normalizeHomeLayoutSection)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  },
+  ["home-layout-sections"],
+  { revalidate: 3600, tags: ["home-layout", "home-data"] }
+);
+
+export async function getHomeLayoutSections(supabase?: SupabaseClient, forceFresh = false): Promise<HomeLayoutSection[]> {
+  if (!forceFresh) {
+    return getCachedHomeLayoutSections();
+  }
+
+  if (!supabase) {
+    throw new Error("Supabase client is required for forceFresh database fetch");
+  }
+
   const { data, error } = await supabase
     .from("home_layout_sections")
     .select("*")

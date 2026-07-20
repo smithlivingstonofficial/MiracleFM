@@ -54,7 +54,7 @@ export default function PlaylistCover({ playlistId, explicitCover, className, si
 
   if (explicitCover) {
     return (
-      <div className={className}>
+      <div className={`relative ${className || ""}`}>
         <Image src={explicitCover} alt="Playlist cover" fill className="object-cover" sizes="(max-width: 768px) 50vw, 280px" />
       </div>
     );
@@ -62,7 +62,7 @@ export default function PlaylistCover({ playlistId, explicitCover, className, si
 
   if (covers.length >= 4) {
     return (
-      <div className={`${className} grid grid-cols-2 grid-rows-2`}>
+      <div className={`relative ${className || ""} grid grid-cols-2 grid-rows-2`}>
         {covers.slice(0, 4).map((url, i) => (
           <div key={i} className="relative w-full h-full border-[0.5px] border-black/10">
             <Image src={url} alt="Playlist cover artwork" fill className="object-cover" sizes="140px" />
@@ -74,14 +74,14 @@ export default function PlaylistCover({ playlistId, explicitCover, className, si
 
   if (covers.length > 0) {
     return (
-      <div className={className}>
+      <div className={`relative ${className || ""}`}>
         <Image src={covers[0]} alt="Playlist cover" fill className="object-cover" sizes="(max-width: 768px) 50vw, 280px" />
       </div>
     );
   }
 
   return (
-    <div className={`${className} bg-zinc-900/50 flex flex-col items-center justify-center text-zinc-700`}>
+    <div className={`relative ${className || ""} bg-zinc-900/50 flex flex-col items-center justify-center text-zinc-700`}>
       <ListMusic size={size} strokeWidth={1.5} />
     </div>
   );

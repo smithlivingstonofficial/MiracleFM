@@ -65,7 +65,7 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
           className="relative ml-1 h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/5 shadow-[0_16px_34px_-20px_rgba(255,255,255,0.45)] transition-all active:scale-90 md:h-12 md:w-12 md:hover:border-[#FF0055]"
         >
           {user.user_metadata?.avatar_url ? (
-            <Image src={user.user_metadata.avatar_url} alt="Profile" fill className="object-cover" />
+            <Image src={user.user_metadata.avatar_url} alt="Profile" fill className="object-cover" sizes="(max-width: 768px) 40px, 48px" />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-zinc-800 text-xs font-black text-white transition-colors group-hover:bg-zinc-700">
               {user.email?.charAt(0).toUpperCase()}
@@ -90,7 +90,7 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,0,85,0.12),transparent_34%,rgba(255,255,255,0.035))]" />
 
         <Link href="/" className="relative z-10 h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-[0_18px_38px_-20px_rgba(255,0,85,0.95)] md:h-14 md:w-14">
-          <Image src="/miraclefm.jpg" alt="Miracle FM" fill className="object-cover" priority />
+          <Image src="/miraclefm.jpg" alt="Miracle FM" fill className="object-cover" priority sizes="(max-width: 768px) 44px, 56px" />
         </Link>
 
         <div className="relative z-10 min-w-0 flex-1">
@@ -144,6 +144,7 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
             fill 
             className="object-cover transition-transform duration-500 group-hover:scale-110" 
             priority
+            sizes="(max-width: 768px) 44px, 56px"
           />
           {/* Subtle Shine Effect */}
           <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />

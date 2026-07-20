@@ -48,6 +48,7 @@ export default function HeroSection({ banners }: { banners: Banner[] }) {
             // Zoom in and Blur when Details are open
             isDetailsOpen ? "scale-110 blur-xl brightness-[0.25]" : "scale-100 blur-0 brightness-[0.94] group-hover:scale-[1.035] group-hover:brightness-100"
           )}
+          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 70vw, 800px"
           priority
         />
       </div>

@@ -14,7 +14,7 @@ import RecommendationMixSection from "@/components/user/home/RecommendationMixSe
 import HomeSessionCache from "@/components/user/home/HomeSessionCache";
 import HomeFooter from "@/components/user/home/HomeFooter";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
-import { getRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
+import { getCachedRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
 import { getHomeLayoutSections, type HomeLayoutSection } from "@/lib/home-layout";
 import { cn } from "@/lib/utils";
 import type { Album, Artist, Playlist, Track } from "@/types/music";
@@ -28,6 +28,8 @@ type TrackWithRelations = Track & {
   artist_id?: string | null;
   album_id?: string | null;
 };
+
+const HOMEPAGE_TRACK_SELECT = "id, title, artist_id, album_id, hls_url, fallback_audio_url, audio_status, audio_version, cover_url, duration, duration_seconds, genre, play_count, artists(id, name, image_url), albums(id, title, cover_url)";
 
 const sectionLimit = (section: HomeLayoutSection, fallback: number) =>
   Math.min(Math.max(Number(section.settings.max_items || fallback), 1), 24);
@@ -67,7 +69,7 @@ const getCachedPublicData = unstable_cache(
       supabaseAnon.from("albums").select("*, artists(id, name, image_url)").order("created_at", { ascending: false }).limit(10),
       supabaseAnon
         .from("tracks")
-        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+        .select(HOMEPAGE_TRACK_SELECT)
         .eq("audio_status", "ready")
         .order("created_at", { ascending: false })
         .limit(12),
@@ -93,18 +95,18 @@ const getCachedPublicData = unstable_cache(
     if (engagementIds.length > 0) {
       const { data: engagementTracks } = await supabaseAnon
         .from("tracks")
-        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+        .select(HOMEPAGE_TRACK_SELECT)
         .eq("audio_status", "ready")
         .in("id", engagementIds);
 
       if (engagementTracks?.length) {
-        const byId = new Map(engagementTracks.map((track) => [track.id, track as Track]));
+        const byId = new Map((engagementTracks as unknown as Track[]).map((track) => [track.id, track]));
         popularTracks = popularIds.map((id) => byId.get(id)).filter((track): track is Track => Boolean(track));
         trendingTracks = trendingIds.map((id) => byId.get(id)).filter((track): track is Track => Boolean(track));
       }
     }
 
-    if (popularTracks.length === 0) popularTracks = newTracksRes.data || [];
+    if (popularTracks.length === 0) popularTracks = (newTracksRes.data as unknown as Track[]) || [];
     if (trendingTracks.length === 0) trendingTracks = popularTracks;
 
     const playlistIds = (playlistsRes.data || []).map((playlist) => playlist.id).filter(Boolean);
@@ -115,34 +117,34 @@ const getCachedPublicData = unstable_cache(
       playlistIds.length > 0
         ? supabaseAnon
             .from("playlist_tracks")
-            .select("playlist_id, tracks(*, artists(id, name, image_url), albums(id, title, cover_url))")
+            .select(`playlist_id, tracks(${HOMEPAGE_TRACK_SELECT})`)
             .in("playlist_id", playlistIds)
             .order("added_at", { ascending: true })
         : Promise.resolve({ data: [] }),
       albumIds.length > 0
         ? supabaseAnon
             .from("tracks")
-            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+            .select(HOMEPAGE_TRACK_SELECT)
             .in("album_id", albumIds)
             .order("created_at", { ascending: true })
         : Promise.resolve({ data: [] }),
       artistIds.length > 0
         ? supabaseAnon
             .from("tracks")
-            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+            .select(HOMEPAGE_TRACK_SELECT)
             .in("artist_id", artistIds)
             .order("created_at", { ascending: true })
         : Promise.resolve({ data: [] }),
     ]);
 
-    const playlistTracks = ((playlistTracksRes.data || []) as PlaylistTrackRow[]).reduce<TrackMap>((acc, row) => {
+    const playlistTracks = ((playlistTracksRes.data || []) as unknown as PlaylistTrackRow[]).reduce<TrackMap>((acc, row) => {
       const track = Array.isArray(row.tracks) ? row.tracks[0] : row.tracks;
       if (!track || (track.audio_status && track.audio_status !== "ready")) return acc;
       acc[row.playlist_id] = [...(acc[row.playlist_id] || []), track];
       return acc;
     }, {});
 
-    const albumTracks = ((albumTracksRes.data || []) as TrackWithRelations[]).reduce<TrackMap>((acc, track) => {
+    const albumTracks = ((albumTracksRes.data || []) as unknown as TrackWithRelations[]).reduce<TrackMap>((acc, track) => {
       const albumId = track.album_id || track.albums?.id;
       if (!albumId) return acc;
       if (track.audio_status && track.audio_status !== "ready") return acc;
@@ -150,7 +152,7 @@ const getCachedPublicData = unstable_cache(
       return acc;
     }, {});
 
-    const artistTracks = ((artistTracksRes.data || []) as TrackWithRelations[]).reduce<TrackMap>((acc, track) => {
+    const artistTracks = ((artistTracksRes.data || []) as unknown as TrackWithRelations[]).reduce<TrackMap>((acc, track) => {
       const artistId = track.artist_id || track.artists?.id;
       if (!artistId) return acc;
       if (track.audio_status && track.audio_status !== "ready") return acc;
@@ -197,132 +199,201 @@ const getCachedPublicData = unstable_cache(
   { revalidate: 3600, tags: ["home-data"] } // Revalidates every hour (3600 seconds)
 );
 
+const getCachedBanners = unstable_cache(
+  async () => {
+    const supabaseAnon = createAnonClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { data: banners } = await supabaseAnon
+      .from("banners")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+    return banners || [];
+  },
+  ["banners-list"],
+  { revalidate: 3600, tags: ["home-data", "banners-list"] }
+);
+
+function getCachedPersonalHomeData(userId: string) {
+  return unstable_cache(
+    async () => {
+      const supabaseAnon = createAnonClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      let dailyMix: Track[] = [];
+      let recentTracks: Track[] = [];
+      let relatedTracks: Track[] = [];
+      let userPlaylists: Playlist[] = [];
+      let userPlaylistTracks: TrackMap = {};
+
+      // 1. Daily Mix Logic using get_recommendation_tracks directly (runs under anon)
+      const { data: mixData } = await supabaseAnon.rpc("get_recommendation_tracks", {
+        uid: userId,
+        section_slug: "daily-mix",
+        limit_count: 20,
+      });
+
+      const rows = ((mixData || []) as { track_id: string }[]).filter((row) => row.track_id);
+      const mixTrackIds = rows.map((row) => row.track_id);
+
+      if (mixTrackIds.length > 0) {
+        const { data: enrichedTracks } = await supabaseAnon
+          .from("tracks")
+          .select(HOMEPAGE_TRACK_SELECT)
+          .eq("audio_status", "ready")
+          .in("id", mixTrackIds);
+
+        if (enrichedTracks?.length) {
+          const trackById = new Map((enrichedTracks as unknown as Track[] || []).map((t) => [t.id, t]));
+          dailyMix = mixTrackIds
+            .map((id) => trackById.get(id))
+            .filter((t): t is Track => Boolean(t));
+        }
+      }
+
+      // 2. Recent Tracks
+      const { data: recentEvents } = await supabaseAnon
+        .from("play_events")
+        .select(`track_id, tracks(${HOMEPAGE_TRACK_SELECT})`)
+        .eq("user_id", userId)
+        .eq("event_type", "listen_qualified")
+        .order("created_at", { ascending: false })
+        .limit(12);
+
+      const seenTrackIds = new Set<string>();
+      recentTracks =
+        (recentEvents as any[])
+          ?.map((event) => {
+            const raw = event.tracks;
+            const track = Array.isArray(raw) ? raw[0] : raw;
+            return (track as Track) ?? null;
+          })
+          .filter((track): track is Track => {
+            if (!track || track.audio_status !== "ready" || seenTrackIds.has(track.id)) return false;
+            seenTrackIds.add(track.id);
+            return true;
+          })
+          .slice(0, 6) || [];
+
+      // 3. Related Tracks
+      const recentArtistIds = Array.from(
+        new Set(
+          recentTracks
+            .map((track) => (track as TrackWithRelations).artist_id || track.artists?.id)
+            .filter((value): value is string => Boolean(value))
+        )
+      ).slice(0, 3);
+
+      if (recentArtistIds.length > 0) {
+        const { data: relatedData } = await supabaseAnon
+          .from("tracks")
+          .select(HOMEPAGE_TRACK_SELECT)
+          .eq("audio_status", "ready")
+          .in("artist_id", recentArtistIds)
+          .limit(16);
+
+        const recentIds = new Set(recentTracks.map((track) => track.id));
+        relatedTracks = ((relatedData as unknown as Track[] || [])).filter((track) => !recentIds.has(track.id)).slice(0, 8);
+      }
+
+      // 4. User Playlists
+      const { data: personalPlaylists } = await supabaseAnon
+        .from("playlists")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(8);
+
+      userPlaylists = (personalPlaylists || []) as Playlist[];
+
+      // 5. User Playlist Tracks
+      const userPlaylistIds = userPlaylists.map((playlist) => playlist.id).filter(Boolean);
+      if (userPlaylistIds.length > 0) {
+        const { data: userPlaylistTrackRows } = await supabaseAnon
+          .from("playlist_tracks")
+          .select(`playlist_id, tracks(${HOMEPAGE_TRACK_SELECT})`)
+          .in("playlist_id", userPlaylistIds)
+          .order("added_at", { ascending: true });
+
+        userPlaylistTracks = ((userPlaylistTrackRows as unknown as PlaylistTrackRow[] || [])).reduce<TrackMap>((acc, row) => {
+          const track = Array.isArray(row.tracks) ? row.tracks[0] : row.tracks;
+          if (!track || track.audio_status !== "ready") return acc;
+          acc[row.playlist_id] = [...(acc[row.playlist_id] || []), track];
+          return acc;
+        }, {});
+      }
+
+      return {
+        dailyMix,
+        recentTracks,
+        relatedTracks,
+        userPlaylists,
+        userPlaylistTracks,
+      };
+    },
+    ["personal-home-data", userId],
+    {
+      revalidate: 120, // 2 minutes
+      tags: [`user-personal-${userId}`, "home-data"],
+    }
+  )();
+}
+
 export default async function HomePage() {
   // 1. Fetch User (Dynamic per request using SSR Client)
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   // 2. Get Cached Public Data (Instant load, 0 DB cost)
-  const { playlists, artists, albums, newTracks, popularTracks, trendingTracks, playlistTracks, albumTracks, artistTracks, genreShelfItems } = await getCachedPublicData();
+  const { playlists, artists, albums, newTracks, popularTracks, trendingTracks, playlistTracks, albumTracks, artistTracks, genreShelfItems } = await getCachedPublicData() as any;
 
-  const { data: banners } = await supabase
-    .from("banners")
-    .select("*")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
+  const banners = await getCachedBanners();
   const [recommendationSections, homeLayoutSections] = await Promise.all([
     getRecommendationSections(supabase, user),
     getHomeLayoutSections(supabase),
   ]);
 
-  // 3. Daily Mix Logic (Dynamic per request, only if logged in)
+  // 3. Daily Mix Logic (Cached per user, 0 DB cost on cache hit)
   let dailyMix: Track[] = [];
   let recentTracks: Track[] = [];
   let relatedTracks: Track[] = [];
   let userPlaylists: Playlist[] = [];
   let userPlaylistTracks: TrackMap = {};
   if (user) {
-    const { data: mixData } = await supabase.rpc('get_personalized_mix', { uid: user.id, limit_count: 20 });
-    if (mixData && mixData.length > 0) {
-      const { data: enrichedTracks } = await supabase
-        .from("tracks")
-        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-        .eq("audio_status", "ready")
-        .in("id", mixData.map((track: { id: string }) => track.id));
-      dailyMix = enrichedTracks ||[];
-    }
-
-    const { data: recentEvents } = await supabase
-      .from("play_events")
-      .select("track_id, tracks(*, artists(id, name, image_url), albums(id, title, cover_url))")
-      .eq("user_id", user.id)
-      .eq("event_type", "listen_qualified")
-      .order("created_at", { ascending: false })
-      .limit(12);
-
-    const seenTrackIds = new Set<string>();
-    recentTracks =
-      recentEvents
-        ?.map((event) => {
-          const raw = event.tracks;
-          const track = Array.isArray(raw) ? raw[0] : raw;
-          return (track as Track) ?? null;
-        })
-        .filter((track): track is Track => {
-          if (!track || track.audio_status !== "ready" || seenTrackIds.has(track.id)) return false;
-          seenTrackIds.add(track.id);
-          return true;
-        })
-        .slice(0, 6) || [];
-
-    const recentArtistIds = Array.from(
-      new Set(
-        recentTracks
-          .map((track) => (track as Track & { artist_id?: string | null }).artist_id || track.artists?.id)
-          .filter((value): value is string => Boolean(value))
-      )
-    ).slice(0, 3);
-
-    if (recentArtistIds.length > 0) {
-      const { data: relatedData } = await supabase
-        .from("tracks")
-        .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-        .eq("audio_status", "ready")
-        .in("artist_id", recentArtistIds)
-        .limit(16);
-
-      const recentIds = new Set(recentTracks.map((track) => track.id));
-      relatedTracks = ((relatedData || []) as Track[]).filter((track) => !recentIds.has(track.id)).slice(0, 8);
-    }
-
-    const { data: personalPlaylists } = await supabase
-      .from("playlists")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(8);
-
-    userPlaylists = (personalPlaylists || []) as Playlist[];
-
-    const userPlaylistIds = userPlaylists.map((playlist) => playlist.id).filter(Boolean);
-    if (userPlaylistIds.length > 0) {
-      const { data: userPlaylistTrackRows } = await supabase
-        .from("playlist_tracks")
-        .select("playlist_id, tracks(*, artists(id, name, image_url), albums(id, title, cover_url))")
-        .in("playlist_id", userPlaylistIds)
-        .order("added_at", { ascending: true });
-
-      userPlaylistTracks = ((userPlaylistTrackRows || []) as PlaylistTrackRow[]).reduce<TrackMap>((acc, row) => {
-        const track = Array.isArray(row.tracks) ? row.tracks[0] : row.tracks;
-        if (!track || track.audio_status !== "ready") return acc;
-        acc[row.playlist_id] = [...(acc[row.playlist_id] || []), track];
-        return acc;
-      }, {});
-    }
+    const personal = await getCachedPersonalHomeData(user.id);
+    dailyMix = personal.dailyMix;
+    recentTracks = personal.recentTracks;
+    relatedTracks = personal.relatedTracks;
+    userPlaylists = personal.userPlaylists;
+    userPlaylistTracks = personal.userPlaylistTracks;
   }
 
-  const recommendationPlaylists = await getRecommendationPlaylists(supabase, recommendationSections, user, 12);
+  const recommendationPlaylists = await getCachedRecommendationPlaylists(user?.id || null, 12);
 
   const userSignalTracks = user ? [...dailyMix, ...recentTracks, ...relatedTracks] : [];
   const fallbackSignalTracks = [...trendingTracks, ...popularTracks, ...newTracks];
   const signalTracks = userSignalTracks.length > 0 ? userSignalTracks : fallbackSignalTracks;
   const signalArtistIds = new Set(
     signalTracks
-      .map((track) => (track as TrackWithRelations).artist_id || track.artists?.id)
+      .map((track) => (track as TrackWithRelations).artist_id || (track as any).artists?.id)
       .filter((value): value is string => Boolean(value))
   );
   const signalGenres = new Set(
     signalTracks.flatMap((track) => track.genre || []).map((genre) => genre.toLowerCase())
   );
-  const trendingTrackIds = new Set(trendingTracks.map((track) => track.id));
-  const popularTrackIds = new Set(popularTracks.map((track) => track.id));
+  const trendingTrackIds = new Set(trendingTracks.map((track: any) => track.id));
+  const popularTrackIds = new Set(popularTracks.map((track: any) => track.id));
 
   let activeAlbums = [...albums];
   if (activeAlbums.length === 0) {
     const extractedMap = new Map<string, Album>();
     fallbackSignalTracks.forEach((track) => {
-      if (track.albums && track.albums.id && !extractedMap.has(track.albums.id)) {
-        extractedMap.set(track.albums.id, track.albums as Album);
+      if ((track as any).albums && (track as any).albums.id && !extractedMap.has((track as any).albums.id)) {
+        extractedMap.set((track as any).albums.id, (track as any).albums as Album);
       }
     });
     activeAlbums = Array.from(extractedMap.values());
@@ -332,8 +403,8 @@ export default async function HomePage() {
   if (activeArtists.length === 0) {
     const extractedMap = new Map<string, Artist>();
     fallbackSignalTracks.forEach((track) => {
-      if (track.artists && track.artists.id && !extractedMap.has(track.artists.id)) {
-        extractedMap.set(track.artists.id, track.artists as Artist);
+      if ((track as any).artists && (track as any).artists.id && !extractedMap.has((track as any).artists.id)) {
+        extractedMap.set((track as any).artists.id, (track as any).artists as Artist);
       }
     });
     activeArtists = Array.from(extractedMap.values());
@@ -343,10 +414,10 @@ export default async function HomePage() {
     const scoreAlbum = (album: (typeof albums)[number]) => {
       const tracks = album.id ? albumTracks[album.id] || [] : [];
       const artistId = album.artists?.id;
-      const interestScore = tracks.some((track) => signalArtistIds.has((track as TrackWithRelations).artist_id || track.artists?.id || "")) || (artistId && signalArtistIds.has(artistId)) ? 80 : 0;
-      const genreScore = tracks.some((track) => (track.genre || []).some((genre) => signalGenres.has(genre.toLowerCase()))) ? 45 : 0;
-      const trendingScore = tracks.filter((track) => trendingTrackIds.has(track.id)).length * 20;
-      const popularScore = tracks.filter((track) => popularTrackIds.has(track.id)).length * 12;
+      const interestScore = tracks.some((track: any) => signalArtistIds.has(track.artist_id || track.artists?.id || "")) || (artistId && signalArtistIds.has(artistId)) ? 80 : 0;
+      const genreScore = tracks.some((track: any) => (track.genre || []).some((genre: any) => signalGenres.has(genre.toLowerCase()))) ? 45 : 0;
+      const trendingScore = tracks.filter((track: any) => trendingTrackIds.has(track.id)).length * 20;
+      const popularScore = tracks.filter((track: any) => popularTrackIds.has(track.id)).length * 12;
       const playableScore = Math.min(tracks.length, 8) * 3;
       const recencyScore = album.created_at ? Math.max(0, 20 - Math.floor((Date.now() - new Date(album.created_at).getTime()) / 86_400_000)) : 0;
       return interestScore + genreScore + trendingScore + popularScore + playableScore + recencyScore;
@@ -359,9 +430,9 @@ export default async function HomePage() {
       const artistId = artist.id || "";
       const tracks = artistTracks[artistId] || [];
       const interestScore = signalArtistIds.has(artistId) ? 100 : 0;
-      const genreScore = tracks.some((track) => (track.genre || []).some((genre) => signalGenres.has(genre.toLowerCase()))) ? 40 : 0;
-      const trendingScore = tracks.filter((track) => trendingTrackIds.has(track.id)).length * 24;
-      const popularScore = tracks.filter((track) => popularTrackIds.has(track.id)).length * 14;
+      const genreScore = tracks.some((track: any) => (track.genre || []).some((genre: any) => signalGenres.has(genre.toLowerCase()))) ? 40 : 0;
+      const trendingScore = tracks.filter((track: any) => trendingTrackIds.has(track.id)).length * 24;
+      const popularScore = tracks.filter((track: any) => popularTrackIds.has(track.id)).length * 14;
       const playableScore = Math.min(tracks.length, 8) * 4;
       return interestScore + genreScore + trendingScore + popularScore + playableScore;
     };
