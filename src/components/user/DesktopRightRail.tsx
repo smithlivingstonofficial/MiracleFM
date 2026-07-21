@@ -143,12 +143,12 @@ export default function DesktopRightRail({ banners, initialTracks, isSignedIn }:
           .maybeSingle(),
         artistId
           ? supabase
-              .from("tracks")
-              .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-              .eq("artist_id", artistId)
-              .eq("audio_status", "ready")
-              .neq("id", track.id)
-              .limit(6)
+            .from("tracks")
+            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+            .eq("artist_id", artistId)
+            .eq("audio_status", "ready")
+            .neq("id", track.id)
+            .limit(6)
           : Promise.resolve({ data: [] }),
       ]);
 

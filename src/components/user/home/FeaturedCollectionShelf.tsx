@@ -22,33 +22,33 @@ type FeaturedCollectionShelfProps = {
 
 type FeaturedItem =
   | {
-      id: string;
-      kind: "playlist";
-      title: string;
-      subtitle: string;
-      href: string;
-      coverUrl?: string | null;
-      playlistId: string;
-      tracks: Track[];
-    }
+    id: string;
+    kind: "playlist";
+    title: string;
+    subtitle: string;
+    href: string;
+    coverUrl?: string | null;
+    playlistId: string;
+    tracks: Track[];
+  }
   | {
-      id: string;
-      kind: "album";
-      title: string;
-      subtitle: string;
-      href: string;
-      coverUrl?: string | null;
-      tracks: Track[];
-    }
+    id: string;
+    kind: "album";
+    title: string;
+    subtitle: string;
+    href: string;
+    coverUrl?: string | null;
+    tracks: Track[];
+  }
   | {
-      id: string;
-      kind: "mix";
-      title: string;
-      subtitle: string;
-      href: string;
-      coverUrls: string[];
-      tracks: Track[];
-    };
+    id: string;
+    kind: "mix";
+    title: string;
+    subtitle: string;
+    href: string;
+    coverUrls: string[];
+    tracks: Track[];
+  };
 
 const mixArtwork = (playlist: GeneratedPlaylist) =>
   Array.from(

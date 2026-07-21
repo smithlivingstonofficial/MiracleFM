@@ -82,17 +82,20 @@ export default async function UserLayout({ children }: { children: React.ReactNo
   ]);
 
   return (
-    <div className="flex h-[100dvh] w-full bg-[#050505] text-white font-sans selection:bg-[#FF0055] selection:text-white isolate">
-      <div className="hidden md:block h-full z-30 relative shrink-0">
-        <UserSidebar />
-      </div>
+    <div className="flex flex-col h-[100dvh] w-full bg-[#050505] text-white font-sans selection:bg-[#FF0055] selection:text-white isolate">
+      {/* Unified top bar spans 100% width across the top of the viewport */}
+      <HomeHeader user={user} />
 
-      <div className="flex-1 flex h-full relative min-w-0">
+      {/* Grid container containing Sidebar, Main viewport, and Right Rail */}
+      <div className="flex-1 flex h-0 relative min-w-0">
+        <div className="hidden md:block h-full z-30 relative shrink-0">
+          <UserSidebar />
+        </div>
+
         <main
           id="main-content"
           className="min-w-0 flex-1 overflow-y-auto scroll-smooth no-scrollbar bg-[#050505]"
         >
-          <HomeHeader user={user} />
           <div className="pb-56 md:pb-36 min-h-full">{children}</div>
         </main>
 

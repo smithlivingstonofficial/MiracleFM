@@ -133,13 +133,13 @@ function QuickArtwork({ item }: { item: QuickAccessItem }) {
   if (item.kind === "static") {
     const Icon =
       item.icon === "heart" ? Heart
-      : item.icon === "album" ? Disc3
-      : item.icon === "artist" ? Mic2
-      : item.icon === "playlist" ? ListMusic
-      : item.icon === "trending" ? TrendingUp
-      : item.icon === "music" ? Music4
-      : item.icon === "sparkles" ? Sparkles
-      : TrendingUp;
+        : item.icon === "album" ? Disc3
+          : item.icon === "artist" ? Mic2
+            : item.icon === "playlist" ? ListMusic
+              : item.icon === "trending" ? TrendingUp
+                : item.icon === "music" ? Music4
+                  : item.icon === "sparkles" ? Sparkles
+                    : TrendingUp;
     return (
       <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_18%,rgba(255,255,255,0.16),transparent_34%),linear-gradient(135deg,#251018,#101012)] text-white">
         <Icon size={23} className={item.icon === "heart" ? "fill-[#FF0055] text-[#FF0055]" : "text-[#FF4D89]"} />
@@ -403,7 +403,7 @@ export default function HomeHeroMosaic({
 
   const sideFeature = hasDailyMix ? (
     <MixCard tracks={dailyMix} title="Daily Mix" description="Fresh tunes for your spirit." badgeText="Daily" href="/mix/daily-mix" />
-  ) : firstGenerated ? (
+  ) : firstGenerated && !["trending-now", "top-listened"].includes(firstGenerated.section.slug) ? (
     <GeneratedFeature playlist={firstGenerated} />
   ) : (
     <TrendingFeature tracks={chartTracks} />

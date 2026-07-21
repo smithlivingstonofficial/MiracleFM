@@ -456,7 +456,7 @@ export default function AudioPlayer() {
       let recommendationTracks: Track[] = [];
       const { data: recommendationRows } = await supabase.rpc("get_recommendation_tracks", {
         uid: user?.id ?? null,
-        section_slug: "daily-mix",
+        section_slug: "trending-now",
         limit_count: AUTO_FILL_FETCH_LIMIT,
       });
 

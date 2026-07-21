@@ -224,36 +224,12 @@ function getCachedPersonalHomeData(userId: string) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
 
+      // 1. Daily Mix Logic (Personal recommendation disabled to reduce storage and database load)
       let dailyMix: Track[] = [];
       let recentTracks: Track[] = [];
       let relatedTracks: Track[] = [];
       let userPlaylists: Playlist[] = [];
       let userPlaylistTracks: TrackMap = {};
-
-      // 1. Daily Mix Logic using get_recommendation_tracks directly (runs under anon)
-      const { data: mixData } = await supabaseAnon.rpc("get_recommendation_tracks", {
-        uid: userId,
-        section_slug: "daily-mix",
-        limit_count: 20,
-      });
-
-      const rows = ((mixData || []) as { track_id: string }[]).filter((row) => row.track_id);
-      const mixTrackIds = rows.map((row) => row.track_id);
-
-      if (mixTrackIds.length > 0) {
-        const { data: enrichedTracks } = await supabaseAnon
-          .from("tracks")
-          .select(HOMEPAGE_TRACK_SELECT)
-          .eq("audio_status", "ready")
-          .in("id", mixTrackIds);
-
-        if (enrichedTracks?.length) {
-          const trackById = new Map((enrichedTracks as unknown as Track[] || []).map((t) => [t.id, t]));
-          dailyMix = mixTrackIds
-            .map((id) => trackById.get(id))
-            .filter((t): t is Track => Boolean(t));
-        }
-      }
 
       // 2. Recent Tracks
       const { data: recentEvents } = await supabaseAnon

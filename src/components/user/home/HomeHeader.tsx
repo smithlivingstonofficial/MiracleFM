@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Radio, Search, User, X } from "lucide-react";
+import { Radio, Search, User, X, Home, Download, Compass } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,12 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
   const [fade, setFade] = useState(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [localQuery, setLocalQuery] = useState(searchParamQuery);
+
+  useEffect(() => {
+    setLocalQuery(searchParamQuery);
+  }, [searchParamQuery]);
+
   useEffect(() => {
     if (isSearchPage) return;
 
@@ -43,8 +49,8 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
       timeoutRef.current = setTimeout(() => {
         setIndex((prevIndex) => (prevIndex + 1) % BLESSINGS.length);
         setFade(true);
-      }, 500); 
-    }, 8000); 
+      }, 500);
+    }, 8000);
 
     return () => {
       clearInterval(interval);
@@ -57,17 +63,31 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
     router.replace(trimmedValue ? `/search?q=${encodeURIComponent(trimmedValue)}` : "/search", { scroll: false });
   };
 
+  const handleSearchFocus = () => {
+    if (!isSearchPage) {
+      router.push("/search");
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    if (!isSearchPage) {
+      router.push(`/search?q=${encodeURIComponent(value)}`);
+    } else {
+      updateSearchUrl(value);
+    }
+  };
+
   const renderProfileAction = () => {
     if (user) {
       return (
         <Link
           href="/profile"
-          className="relative ml-1 h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/5 shadow-[0_16px_34px_-20px_rgba(255,255,255,0.45)] transition-all active:scale-90 md:h-12 md:w-12 md:hover:border-[#FF0055]"
+          className="relative ml-1 h-9 w-9 shrink-0 overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-[0_0_12px_rgba(255,0,85,0.1)] ring-2 ring-offset-2 ring-offset-[#050505] ring-[#FF0055]/30 transition-all duration-300 hover:ring-[#FF0055] active:scale-90 md:h-10 md:w-10"
         >
           {user.user_metadata?.avatar_url ? (
-            <Image src={user.user_metadata.avatar_url} alt="Profile" fill className="object-cover" sizes="(max-width: 768px) 40px, 48px" unoptimized />
+            <Image src={user.user_metadata.avatar_url} alt="Profile" fill className="object-cover transition-transform duration-500 hover:scale-110" sizes="(max-width: 768px) 36px, 40px" unoptimized />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-zinc-800 text-xs font-black text-white transition-colors group-hover:bg-zinc-700">
+            <div className="flex h-full w-full items-center justify-center bg-zinc-800 text-xs font-black text-white transition-colors hover:bg-zinc-700">
               {user.email?.charAt(0).toUpperCase()}
             </div>
           )}
@@ -77,96 +97,56 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
 
     return (
       <Link href="/signin">
-        <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FF0055] text-white shadow-[0_0_24px_rgba(255,0,85,0.45)] transition-all active:scale-90 md:h-12 md:w-12">
-          <User size={18} fill="currentColor" />
+        <button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#FF0055] to-[#E6004D] text-white shadow-[0_4px_15px_rgba(255,0,85,0.3)] transition-all duration-300 hover:scale-105 active:scale-90 md:h-10 md:w-10">
+          <User size={15} fill="currentColor" />
         </button>
       </Link>
     );
   };
 
-  if (isSearchPage) {
-    return (
-      <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-white/10 bg-[#050505]/82 px-4 py-3 shadow-[0_18px_60px_-46px_rgba(255,0,85,0.65)] backdrop-blur-2xl transition-all md:px-10">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,0,85,0.12),transparent_34%,rgba(255,255,255,0.035))]" />
-
-        <Link href="/" className="relative z-10 h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-[0_18px_38px_-20px_rgba(255,0,85,0.95)] md:h-14 md:w-14">
-          <Image src="/miraclefm.jpg" alt="Miracle FM" fill className="object-cover" priority sizes="(max-width: 768px) 44px, 56px" />
-        </Link>
-
-        <div className="relative z-10 min-w-0 flex-1">
-          <div className="group relative">
-            <div className="absolute left-4 top-1/2 z-10 -translate-y-1/2 text-zinc-500 transition-colors group-focus-within:text-[#FF0055] md:left-5">
-              <Search size={19} />
-            </div>
-            <input
-              value={searchParamQuery}
-              onChange={(event) => updateSearchUrl(event.target.value)}
-              placeholder="Search songs, artists, albums, lyrics..."
-              className="h-11 w-full rounded-full border border-white/10 bg-white/[0.055] pl-11 pr-11 text-sm font-black text-white outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_44px_-34px_rgba(255,0,85,0.9)] transition-all placeholder:text-zinc-600 focus:border-[#FF0055]/55 focus:bg-black/80 focus:ring-4 focus:ring-[#FF0055]/10 md:h-12 md:pl-12 md:pr-12 md:text-base"
-              autoFocus
-            />
-            {searchParamQuery ? (
-              <button
-                type="button"
-                onClick={() => updateSearchUrl("")}
-                className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/5 p-1.5 text-zinc-500 transition-all hover:bg-white/10 hover:text-white active:scale-90 md:right-4"
-                aria-label="Clear search"
-              >
-                <X size={15} />
-              </button>
-            ) : (
-              <div className="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600 md:flex">
-                Search
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="relative z-10 shrink-0">
-          {renderProfileAction()}
-        </div>
-      </header>
-    );
-  }
-
   return (
-    <header className="sticky top-0 z-40 px-4 md:px-10 py-3 flex items-center justify-between bg-[#050505]/76 backdrop-blur-2xl border-b border-white/10 transition-all shadow-[0_18px_60px_-46px_rgba(255,0,85,0.65)]">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,0,85,0.10),transparent_32%,rgba(255,255,255,0.035))]" />
-      
-      {/* --- LEFT: LOGO & BLESSING --- */}
-      <div className="flex items-center gap-3 md:gap-4 overflow-hidden relative z-10">
-        
+    <header className="sticky top-0 z-40 px-4 md:px-6 lg:px-8 py-2.5 flex items-center justify-between bg-[#050505]/50 backdrop-blur-2xl border-b border-white/[0.05] transition-all">
+      {/* Ambient background mesh glow */}
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,0,85,0.04),transparent_40%,rgba(255,255,255,0.015))]" />
+
+      {/* Thin pink reflection border at the very bottom */}
+      <div className="pointer-events-none absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#FF0055]/15 to-transparent" />
+
+      {/* --- LEFT: LOGO & BLESSING (Hidden on mobile search page to make room) --- */}
+      <div className={cn(
+        "flex items-center gap-3 overflow-hidden relative z-10 min-w-0 mr-4",
+        isSearchPage && "hidden md:flex"
+      )}>
         {/* Brand Logo */}
-        <Link href="/" className="relative shrink-0 w-11 h-11 md:w-14 md:h-14 rounded-2xl overflow-hidden border border-white/15 shadow-[0_18px_38px_-20px_rgba(255,0,85,0.95)] group bg-white/5">
-          <Image 
-            src="/miraclefm.jpg" 
-            alt="Miracle FM" 
-            fill 
-            className="object-cover transition-transform duration-500 group-hover:scale-110" 
+        <Link href="/" className="relative shrink-0 w-8.5 h-8.5 md:w-10 md:h-10 rounded-xl overflow-hidden border border-white/10 shadow-[0_4px_12px_rgba(255,0,85,0.2)] group bg-white/5">
+          <Image
+            src="/miraclefm.jpg"
+            alt="Miracle FM"
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-108"
             priority
-            sizes="(max-width: 768px) 44px, 56px"
+            sizes="(max-width: 768px) 34px, 40px"
           />
-          {/* Subtle Shine Effect */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
         </Link>
 
         {/* Animated Text */}
         <div className="flex flex-col justify-center min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF0055] opacity-50" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF0055]" />
+            <span className="relative flex h-1.5 w-1.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF0055] opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#FF0055] shadow-[0_0_6px_#FF0055]" />
             </span>
-            <p className="text-zinc-400 text-[8px] md:text-[10px] font-black uppercase tracking-[0.24em] whitespace-nowrap">
+            <p className="text-zinc-500 text-[8px] md:text-[9px] font-black uppercase tracking-[0.24em] whitespace-nowrap">
               Miracle FM Live
             </p>
           </div>
-          
-          <h2 
+
+          <h2
             className={cn(
-              "text-white font-black text-sm md:text-lg leading-none tracking-tight transition-all duration-700 ease-in-out transform truncate pr-2",
-              fade 
-                ? "opacity-100 translate-y-0 blur-0" 
+              "text-white font-black text-xs md:text-sm leading-none tracking-tight transition-all duration-700 ease-in-out transform truncate pr-2 bg-gradient-to-r from-white to-zinc-200 bg-clip-text",
+              fade
+                ? "opacity-100 translate-y-0 blur-0"
                 : "opacity-0 translate-y-2 blur-sm"
             )}
           >
@@ -175,24 +155,84 @@ export default function HomeHeader({ user }: HomeHeaderProps) {
         </div>
       </div>
 
-      {/* --- RIGHT: ACTIONS & PROFILE --- */}
-      <div className="flex items-center gap-2 md:gap-3 shrink-0 relative z-10">
-        <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-zinc-300">
-          <Radio size={14} className="text-[#FF0055]" />
-          Premium live
-        </div>
-        
-        {/* Search */}
-        <Link href="/search">
+      {/* --- CENTER: SPOTIFY-STYLE CAPSULE LAYOUT (Desktop & tablet only, or full-width search input on mobile search page) --- */}
+      <div className={cn(
+        "relative z-10 flex-1 max-w-[480px] mx-auto items-center gap-3",
+        isSearchPage ? "flex" : "hidden md:flex"
+      )}>
+        {/* Standalone Circular Home Button */}
+        <Link href="/">
           <button
-            className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center text-zinc-300 active:scale-90 md:hover:text-white md:hover:bg-[#FF0055] md:hover:border-[#FF0055] transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-            aria-label="Search"
+            className={cn(
+              "w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]",
+              pathname === "/"
+                ? "bg-[#FF0055] text-white shadow-[0_0_12px_rgba(255,0,85,0.35)]"
+                : "bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-white hover:bg-white/[0.08]"
+            )}
+            title="Home"
           >
-            <Search size={18} />
+            <Home size={16} />
           </button>
         </Link>
 
-        {/* User Profile (Moved to Right) */}
+        {/* Central Search Capsule */}
+        <div className="relative flex-1 group">
+          <div className="absolute left-3.5 top-1/2 z-10 -translate-y-1/2 text-zinc-500 transition-colors group-focus-within:text-[#FF0055]">
+            <Search size={16} />
+          </div>
+          <input
+            value={localQuery}
+            onChange={(e) => {
+              setLocalQuery(e.target.value);
+              handleSearchChange(e.target.value);
+            }}
+            onFocus={handleSearchFocus}
+            placeholder="What do you want to play?"
+            className="h-9 md:h-10 w-full rounded-full border border-white/[0.08] bg-white/[0.035] pl-10 pr-10 text-xs font-bold text-white outline-none shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all placeholder:text-zinc-500 focus:border-[#FF0055]/40 focus:bg-[#050505]/80 focus:ring-4 focus:ring-[#FF0055]/8"
+          />
+
+          {localQuery ? (
+            <button
+              type="button"
+              onClick={() => {
+                setLocalQuery("");
+                handleSearchChange("");
+              }}
+              className="absolute right-3.5 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/5 p-1 text-zinc-500 transition-all hover:bg-white/10 hover:text-white active:scale-90"
+              aria-label="Clear search"
+            >
+              <X size={12} />
+            </button>
+          ) : (
+            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 group-hover:text-zinc-300 transition-colors pointer-events-none pr-1">
+              <Compass size={14} className="animate-pulse" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* --- RIGHT: ACTIONS & PROFILE (Compact) --- */}
+      <div className="flex items-center gap-2 md:gap-3 shrink-0 relative z-10 ml-4">
+
+        {/* Compact Install Badge */}
+        <div className="hidden md:flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-zinc-300 hover:bg-white/[0.08] hover:text-white transition-all cursor-pointer">
+          <Download size={11} className="text-[#FF0055]" />
+          Install App
+        </div>
+
+        {/* Compact Search Trigger (Visible only on mobile/tablet when NOT on search page) */}
+        {!isSearchPage && (
+          <Link href="/search" className="md:hidden">
+            <button
+              className="w-9 h-9 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-400 active:scale-90"
+              aria-label="Search"
+            >
+              <Search size={16} />
+            </button>
+          </Link>
+        )}
+
+        {/* User Profile */}
         {renderProfileAction()}
       </div>
     </header>

@@ -12,10 +12,6 @@ type ImpressionPayload = {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     const body = (await request.json().catch(() => ({}))) as ImpressionPayload;
     const sectionSlug = String(body.section_slug || "");
     const eventType = String(body.event_type || "");
@@ -24,16 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid recommendation impression" }, { status: 400 });
     }
 
-    const { error } = await supabase.from("recommendation_impressions").insert({
-      user_id: user?.id ?? null,
-      section_slug: sectionSlug,
-      event_type: eventType,
-      track_count: Number.isFinite(body.track_count) ? body.track_count : null,
-      metadata: body.metadata ?? {},
-    });
-
-    if (error) throw error;
-
+    // Database writes are disabled to save storage and egress.
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to record recommendation impression";
