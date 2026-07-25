@@ -9,12 +9,15 @@ import { cn } from "@/lib/utils";
 import { deleteLocalCacheByPrefix } from "@/lib/local-cache";
 import { clearHomeSessionCache } from "@/lib/home-session-cache";
 
+import { useUserAuth } from "@/components/providers/UserAuthProvider";
+
 type FollowArtistButtonProps = {
   artistId: string;
   className?: string;
 };
 
 export default function FollowArtistButton({ artistId, className }: FollowArtistButtonProps) {
+  const { user } = useUserAuth();
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [following, setFollowing] = useState(false);
@@ -25,10 +28,6 @@ export default function FollowArtistButton({ artistId, className }: FollowArtist
     let cancelled = false;
 
     async function loadState() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
       if (!user) {
         if (!cancelled) setLoading(false);
         return;
@@ -51,7 +50,7 @@ export default function FollowArtistButton({ artistId, className }: FollowArtist
     return () => {
       cancelled = true;
     };
-  }, [artistId, supabase]);
+  }, [artistId, user, supabase]);
 
   const toggleFollow = async () => {
     if (busy) return;

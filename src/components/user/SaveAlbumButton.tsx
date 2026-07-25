@@ -9,12 +9,15 @@ import { cn } from "@/lib/utils";
 import { deleteLocalCacheByPrefix } from "@/lib/local-cache";
 import { clearHomeSessionCache } from "@/lib/home-session-cache";
 
+import { useUserAuth } from "@/components/providers/UserAuthProvider";
+
 type SaveAlbumButtonProps = {
   albumId: string;
   className?: string;
 };
 
 export default function SaveAlbumButton({ albumId, className }: SaveAlbumButtonProps) {
+  const { user } = useUserAuth();
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [saved, setSaved] = useState(false);
@@ -25,10 +28,6 @@ export default function SaveAlbumButton({ albumId, className }: SaveAlbumButtonP
     let cancelled = false;
 
     async function loadState() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
       if (!user) {
         if (!cancelled) setLoading(false);
         return;
@@ -51,7 +50,7 @@ export default function SaveAlbumButton({ albumId, className }: SaveAlbumButtonP
     return () => {
       cancelled = true;
     };
-  }, [albumId, supabase]);
+  }, [albumId, user, supabase]);
 
   const toggleSaved = async () => {
     if (busy) return;

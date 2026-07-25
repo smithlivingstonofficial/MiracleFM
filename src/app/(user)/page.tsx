@@ -14,7 +14,7 @@ import RecommendationMixSection from "@/components/user/home/RecommendationMixSe
 import HomeSessionCache from "@/components/user/home/HomeSessionCache";
 import HomeFooter from "@/components/user/home/HomeFooter";
 import ResponsiveAd from "@/components/ads/ResponsiveAd";
-import { getCachedRecommendationPlaylists, getRecommendationSections } from "@/lib/recommendations";
+import { getCachedRecommendationPlaylists, getCachedRecommendationSections } from "@/lib/recommendations";
 import { getHomeLayoutSections, type HomeLayoutSection } from "@/lib/home-layout";
 import { cn } from "@/lib/utils";
 import type { Album, Artist, Playlist, Track } from "@/types/music";
@@ -216,111 +216,8 @@ const getCachedBanners = unstable_cache(
   { revalidate: 3600, tags: ["home-data", "banners-list"] }
 );
 
-function getCachedPersonalHomeData(userId: string) {
-  return unstable_cache(
-    async () => {
-      const supabaseAnon = createAnonClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
-      // 1. Daily Mix Logic (Personal recommendation disabled to reduce storage and database load)
-      let dailyMix: Track[] = [];
-      let recentTracks: Track[] = [];
-      let relatedTracks: Track[] = [];
-      let userPlaylists: Playlist[] = [];
-      let userPlaylistTracks: TrackMap = {};
-
-      // 2. Recent Tracks
-      const { data: recentEvents } = await supabaseAnon
-        .from("play_events")
-        .select(`track_id, tracks(${HOMEPAGE_TRACK_SELECT})`)
-        .eq("user_id", userId)
-        .eq("event_type", "listen_qualified")
-        .order("created_at", { ascending: false })
-        .limit(12);
-
-      const seenTrackIds = new Set<string>();
-      recentTracks =
-        (recentEvents as any[])
-          ?.map((event) => {
-            const raw = event.tracks;
-            const track = Array.isArray(raw) ? raw[0] : raw;
-            return (track as Track) ?? null;
-          })
-          .filter((track): track is Track => {
-            if (!track || track.audio_status !== "ready" || seenTrackIds.has(track.id)) return false;
-            seenTrackIds.add(track.id);
-            return true;
-          })
-          .slice(0, 6) || [];
-
-      // 3. Related Tracks
-      const recentArtistIds = Array.from(
-        new Set(
-          recentTracks
-            .map((track) => (track as TrackWithRelations).artist_id || track.artists?.id)
-            .filter((value): value is string => Boolean(value))
-        )
-      ).slice(0, 3);
-
-      if (recentArtistIds.length > 0) {
-        const { data: relatedData } = await supabaseAnon
-          .from("tracks")
-          .select(HOMEPAGE_TRACK_SELECT)
-          .eq("audio_status", "ready")
-          .in("artist_id", recentArtistIds)
-          .limit(16);
-
-        const recentIds = new Set(recentTracks.map((track) => track.id));
-        relatedTracks = ((relatedData as unknown as Track[] || [])).filter((track) => !recentIds.has(track.id)).slice(0, 8);
-      }
-
-      // 4. User Playlists
-      const { data: personalPlaylists } = await supabaseAnon
-        .from("playlists")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(8);
-
-      userPlaylists = (personalPlaylists || []) as Playlist[];
-
-      // 5. User Playlist Tracks
-      const userPlaylistIds = userPlaylists.map((playlist) => playlist.id).filter(Boolean);
-      if (userPlaylistIds.length > 0) {
-        const { data: userPlaylistTrackRows } = await supabaseAnon
-          .from("playlist_tracks")
-          .select(`playlist_id, tracks(${HOMEPAGE_TRACK_SELECT})`)
-          .in("playlist_id", userPlaylistIds)
-          .order("added_at", { ascending: true });
-
-        userPlaylistTracks = ((userPlaylistTrackRows as unknown as PlaylistTrackRow[] || [])).reduce<TrackMap>((acc, row) => {
-          const track = Array.isArray(row.tracks) ? row.tracks[0] : row.tracks;
-          if (!track || track.audio_status !== "ready") return acc;
-          acc[row.playlist_id] = [...(acc[row.playlist_id] || []), track];
-          return acc;
-        }, {});
-      }
-
-      return {
-        dailyMix,
-        recentTracks,
-        relatedTracks,
-        userPlaylists,
-        userPlaylistTracks,
-      };
-    },
-    ["personal-home-data", userId],
-    {
-      revalidate: 120, // 2 minutes
-      tags: [`user-personal-${userId}`, "home-data"],
-    }
-  )();
-}
-
 export default async function HomePage() {
-  // 1. Fetch User (Dynamic per request using SSR Client)
+  // 1. Fetch User (for UI header display only)
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -329,30 +226,21 @@ export default async function HomePage() {
 
   const banners = await getCachedBanners();
   const [recommendationSections, homeLayoutSections] = await Promise.all([
-    getRecommendationSections(supabase, user),
-    getHomeLayoutSections(supabase),
+    getCachedRecommendationSections(),
+    getHomeLayoutSections(),
   ]);
 
-  // 3. Daily Mix Logic (Cached per user, 0 DB cost on cache hit)
-  let dailyMix: Track[] = [];
-  let recentTracks: Track[] = [];
-  let relatedTracks: Track[] = [];
-  let userPlaylists: Playlist[] = [];
-  let userPlaylistTracks: TrackMap = {};
-  if (user) {
-    const personal = await getCachedPersonalHomeData(user.id);
-    dailyMix = personal.dailyMix;
-    recentTracks = personal.recentTracks;
-    relatedTracks = personal.relatedTracks;
-    userPlaylists = personal.userPlaylists;
-    userPlaylistTracks = personal.userPlaylistTracks;
-  }
+  // 3. Shared Public Playlists & Data (0 DB cost on cache hit)
+  const dailyMix: Track[] = [];
+  const recentTracks: Track[] = [];
+  const relatedTracks: Track[] = [];
+  const userPlaylists: Playlist[] = [];
+  const userPlaylistTracks: TrackMap = {};
 
-  const recommendationPlaylists = await getCachedRecommendationPlaylists(user?.id || null, 12);
+  const recommendationPlaylists = await getCachedRecommendationPlaylists(null, 12);
 
-  const userSignalTracks = user ? [...dailyMix, ...recentTracks, ...relatedTracks] : [];
   const fallbackSignalTracks = [...trendingTracks, ...popularTracks, ...newTracks];
-  const signalTracks = userSignalTracks.length > 0 ? userSignalTracks : fallbackSignalTracks;
+  const signalTracks = fallbackSignalTracks;
   const signalArtistIds = new Set(
     signalTracks
       .map((track) => (track as TrackWithRelations).artist_id || (track as any).artists?.id)
@@ -417,7 +305,7 @@ export default async function HomePage() {
 
   const allPlaylistTracks = { ...playlistTracks, ...userPlaylistTracks };
   let enabledHomeSections = homeLayoutSections
-    .map((section) => {
+    .map((section: HomeLayoutSection) => {
       const s = (section.slug || "").toLowerCase();
       const t = (section.section_type || "").toLowerCase();
       const title = (section.title || "").toLowerCase();
@@ -427,8 +315,8 @@ export default async function HomePage() {
       }
       return section;
     })
-    .filter((section) => section.enabled)
-    .sort((a, b) => a.sort_order - b.sort_order);
+    .filter((section: HomeLayoutSection) => section.enabled)
+    .sort((a: HomeLayoutSection, b: HomeLayoutSection) => a.sort_order - b.sort_order);
 
   if (!enabledHomeSections.some((s) => (s.slug || "").toLowerCase().includes("album") || (s.section_type || "").toLowerCase().includes("album"))) {
     enabledHomeSections.push({
@@ -607,7 +495,7 @@ export default async function HomePage() {
             key={section.slug}
             albums={rankedAlbums}
             albumTracks={albumTracks}
-            personalized={Boolean(user && userSignalTracks.length > 0)}
+            personalized={false}
             title={section.title}
             description={sectionDescription(section)}
             maxItems={sectionLimit(section, 12)}
@@ -620,7 +508,7 @@ export default async function HomePage() {
             key={section.slug}
             artists={rankedArtists}
             artistTracks={artistTracks}
-            personalized={Boolean(user && userSignalTracks.length > 0)}
+            personalized={false}
             title={section.title}
             description={sectionDescription(section)}
             maxItems={sectionLimit(section, 12)}
@@ -676,7 +564,7 @@ export default async function HomePage() {
 
       {/* 2. Admin-configurable Sections Stack */}
       <div className="mt-4 flex flex-col animate-in fade-in slide-in-from-bottom-8 duration-1000 fill-mode-forwards md:mt-6">
-        {enabledHomeSections.map((section, index) => {
+        {enabledHomeSections.map((section: HomeLayoutSection, index: number) => {
           const node = renderHomeSection(section);
           if (!node) return null;
 

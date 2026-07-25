@@ -449,54 +449,19 @@ export default function AudioPlayer() {
         ...(currentTrack?.id ? [currentTrack.id] : []),
       ]);
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from("tracks")
+        .select("id, title, artist_id, album_id, cover_url, hls_url, fallback_audio_url, duration, duration_seconds, artists(id, name, image_url), albums(id, title, cover_url)")
+        .eq("audio_status", "ready")
+        .order("created_at", { ascending: false })
+        .limit(AUTO_FILL_FETCH_LIMIT);
 
-      let recommendationTracks: Track[] = [];
-      const { data: recommendationRows } = await supabase.rpc("get_recommendation_tracks", {
-        uid: user?.id ?? null,
-        section_slug: "trending-now",
-        limit_count: AUTO_FILL_FETCH_LIMIT,
-      });
+      if (error || !data?.length) return false;
 
-      const recommendedIds = ((recommendationRows || []) as RecommendationTrackRow[])
-        .map((row) => row.track_id)
-        .filter((id) => id && !excludedIds.has(id));
-
-      if (recommendedIds.length > 0) {
-        const { data } = await supabase
-          .from("tracks")
-          .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-          .eq("audio_status", "ready")
-          .in("id", recommendedIds);
-
-        const tracksById = (data || []) as Track[];
-        const byId = new Map(tracksById.map((track) => [track.id, track]));
-        recommendationTracks = recommendedIds
-          .map((id) => byId.get(id))
-          .filter((track): track is Track => Boolean(track && !excludedIds.has(track.id)));
-      }
-
-      let nextTracks = recommendationTracks.slice(0, AUTO_FILL_MIN_QUEUE);
-
-      if (nextTracks.length < AUTO_FILL_MIN_QUEUE) {
-        const { data, error } = await supabase
-          .from("tracks")
-          .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-          .eq("audio_status", "ready")
-          .order("created_at", { ascending: false })
-          .limit(AUTO_FILL_FETCH_LIMIT);
-
-        if (!error && data?.length) {
-          const fallbackTracks = shuffled(
-            (data as Track[]).filter(
-              (track) => !excludedIds.has(track.id) && !nextTracks.some((queuedTrack) => queuedTrack.id === track.id)
-            )
-          );
-          nextTracks = [...nextTracks, ...fallbackTracks].slice(0, AUTO_FILL_MIN_QUEUE);
-        }
-      }
+      const fallbackTracks = shuffled(
+        (data as Track[]).filter((track) => !excludedIds.has(track.id))
+      );
+      const nextTracks = fallbackTracks.slice(0, AUTO_FILL_MIN_QUEUE);
 
       if (!nextTracks.length) return false;
 

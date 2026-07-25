@@ -136,15 +136,16 @@ function SearchExperience() {
 
     const delayDebounceFn = setTimeout(async () => {
       if (trimmedQuery.length > 1) {
+        const LIGHT_TRACK = "id, title, artist_id, album_id, cover_url, hls_url, fallback_audio_url, duration, duration_seconds, artists(id, name, image_url), albums(id, title, cover_url)";
         const [t, a, alb, pl, lyrics] = await Promise.all([
           supabase
             .from("tracks")
-            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+            .select(LIGHT_TRACK)
             .eq("audio_status", "ready")
             .ilike("title", `%${trimmedQuery}%`)
             .limit(8),
-          supabase.from("artists").select("*").ilike("name", `%${trimmedQuery}%`).limit(5),
-          supabase.from("albums").select("*, artists(name)").ilike("title", `%${trimmedQuery}%`).limit(5),
+          supabase.from("artists").select("id, name, image_url").ilike("name", `%${trimmedQuery}%`).limit(5),
+          supabase.from("albums").select("id, title, cover_url, artists(id, name)").ilike("title", `%${trimmedQuery}%`).limit(5),
           supabase
             .from("playlists")
             .select("id, title, cover_url, user_id, is_public")
@@ -153,7 +154,7 @@ function SearchExperience() {
             .limit(5),
           supabase
             .from("tracks")
-            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
+            .select(LIGHT_TRACK)
             .eq("audio_status", "ready")
             .ilike("lyrics", `%${trimmedQuery}%`)
             .limit(5),

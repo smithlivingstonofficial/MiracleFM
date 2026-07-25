@@ -115,67 +115,17 @@ function activeLyricIndex(lines: LyricLine[], currentTime: number) {
 }
 
 export default function DesktopRightRail({ banners, initialTracks, isSignedIn }: DesktopRightRailProps) {
-  const supabase = useMemo(() => createClient(), []);
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const currentTime = usePlayerStore((state) => state.currentTime);
-  const [trackDetails, setTrackDetails] = useState<Track | null>(null);
-  const [statsState, setStatsState] = useState<{ trackId: string; stats: TrackStats | null } | null>(null);
-  const [relatedState, setRelatedState] = useState<{ trackId: string; tracks: Track[] } | null>(null);
 
-  useEffect(() => {
-    if (!currentTrack?.id) return;
-
-    let cancelled = false;
-    const track = currentTrack;
-    const artistId = artistIdFor(track);
-
-    async function fetchDetails() {
-      const [trackRes, statsRes, relatedRes] = await Promise.all([
-        supabase
-          .from("tracks")
-          .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-          .eq("id", track.id)
-          .maybeSingle(),
-        supabase
-          .from("track_engagement_stats")
-          .select("qualified_listens, unique_listeners, like_users, playlist_save_users, playlist_adds, recent_7d_listens")
-          .eq("track_id", track.id)
-          .maybeSingle(),
-        artistId
-          ? supabase
-            .from("tracks")
-            .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-            .eq("artist_id", artistId)
-            .eq("audio_status", "ready")
-            .neq("id", track.id)
-            .limit(6)
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      if (cancelled) return;
-      setTrackDetails((trackRes.data as Track | null) || track);
-      setStatsState({ trackId: track.id, stats: (statsRes.data as TrackStats | null) || null });
-      setRelatedState({
-        trackId: track.id,
-        tracks: ((relatedRes.data || []) as Track[]).filter((relatedTrack) => relatedTrack.id !== track.id),
-      });
-    }
-
-    fetchDetails();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentTrack, supabase]);
-
-  const activeTrack = trackDetails?.id === currentTrack?.id ? trackDetails : currentTrack;
+  const activeTrack = currentTrack;
 
   if (!activeTrack) {
     return <RailEmptyState banners={banners} tracks={initialTracks} isSignedIn={isSignedIn} />;
   }
 
-  const stats = statsState?.trackId === activeTrack.id ? statsState.stats : null;
-  const relatedTracks = relatedState?.trackId === activeTrack.id ? relatedState.tracks : [];
+  const stats = null as TrackStats | null;
+  const relatedTracks = initialTracks.filter((t) => t.id !== activeTrack.id).slice(0, 6);
   const displayImage = imageFor(activeTrack);
   const artistId = artistIdFor(activeTrack);
   const albumId = albumIdFor(activeTrack);

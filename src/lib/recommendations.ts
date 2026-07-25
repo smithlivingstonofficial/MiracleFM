@@ -82,7 +82,7 @@ export async function getRecommendationSections(
   return data as RecommendationSection[];
 }
 
-export function getCachedRecommendationPlaylists(userId: string | null, limitPerSection = 12) {
+export function getCachedRecommendationPlaylists(_userId?: string | null, limitPerSection = 12) {
   return unstable_cache(
     async () => {
       const supabaseAnon = createAnonClient(
@@ -95,17 +95,17 @@ export function getCachedRecommendationPlaylists(userId: string | null, limitPer
           getRecommendationPlaylist(
             supabaseAnon,
             section,
-            userId ? { id: userId } : null,
+            null,
             Math.min(section.track_limit, limitPerSection)
           )
         )
       );
       return playlists.filter((playlist) => playlist.tracks.length > 0);
     },
-    ["recommendation-playlists", userId || "guest", String(limitPerSection)],
+    ["recommendation-playlists-public", String(limitPerSection)],
     {
-      revalidate: userId ? 120 : 3600, // 2 mins for users, 1 hour for guests
-      tags: userId ? [`user-rec-${userId}`, "home-data"] : ["guest-rec", "home-data"],
+      revalidate: 3600, // 1 hour shared cache
+      tags: ["home-data", "public-rec"],
     }
   )();
 }
