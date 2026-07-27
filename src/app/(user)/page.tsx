@@ -49,9 +49,8 @@ const sectionSpacingClass = (section: HomeLayoutSection) => {
   return "mb-10 md:mb-12";
 };
 
-// We force the page to be dynamic so user auth works,
-// but we cache the heavy database queries below.
-export const dynamic = "force-dynamic";
+// Enable ISR revalidation for sub-50ms Edge delivery at zero Vercel cost
+export const revalidate = 3600;
 
 // --- TIER 3 SERVER CACHE ---
 // This function runs ONLY ONCE PER HOUR across your entire application.

@@ -7,5 +7,9 @@ export async function POST() {
   if (authError) return authError;
 
   revalidateTag("home-data", "max");
+  revalidateTag("banners-list", "max");
+  revalidateTag("public-right-rail", "max");
+  revalidateTag("faith-tracks", "max");
+
   return NextResponse.json({ success: true });
 }

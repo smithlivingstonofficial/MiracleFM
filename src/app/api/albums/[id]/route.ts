@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/admin-auth";
 import { deleteR2File } from "@/lib/r2-helpers";
 
@@ -14,6 +15,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
     const { error } = await supabase.from("albums").delete().eq("id", id);
     if (error) throw error;
+
+    revalidateTag("home-data", "max");
+    revalidateTag(`album-${id}`, "max");
 
     return NextResponse.json({ success: true });
   } catch (error) {

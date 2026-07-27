@@ -38,17 +38,28 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
 
-  // Range responses are not safe to satisfy from a whole-object Cache API entry.
-  if (request.headers.has("range")) return;
-
   const url = new URL(request.url);
 
-  if (url.pathname.match(/\.m3u8$/i)) {
-    event.respondWith(networkFirst(request, AUDIO_CACHE, 30, MAX_AUDIO_ENTRIES));
-    return;
-  }
+  // Audio & media assets (HLS segments, progressive M4A, MP3, AAC)
+  if (url.pathname.match(/\.(m4s|mp4|aac|m4a|mp3|ts|m3u8)$/i)) {
+    if (request.headers.has("range")) {
+      // Range requests: pass through to network with cache fallback
+      event.respondWith(
+        fetch(request).catch(async () => {
+          const cache = await caches.open(AUDIO_CACHE);
+          const cached = await cache.match(request.url);
+          if (cached) return cached;
+          return new Response("Media stream unavailable", { status: 503 });
+        })
+      );
+      return;
+    }
 
-  if (url.pathname.match(/\.(m4s|mp4|aac|m4a|mp3|ts)$/i)) {
+    if (url.pathname.match(/\.m3u8$/i)) {
+      event.respondWith(networkFirst(request, AUDIO_CACHE, 30, MAX_AUDIO_ENTRIES));
+      return;
+    }
+
     event.respondWith(cacheFirstLimited(request, AUDIO_CACHE, MAX_AUDIO_ENTRIES));
     return;
   }

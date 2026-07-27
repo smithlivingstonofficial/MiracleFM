@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/admin-auth";
 import { normalizeGenreName, normalizeGenreList, slugifyGenre, sortGenres } from "@/lib/genres";
 import type { Genre } from "@/types/music";
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
       .single();
 
     if (insertError) throw insertError;
+    revalidateTag("home-data", "max");
     return NextResponse.json({ genre: data }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create genre";
@@ -126,6 +128,7 @@ export async function PATCH(request: Request) {
       .single();
 
     if (updateError) throw updateError;
+    revalidateTag("home-data", "max");
     return NextResponse.json({ genre: data });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update genre";

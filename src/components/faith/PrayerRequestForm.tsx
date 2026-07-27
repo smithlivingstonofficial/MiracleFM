@@ -6,11 +6,15 @@ import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 
+import { useUserAuth } from "@/components/providers/UserAuthProvider";
+
 type PrayerRequestFormProps = {
-  isSignedIn: boolean;
+  isSignedIn?: boolean;
 };
 
-export default function PrayerRequestForm({ isSignedIn }: PrayerRequestFormProps) {
+export default function PrayerRequestForm({ isSignedIn: propIsSignedIn }: PrayerRequestFormProps) {
+  const { user: authUser } = useUserAuth();
+  const isSignedIn = propIsSignedIn ?? Boolean(authUser);
   const supabase = useMemo(() => createClient(), []);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");

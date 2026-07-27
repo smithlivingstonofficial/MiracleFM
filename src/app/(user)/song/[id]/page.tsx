@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Clock, Disc3, Headphones, Music4, ScrollText } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import { createClient as createAnonClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 import AddToPlaylistButton from "@/components/user/AddToPlaylistButton";
@@ -35,21 +34,15 @@ const formatDuration = (seconds?: number | null) => {
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: track } = await supabase
-    .from("tracks")
-    .select("title, cover_url, artists(name)")
-    .eq("id", id)
-    .single();
+  const pageData = await getCachedSongPageData(id);
 
-  if (!track) return { title: "Song" };
+  if (!pageData || !pageData.track) return { title: "Song" };
 
-  const metadataTrack = track as { title: string; cover_url?: string | null; artists?: { name?: string | null } | { name?: string | null }[] | null };
-  const metadataArtist = Array.isArray(metadataTrack.artists) ? metadataTrack.artists[0] : metadataTrack.artists;
-  const artistName = metadataArtist?.name;
-  const description = artistName ? `Listen to ${metadataTrack.title} by ${artistName} on Miracle FM.` : `Listen to ${metadataTrack.title} on Miracle FM.`;
-  const image = metadataTrack.cover_url || DEFAULT_IMAGE;
-  const title = artistName ? `${metadataTrack.title} by ${artistName}` : metadataTrack.title;
+  const track = pageData.track;
+  const artistName = track.artists?.name;
+  const description = artistName ? `Listen to ${track.title} by ${artistName} on Miracle FM.` : `Listen to ${track.title} on Miracle FM.`;
+  const image = track.cover_url || DEFAULT_IMAGE;
+  const title = artistName ? `${track.title} by ${artistName}` : track.title;
 
   return {
     title,

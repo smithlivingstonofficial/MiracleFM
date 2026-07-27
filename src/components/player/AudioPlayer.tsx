@@ -474,18 +474,51 @@ export default function AudioPlayer() {
     }
   }, []);
 
-  const continueToNextTrack = useCallback((reason = "auto") => {
-    userWantsPlayRef.current = true;
-    setIsPlayingRef.current(true);
-    if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+  const continueToNextTrack = useCallback(
+    (reason = "auto") => {
+      userWantsPlayRef.current = true;
+      setIsPlayingRef.current(true);
+      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
 
-    sendPlayEvent("level_switch", {
-      metadata: playbackMetadata({ action: "next-track-transition", reason }),
-    });
+      const store = usePlayerStore.getState();
+      const nextTrack = store.queue?.[store.currentIndex + 1];
 
-    playNextRef.current();
-    void autoFillQueueIfNeeded();
-  }, [autoFillQueueIfNeeded, playbackMetadata, sendPlayEvent]);
+      // Fast-path for mobile background / lock-screen auto-play:
+      // Synchronously assign next audio src & update MediaSession metadata before JS background throttling delays React render
+      if (nextTrack && audioRef.current && (isMobileBrowser() || (typeof document !== "undefined" && document.hidden))) {
+        const nextFallbackUrl = toAbsoluteUrl(nextTrack.fallback_audio_url || nextTrack.hls_url);
+        if (nextFallbackUrl) {
+          try {
+            destroyHls();
+            fallbackPrimaryActiveRef.current = true;
+            setActiveSourceKind("fallback");
+            setLoadStatus("loading");
+
+            audioRef.current.src = nextFallbackUrl;
+            audioRef.current.load();
+            audioRef.current.play().catch(() => {});
+
+            if ("mediaSession" in navigator) {
+              navigator.mediaSession.metadata = new MediaMetadata({
+                title: nextTrack.title,
+                artist: nextTrack.artists?.name ?? "Unknown Artist",
+                album: nextTrack.albums?.title ?? "Miracle FM",
+                artwork: buildArtwork(getDisplayImage(nextTrack)),
+              });
+            }
+          } catch {}
+        }
+      }
+
+      sendPlayEvent("level_switch", {
+        metadata: playbackMetadata({ action: "next-track-transition", reason }),
+      });
+
+      playNextRef.current();
+      void autoFillQueueIfNeeded();
+    },
+    [autoFillQueueIfNeeded, destroyHls, playbackMetadata, sendPlayEvent, setActiveSourceKind]
+  );
 
   const loadFallbackDirect = useCallback(
     (track: NonNullable<CurrentTrack>, token: number, reason: string) => {

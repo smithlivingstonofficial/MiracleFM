@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createAnonClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import { Play, CheckCircle2, Music4, Disc } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import StartRadio from "@/components/user/StartRadio";
@@ -12,21 +13,53 @@ import ShareButton from "@/components/user/ShareButton";
 import FollowArtistButton from "@/components/user/FollowArtistButton";
 import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import { absoluteUrl, compactObject, DEFAULT_IMAGE, SITE_NAME } from "@/lib/seo";
+import type { Track } from "@/types/music";
 import type { Metadata } from "next";
 
 export const revalidate = 86400;
 
+const LIGHT_TRACK_SELECT = "id, title, artist_id, album_id, cover_url, hls_url, fallback_audio_url, audio_status, audio_version, duration, duration_seconds, genre, play_count, created_at, artists(id, name, image_url), albums(id, title, cover_url)";
+
+function getCachedArtistPageData(id: string) {
+  return unstable_cache(
+    async () => {
+      const supabaseAnon = createAnonClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const [artistRes, topTracksRes, albumsRes] = await Promise.all([
+        supabaseAnon.from("artists").select("*").eq("id", id).single(),
+        supabaseAnon
+          .from("tracks")
+          .select(LIGHT_TRACK_SELECT)
+          .eq("artist_id", id)
+          .eq("audio_status", "ready")
+          .order("play_count", { ascending: false })
+          .limit(10),
+        supabaseAnon.from("albums").select("*").eq("artist_id", id).order("created_at", { ascending: false }),
+      ]);
+
+      if (!artistRes.data) return null;
+
+      return {
+        artist: artistRes.data,
+        topTracks: (topTracksRes.data || []) as unknown as Track[],
+        albums: albumsRes.data || [],
+      };
+    },
+    ["artist-page-data", id],
+    { revalidate: 3600, tags: [`artist-${id}`, "home-data"] }
+  )();
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: artist } = await supabase
-    .from("artists")
-    .select("name, image_url, bio")
-    .eq("id", id)
-    .single();
+  const pageData = await getCachedArtistPageData(id);
 
-  if (!artist) return { title: "Artist" };
+  if (!pageData || !pageData.artist) return { title: "Artist" };
 
+  const artist = pageData.artist;
   const description = artist.bio || `Listen to ${artist.name}'s Tamil Christian worship songs on Miracle FM.`;
 
   return {
@@ -57,26 +90,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ArtistPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const pageData = await getCachedArtistPageData(id);
 
-  // 1. Parallel Data Fetching
-  const[artistRes, topTracksRes, albumsRes] = await Promise.all([
-    supabase.from("artists").select("*").eq("id", id).single(),
-    supabase
-      .from("tracks")
-      .select("*, albums(id, title, cover_url), artists(id, name, image_url)")
-      .eq("artist_id", id)
-      .eq("audio_status", "ready")
-      .order('play_count', { ascending: false })
-      .limit(10),
-    supabase.from("albums").select("*").eq("artist_id", id).order("created_at", { ascending: false })
-  ]);
+  if (!pageData || !pageData.artist) return notFound();
 
-  const artist = artistRes.data;
-  const topTracks = topTracksRes.data || [];
-  const albums = albumsRes.data ||[];
-
-  if (!artist) return notFound();
+  const { artist, topTracks, albums } = pageData;
 
   // 2. Extract unique genres from the Array field for the Radio
   const genres = Array.from(new Set(

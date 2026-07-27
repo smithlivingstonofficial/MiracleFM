@@ -49,6 +49,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     revalidateTag("home-data", "max");
+    revalidateTag("banners-list", "max");
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal Server Error";
@@ -79,6 +80,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (error) throw error;
 
     revalidateTag("home-data", "max");
+    revalidateTag("banners-list", "max");
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal Server Error";

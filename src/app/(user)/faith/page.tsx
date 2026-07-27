@@ -1,5 +1,6 @@
+import { createClient as createAnonClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import { BookOpenText, HeartHandshake, Music2, Sparkles } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
 import PrayerRequestForm from "@/components/faith/PrayerRequestForm";
 import TrackRow from "@/components/user/TrackRow";
@@ -8,22 +9,31 @@ import SongListAdRow from "@/components/ads/SongListAdRow";
 import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import type { Track } from "@/types/music";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
+
+const LIGHT_TRACK_SELECT = "id, title, artist_id, album_id, cover_url, hls_url, fallback_audio_url, audio_status, audio_version, duration, duration_seconds, genre, play_count, artists(id, name, image_url), albums(id, title, cover_url)";
+
+const getCachedFaithWorshipTracks = unstable_cache(
+  async () => {
+    const supabaseAnon = createAnonClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { data: worshipTracks } = await supabaseAnon
+      .from("tracks")
+      .select(LIGHT_TRACK_SELECT)
+      .eq("audio_status", "ready")
+      .order("play_count", { ascending: false })
+      .limit(8);
+
+    return (worshipTracks || []) as unknown as Track[];
+  },
+  ["faith-worship-tracks"],
+  { revalidate: 3600, tags: ["home-data", "faith-tracks"] }
+);
 
 export default async function FaithPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: worshipTracks } = await supabase
-    .from("tracks")
-    .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-    .eq("audio_status", "ready")
-    .order("play_count", { ascending: false })
-    .limit(8);
-
-  const tracks = (worshipTracks || []) as Track[];
+  const tracks = await getCachedFaithWorshipTracks();
   const todayTrack = tracks[0];
 
   return (
@@ -109,7 +119,7 @@ export default async function FaithPage() {
                 Begin with worship before the day gets loud. Let one song become a prayer, and let one verse stay with you as a quiet anchor.
               </p>
             </section>
-            <PrayerRequestForm isSignedIn={Boolean(user)} />
+            <PrayerRequestForm />
             <ResponsiveAd variant="compact" className="px-0" />
           </div>
         </div>

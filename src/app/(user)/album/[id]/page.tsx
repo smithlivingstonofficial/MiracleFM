@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createAnonClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import { Clock, Disc, Music4, Dot } from "lucide-react";
 import TrackRow from "@/components/user/TrackRow";
 import CollectionPlayButton from "@/components/user/CollectionPlayButton";
@@ -14,21 +15,50 @@ import ShareButton from "@/components/user/ShareButton";
 import SaveAlbumButton from "@/components/user/SaveAlbumButton";
 import { shouldRenderSongListAdAfter } from "@/lib/ads";
 import { absoluteUrl, compactObject, DEFAULT_IMAGE, SITE_NAME } from "@/lib/seo";
+import type { Track } from "@/types/music";
 import type { Metadata } from "next";
 
 export const revalidate = 86400;
 
+const LIGHT_TRACK_SELECT = "id, title, artist_id, album_id, cover_url, hls_url, fallback_audio_url, audio_status, audio_version, duration, duration_seconds, genre, play_count, created_at, artists(id, name, image_url), albums(id, title, cover_url)";
+
+function getCachedAlbumPageData(id: string) {
+  return unstable_cache(
+    async () => {
+      const supabaseAnon = createAnonClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const [{ data: album }, { data: tracks }] = await Promise.all([
+        supabaseAnon.from("albums").select("*, artists(id, name, image_url)").eq("id", id).single(),
+        supabaseAnon
+          .from("tracks")
+          .select(LIGHT_TRACK_SELECT)
+          .eq("album_id", id)
+          .eq("audio_status", "ready")
+          .order("created_at", { ascending: true }),
+      ]);
+
+      if (!album) return null;
+
+      return {
+        album,
+        tracks: (tracks || []) as unknown as Track[],
+      };
+    },
+    ["album-page-data", id],
+    { revalidate: 3600, tags: [`album-${id}`, "home-data"] }
+  )();
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: album } = await supabase
-    .from("albums")
-    .select("title, cover_url, artists(name)")
-    .eq("id", id)
-    .single();
+  const pageData = await getCachedAlbumPageData(id);
 
-  if (!album) return { title: "Album" };
+  if (!pageData || !pageData.album) return { title: "Album" };
 
+  const album = pageData.album;
   const artist = Array.isArray(album.artists) ? album.artists[0] : album.artists;
   const description = artist?.name
     ? `Listen to ${album.title} by ${artist.name} on Miracle FM.`
@@ -64,23 +94,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function AlbumPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const pageData = await getCachedAlbumPageData(id);
 
-  // 1. Fetch Album Details & Tracks
-  const { data: album } = await supabase
-    .from("albums")
-    .select("*, artists(id, name, image_url)")
-    .eq("id", id)
-    .single();
+  if (!pageData || !pageData.album) return notFound();
 
-  if (!album) return notFound();
-
-  const { data: tracks } = await supabase
-    .from("tracks")
-    .select("*, artists(id, name, image_url), albums(id, title, cover_url)")
-    .eq("album_id", id)
-    .eq("audio_status", "ready")
-    .order("created_at", { ascending: true });
+  const { album, tracks } = pageData;
 
   const releaseYear = new Date(album.created_at).getFullYear();
   const trackCount = tracks?.length || 0;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/admin-auth";
 import { deleteR2File } from "@/lib/r2-helpers";
 import { deleteTrackMedia } from "@/lib/track-media-cleanup";
@@ -38,6 +39,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     // 4. Delete Artist Record
     const { error } = await supabase.from("artists").delete().eq("id", id);
     if (error) throw error;
+
+    revalidateTag("home-data", "max");
+    revalidateTag("artist-" + id, "max");
 
     return NextResponse.json({ success: true });
   } catch (error) {
